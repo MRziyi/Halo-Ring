@@ -15,6 +15,7 @@ import androidx.compose.ui.unit.dp
 import com.halo.ring.di.RingInfo
 import com.halo.ring.ui.Cta
 import com.halo.ring.ui.ListRow
+import com.halo.ring.ui.LocalAppGraph
 import com.halo.ring.ui.HaloColors
 import com.halo.ring.ui.HaloType
 import com.halo.ring.ui.ScreenPadding
@@ -34,10 +35,11 @@ import com.halo.ring.ui.ScreenPadding
 @Composable
 fun RingScreen(
     info: RingInfo,
-    onFindRing: () -> Unit = {},
-    onShutdown: () -> Unit = {},
-    onForget: () -> Unit = {},
 ) {
+    // A-4: read the BLE client directly off LocalAppGraph instead of taking three callback
+    // parameters. The three actions always target the same singleton, so threading them through
+    // HaloRingApp's SETTINGS_RING branch was pure ceremony.
+    val graph = LocalAppGraph.current
     Column(modifier = Modifier.fillMaxSize().padding(top = 4.dp)) {
         Text(
             text = info.advertisedName ?: "Ring",
@@ -61,15 +63,22 @@ fun RingScreen(
 
         Spacer(Modifier.height(20.dp))
         Box(Modifier.padding(horizontal = ScreenPadding)) {
-            Cta(text = "FIND RING", onClick = onFindRing)
+            Cta(text = "FIND RING", onClick = { graph.bleClient.blinkLed() })
         }
         Spacer(Modifier.height(8.dp))
         Box(Modifier.padding(horizontal = ScreenPadding)) {
-            Cta(text = "SHUTDOWN", danger = true, onClick = onShutdown)
+            Cta(text = "SHUTDOWN", danger = true, onClick = { graph.bleClient.shutdownRing() })
         }
         Spacer(Modifier.height(8.dp))
         Box(Modifier.padding(horizontal = ScreenPadding)) {
-            Cta(text = "FORGET", danger = true, onClick = onForget)
+            // Forget = drop current connection + start a fresh scan. The MAC whitelist that
+            // would normally pin to the previous ring is gated by the bonded device list in
+            // AndroidR08BleClient, which start() consults; a clean stop/start cycle is the
+            // simplest "release this ring" semantics.
+            Cta(text = "FORGET", danger = true, onClick = {
+                graph.bleClient.stop()
+                graph.bleClient.start()
+            })
         }
 
         Spacer(Modifier.height(12.dp))

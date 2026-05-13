@@ -7,6 +7,7 @@ import com.halo.ring.device.rayneo.RayNeoFeatureIntents
 import com.halo.ring.device.rayneo.RayNeoWearStateProvider
 import com.halo.ring.inject.AccessibilityBackend
 import com.halo.ring.inject.AppProcessAgentBackend
+import com.halo.ring.inject.InotifydScriptBackend
 import com.halo.ring.core.DeviceProfile
 
 /** RayNeo flavor — wires the X3 Pro strategies into the graph. */
@@ -22,6 +23,7 @@ object DeviceFlavorBindings {
             backends       = listOf(
                 AppProcessAgentBackend(mapper),
                 AccessibilityBackend(mapper),
+                InotifydScriptBackend(mapper),
             ),
         )
     }

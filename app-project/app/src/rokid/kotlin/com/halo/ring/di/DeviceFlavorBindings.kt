@@ -7,6 +7,7 @@ import com.halo.ring.device.rokid.RokidFeatureIntents
 import com.halo.ring.device.rokid.RokidWearStateProvider
 import com.halo.ring.inject.AccessibilityBackend
 import com.halo.ring.inject.AppProcessAgentBackend
+import com.halo.ring.inject.InotifydScriptBackend
 import com.halo.ring.core.DeviceProfile
 
 /** Rokid flavor — wires the Rokid-specific strategies into the graph. */
@@ -22,7 +23,8 @@ object DeviceFlavorBindings {
             backends       = listOf(
                 AppProcessAgentBackend(mapper),
                 AccessibilityBackend(mapper),
-                // TODO: ShizukuBackend / InotifydScriptBackend / PollScriptBackend (fallbacks)
+                InotifydScriptBackend(mapper),
+                // TODO: ShizukuBackend / PollScriptBackend (further fallbacks)
             ),
         )
     }

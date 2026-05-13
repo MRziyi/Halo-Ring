@@ -639,7 +639,50 @@ The agent dex goes into `app/src/main/assets/r08agent.dex` (when built) — see
 
 ## 8. One-line summaries of recent sessions
 
-- **2026-05-13 h** (this session): **Halo Ring rebrand** — adopted final product name "Halo Ring · 环意"
+- **2026-05-13 i** (this session): **Open-source release + A-block roadmap items finished**.
+  Repo `MRziyi/Halo-Ring` pushed to GitHub; A-3 / A-4 / A-5 / A-6 complete; only A-2 (SPAKE2,
+  hardware-gated) remains in the A block.
+  - **A-1 OSS repo**: created `/Users/Zack/Code/Halo-Ring/`, pushed clean source (152 files,
+    3 MB) to `git@github.com:MRziyi/Halo-Ring.git`. Bilingual README, MIT LICENSE,
+    CONTRIBUTING.md, `app/libs/README.md` for the Mercury AAR download flow. `R08-dev/` stays
+    locally as the working dir + private vault for non-shippable material (research/,
+    decompiled/, SDK/, remote-v*). Helper script `scripts/sync-to-oss.sh` rsyncs subtrees +
+    commits + pushes — keeps the OSS mirror current with a single command.
+  - **A-3 R8 release shrink**: enabled `isMinifyEnabled = true` + `isShrinkResources = true` on
+    release; wrote `proguard-rules.pro` with keeps for BouncyCastle (heavy reflection),
+    DataStore, Compose Stable/Immutable, Kotlin metadata, our manifest-referenced classes, the
+    R08Protocol constants. Excluded BouncyCastle PQC (`picnic/lowmcL*`) + localised
+    CertPath message bundles via `packaging { resources { excludes += ... } }` for an extra
+    ~1.2 MB. **Result: debug 14 MB → release 3.1 MB (-78 %)**. Verified on OnePlus 9 Pro that R8
+    didn't shrink anything needed at runtime (no crashes, foreground service runs, BLE scan
+    state transitions visible in logcat).
+  - **A-4 LocalAppGraph**: `VitalsScreen` and `RingScreen` now read `LocalAppGraph.current`
+    directly instead of taking callback parameters (`onMeasureNow`, `onFindRing`,
+    `onShutdownRing`, `onForgetRing`). Removed 4 parameters from `HaloRingApp` + 4 callback
+    definitions from `MainActivity`. Pure threading-removal refactor; same semantics, less
+    ceremony. Now uses the `LocalAppGraph` CompositionLocal that was previously declared but
+    unconsumed.
+  - **A-5 LatencyLogger + CSV export**: new `:core/perf/LatencyLogger` (200-entry ring buffer
+    + CSV serialiser, **10 new unit tests, 182 total**). Wired into `HaloRingService.sink`
+    capturing `tBle / tEmitted / tDispatched` per gesture. Gated by the Advanced screen's
+    "Latency measurement" toggle — **default OFF, zero overhead when off** (single @Volatile
+    read per gesture); **~50 µs per gesture when on** (one Sample allocation + one mutex). The
+    Advanced "EXPORT LATENCY CSV" action now writes to `Downloads/halo-latency-{ts}.csv` via
+    MediaStore (scoped-storage compatible since Android 10), with a toast surfacing
+    success / empty / failure.
+  - **A-6 InotifydScriptBackend** (skeleton, fallback at priority 60): new file
+    `app/src/main/kotlin/com/halo/ring/inject/InotifydScriptBackend.kt`. Implements
+    `ExecutorBackend` with NAVIGATE/KEY_EVENT/TAP_SWIPE/LAUNCH_INTENT/SHELL capability set;
+    `isReady()` gated by the same 30 s heartbeat-freshness check as the agent (path
+    `/data/local/tmp/halo.inotifyd.heartbeat`). `perform()` encodes primitives via
+    `AgentWireProtocol`, writes them to `/data/local/tmp/halo.cmd` for the device-side
+    inotifyd shell helper to pick up. Registered in both flavor's backend list. The
+    shell-side script + ADB bootstrap step to deploy it are TODO — until then, `isReady()`
+    returns false and the `ActionRouter` simply skips this backend, so it costs nothing at
+    runtime.
+  - **Validated**: 182/182 tests green; both debug APKs build at 14 MB; release APK 3.1 MB;
+    lint 0 errors; new code installs + runs on the OnePlus 9 Pro.
+- **2026-05-13 h**: **Halo Ring rebrand** — adopted final product name "Halo Ring · 环意"
   with slogan "Where the ring goes, the world moves." / 「环之所至，意之所达」. Author byline:
   Zack 紫意. New repo (to be opened-source under `halo-ring`) will host this codebase; the
   `R08-Dev/R08-Remote` codename is now retired everywhere except where it refers to the QRing R08

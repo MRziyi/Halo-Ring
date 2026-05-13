@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.halo.ring.ui.Cta
 import com.halo.ring.ui.ListRow
+import com.halo.ring.ui.LocalAppGraph
 import com.halo.ring.ui.MetricCell
 import com.halo.ring.ui.HaloColors
 import com.halo.ring.ui.HaloType
@@ -61,9 +62,11 @@ data class VitalsSnapshot(
 fun VitalsScreen(
     state: VitalsState,
     focusedIndex: Int = 0,
-    onMeasureNow: () -> Unit = {},
-    onExportLog: () -> Unit = {},
 ) {
+    // Reads the BLE client directly off [LocalAppGraph] instead of taking a callback parameter
+    // (A-4 refactor) — the screen always wants to talk to the same singleton, so threading the
+    // callback through HaloRingApp → AppTab.VITALS branch was pure ceremony.
+    val graph = LocalAppGraph.current
     Column(
         modifier = Modifier.fillMaxSize().padding(top = 8.dp),
     ) {
@@ -112,7 +115,7 @@ fun VitalsScreen(
             text = if (state.measuring) "MEASURING…" else "MEASURE NOW",
             modifier = Modifier.padding(horizontal = ScreenPadding),
             focused = focusedIndex == 0,
-            onClick = onMeasureNow,
+            onClick = { graph.bleClient.requestVitalsSnapshot() },
         )
 
         Spacer(Modifier.height(18.dp))

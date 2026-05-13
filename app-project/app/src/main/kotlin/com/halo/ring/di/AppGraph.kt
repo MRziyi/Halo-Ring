@@ -20,6 +20,7 @@ import com.halo.ring.core.device.GlassActionMapper
 import com.halo.ring.core.device.WearStateProvider
 import com.halo.ring.core.gesture.SystemGestures
 import com.halo.ring.core.inject.ExecutorBackend
+import com.halo.ring.core.perf.LatencyLogger
 import kotlinx.coroutines.flow.MutableStateFlow
 
 /**
@@ -66,6 +67,10 @@ class AppGraph private constructor(
     /** Latest vitals snapshot (HR / SpO2 / stress) — the foreground service updates this when
      *  [RingEvent.Health] events arrive in response to [R08BleClient.requestVitalsSnapshot]. */
     val vitalsSnapshotFlow: MutableStateFlow<com.halo.ring.ui.screens.VitalsSnapshot>,
+    /** Per-gesture latency ring buffer (Doc/06 §4 — debug HUD's "Latency measurement mode").
+     *  The foreground service records into this when [advancedPrefsFlow.latencyMeasurement] is on;
+     *  the Advanced screen's "Export latency log" action pulls [LatencyLogger.toCsv]. */
+    val latencyLogger: LatencyLogger,
 ) {
     companion object {
         fun create(context: Context): AppGraph {
@@ -100,6 +105,7 @@ class AppGraph private constructor(
                 advancedPrefsFlow = MutableStateFlow(com.halo.ring.ui.screens.AdvancedPrefs()),
                 vitalsPrefsFlow = MutableStateFlow(com.halo.ring.ui.screens.VitalsPrefs()),
                 vitalsSnapshotFlow = MutableStateFlow(com.halo.ring.ui.screens.VitalsSnapshot()),
+                latencyLogger = LatencyLogger(capacity = 200),
             )
         }
 

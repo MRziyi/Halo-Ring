@@ -40,10 +40,22 @@ android {
         }
     }
 
+    // Reuse the debug keystore for release builds so developers can run
+    // :app:assembleRokidRelease without keystore setup — purely for size /
+    // R8-shrink measurement. Replace with a real release signingConfig before
+    // any external distribution.
+    signingConfigs {
+        getByName("debug") {
+            // AGP defaults to ~/.android/debug.keystore — leave as-is.
+        }
+    }
+
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
 
@@ -66,6 +78,18 @@ android {
                 "META-INF/NOTICE",
                 "META-INF/NOTICE.txt",
                 "META-INF/notice.txt",
+            )
+            // BouncyCastle ships ~1.2 MB of PQC (post-quantum) algorithm precomputed tables and
+            // localized CertPath error messages we never use. R8 strips the unused *classes* but
+            // can't strip resource files. Excluding them entirely saves ~1.2 MB in the release
+            // APK with zero functional impact for our use case (we only use AdbCrypto.kt's
+            // RSA-2048 + X.509 cert helpers).
+            excludes += listOf(
+                "org/bouncycastle/pqc/crypto/picnic/lowmcL1.bin.properties",
+                "org/bouncycastle/pqc/crypto/picnic/lowmcL3.bin.properties",
+                "org/bouncycastle/pqc/crypto/picnic/lowmcL5.bin.properties",
+                "org/bouncycastle/x509/CertPathReviewerMessages*.properties",
+                "org/bouncycastle/pkix/CertPathReviewerMessages*.properties",
             )
         }
     }

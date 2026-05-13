@@ -71,10 +71,9 @@ fun HaloRingApp(
     onAdvancedPrefsChanged: (AdvancedPrefs) -> Unit = {},
     onVitalsPrefsChanged: (VitalsPrefs) -> Unit = {},
     onAdvancedAction: (AdvancedAction) -> Unit = {},
-    onFindRing: () -> Unit = {},
-    onShutdownRing: () -> Unit = {},
-    onForgetRing: () -> Unit = {},
-    onMeasureNow: () -> Unit = {},
+    // A-4: onFindRing/onShutdownRing/onForgetRing/onMeasureNow removed — RingScreen + VitalsScreen
+    // now read the BLE client directly off [LocalAppGraph]. Pure threading removal; semantics
+    // unchanged.
 ) {
     HaloRingTheme {
         var state by remember { mutableStateOf(initial) }
@@ -146,7 +145,7 @@ fun HaloRingApp(
                 val top = state.navStack.lastOrNull()
                 when (top) {
                     null -> when (state.tab) {
-                        AppTab.VITALS -> VitalsScreen(state.vitals, onMeasureNow = onMeasureNow)
+                        AppTab.VITALS -> VitalsScreen(state.vitals)
                         AppTab.SETTINGS -> SettingsRootScreen(
                             onSectionSelected = { section ->
                                 push(when (section) {
@@ -247,12 +246,7 @@ fun HaloRingApp(
                         },
                     )
 
-                    SubScreen.Ring -> RingScreen(
-                        info = ringInfo,
-                        onFindRing = onFindRing,
-                        onShutdown = onShutdownRing,
-                        onForget = onForgetRing,
-                    )
+                    SubScreen.Ring -> RingScreen(info = ringInfo)
 
                     SubScreen.Power -> {
                         val active = profiles.firstOrNull { it.id == activeProfileId }

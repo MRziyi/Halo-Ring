@@ -138,11 +138,6 @@ class MainActivity : ComponentActivity() {
                     deviceProfile = graph.deviceProfile,
                     versionName = BuildConfig.VERSION_NAME,
                     versionCode = BuildConfig.VERSION_CODE,
-                    onMeasureNow = {
-                        // B6: trigger an on-demand vitals snapshot via the BLE client.
-                        Log.i("Halo", "Vitals MEASURE NOW")
-                        graph.bleClient.requestVitalsSnapshot()
-                    },
                     onPrefsChanged = { newPrefs ->
                         lifecycleScope.launch { graph.feedbackPrefs.updatePrefs { newPrefs } }
                     },
@@ -156,12 +151,9 @@ class MainActivity : ComponentActivity() {
                     onAdvancedPrefsChanged = { graph.advancedPrefsFlow.value = it },
                     onVitalsPrefsChanged = { graph.vitalsPrefsFlow.value = it },
                     onAdvancedAction = { handleAdvancedAction(it) },
-                    onFindRing = { graph.bleClient.blinkLed() },
-                    onShutdownRing = { graph.bleClient.shutdownRing() },
-                    onForgetRing = {
-                        graph.bleClient.stop()
-                        graph.bleClient.start()
-                    },
+                    // A-4: onMeasureNow / onFindRing / onShutdownRing / onForgetRing removed —
+                    // VitalsScreen + RingScreen consume LocalAppGraph directly. No callback
+                    // threading, same semantics.
                 )
             }
         }
@@ -211,8 +203,74 @@ class MainActivity : ComponentActivity() {
             AdvancedAction.DEEP_LINK_ACCESSIBILITY      -> openSettings(Settings.ACTION_ACCESSIBILITY_SETTINGS)
             AdvancedAction.DEEP_LINK_BATTERY_EXEMPTION  -> requestBatteryExemption()
             AdvancedAction.REOPEN_ADB_WIZARD            -> lifecycleScope.launch { firstRunStore.reset() }
-            AdvancedAction.EXPORT_LATENCY_LOG           -> Log.i("Halo", "TODO: export latency log CSV")
+            AdvancedAction.EXPORT_LATENCY_LOG           -> exportLatencyCsv()
         }
+    }
+
+    /**
+     * A-5: write the LatencyLogger ring buffer to Downloads/ as a CSV via MediaStore (scoped
+     * storage, no WRITE_EXTERNAL_STORAGE required on Android 10+). Returns silently if the
+     * buffer is empty or the file write fails — the user can tell from logcat / file system
+     * whether it succeeded; a toast pops to surface success / empty / failure.
+     */
+    private fun exportLatencyCsv() {
+        val graph = (application as HaloRingApplication).graph
+        val samples = graph.latencyLogger.size()
+        if (samples == 0) {
+            android.widget.Toast.makeText(this,
+                "Latency log is empty — enable measurement first, then exercise the ring.",
+                android.widget.Toast.LENGTH_SHORT).show()
+            return
+        }
+        val csv = graph.latencyLogger.toCsv()
+        val ts = java.text.SimpleDateFormat("yyyyMMdd-HHmmss", java.util.Locale.US)
+            .format(java.util.Date())
+        val displayName = "halo-latency-$ts.csv"
+
+        val resolver = contentResolver
+        val values = android.content.ContentValues().apply {
+            put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, displayName)
+            put(android.provider.MediaStore.MediaColumns.MIME_TYPE, "text/csv")
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH,
+                    android.os.Environment.DIRECTORY_DOWNLOADS)
+            }
+        }
+
+        val uri: android.net.Uri? = try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                resolver.insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+            } else {
+                @Suppress("DEPRATION")
+                val downloads = android.os.Environment.getExternalStoragePublicDirectory(
+                    android.os.Environment.DIRECTORY_DOWNLOADS).apply { mkdirs() }
+                val out = java.io.File(downloads, displayName)
+                out.writeText(csv)
+                android.net.Uri.fromFile(out)
+            }
+        } catch (e: Exception) {
+            Log.e("Halo", "latency CSV export failed: ${e.message}")
+            null
+        }
+
+        if (uri == null) {
+            android.widget.Toast.makeText(this,
+                "Latency export failed — see logcat", android.widget.Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            try {
+                resolver.openOutputStream(uri)?.use { it.write(csv.toByteArray(Charsets.UTF_8)) }
+            } catch (e: Exception) {
+                Log.e("Halo", "latency CSV write to $uri failed: ${e.message}")
+            }
+        }
+
+        Log.i("Halo", "wrote $samples latency samples to $uri")
+        android.widget.Toast.makeText(this,
+            "Wrote $samples samples → Downloads/$displayName",
+            android.widget.Toast.LENGTH_LONG).show()
     }
 
     private fun openSettings(action: String) {

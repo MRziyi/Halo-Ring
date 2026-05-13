@@ -87,6 +87,10 @@ class HaloRingService : Service() {
     private var screenOnState: Boolean = true
     private var idleRelaxTimer: com.halo.ring.core.gesture.Cancellable? = null
     private var modalTimeoutTimer: com.halo.ring.core.gesture.Cancellable? = null
+    /** A-5: name of the action the router most recently resolved a gesture to. Used by the
+     *  latency logger when a gesture is dispatched. Updated synchronously on the scheduler thread
+     *  by [InteractionRouter.onGestureRecognized]. */
+    @Volatile private var lastResolvedActionName: String = "None"
 
     override fun onCreate() {
         super.onCreate()
@@ -100,7 +104,38 @@ class HaloRingService : Service() {
         val synthesizer = GestureSynthesizer(
             config = graph.modeManager.active().gestureConfig,
             scheduler = graph.scheduler,
-            sink = { gesture -> serviceScope.launch { interactionRouter.onGesture(gesture) } },
+            sink = { gesture ->
+                // A-5: capture emit/dispatch timestamps when latency measurement is on.
+                //
+                // Hot path: when the user has the Advanced "Latency measurement" toggle OFF
+                // (the default in both debug and release builds), the only overhead is a single
+                // @Volatile read of `enabled` — about 1 ns per gesture. We pay nothing else: no
+                // allocations, no clock reads, no lock acquisition.
+                //
+                // When the toggle is ON: we read the clock twice, allocate one Sample (~80 B),
+                // take one synchronized lock to push into the 200-entry ring buffer. ~50 µs total
+                // per gesture. Even at one gesture/sec sustained, that's 0.005 % CPU and a few
+                // KB of heap — effectively zero battery impact for diagnostic value.
+                val measure = graph.latencyLogger.enabled
+                val tBle     = if (measure) lastActivityMs           else 0L
+                val tEmitted = if (measure) graph.scheduler.nowMs()  else 0L
+                serviceScope.launch {
+                    interactionRouter.onGesture(gesture)
+                    if (graph.latencyLogger.enabled) {
+                        graph.latencyLogger.record(
+                            com.halo.ring.core.perf.LatencyLogger.Sample(
+                                gestureName  = gesture.name,
+                                // The router fires onGestureRecognized synchronously; the .also { }
+                                // block on the router below caches the resolved action here.
+                                actionName   = lastResolvedActionName,
+                                tBleMs       = tBle,
+                                tEmittedMs   = tEmitted,
+                                tDispatchedMs = graph.scheduler.nowMs(),
+                            )
+                        )
+                    }
+                }
+            },
         )
         interactionRouter = InteractionRouter(
             modeManager = graph.modeManager,
@@ -145,7 +180,10 @@ class HaloRingService : Service() {
             },
         ).also { r ->
             // A5: HUD wiring for recognised gestures + system pseudo-actions.
+            // A-5 (latency): also stash the action name for [LatencyLogger] to pull when the
+            // gesture finishes dispatching.
             r.onGestureRecognized = { gesture, action ->
+                lastResolvedActionName = action::class.simpleName ?: "None"
                 if (feedbackPrefs.gestureHintHud && action !is GlassAction.None) {
                     hud?.show(HudEvent.GestureRecognised(gesture, action))
                 }
@@ -312,6 +350,16 @@ class HaloRingService : Service() {
             graph.feedbackPrefs.flow.collectLatest { p -> feedbackPrefs = p }
         }
         cleanup += { prefsJob.cancel() }
+
+        // ── 8b. AdvancedPrefs → mirror Advanced toggles into runtime hooks ─────────────────────
+        // Only the latency-measurement toggle has a runtime effect today (gates the
+        // LatencyLogger ring buffer). debugHud / spatialMode are UI-only stubs.
+        val advancedJob = serviceScope.launch {
+            graph.advancedPrefsFlow.collectLatest { p ->
+                graph.latencyLogger.enabled = p.latencyMeasurementEnabled
+            }
+        }
+        cleanup += { advancedJob.cancel() }
 
         // ── 9. AccessibilityService foreground-pkg → ModeManager auto-switch (B11) ────────────
         // The a11y service may already be running (from a previous app session) or come online
