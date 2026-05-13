@@ -70,36 +70,53 @@ class HudOverlay(
     enum class HudPosition { TopRight, TopCenter, BottomRight, Center }
 
     fun setPosition(pos: HudPosition) {
-        hudPosition = pos
-        view?.let {
-            wm.updateViewLayout(it, buildLayoutParams(pos))
+        runOnMain {
+            hudPosition = pos
+            view?.let {
+                try { wm.updateViewLayout(it, buildLayoutParams(pos)) } catch (_: Exception) {}
+            }
         }
     }
 
-    /** Show the event. Replaces any in-flight HUD; cancels any pending hide. */
+    /**
+     * Show the event. Replaces any in-flight HUD; cancels any pending hide.
+     *
+     * Audit-2026-05-13j (B1): may be called from the scheduler thread (the BLE-events subscriber
+     * runs there) — but [WindowManager.addView] and Compose state mutation should be on the main
+     * thread. Marshal everything via [runOnMain] so callers don't have to know.
+     */
     fun show(event: HudEvent) {
-        main.removeCallbacks(hideRunnable)
+        runOnMain {
+            main.removeCallbacks(hideRunnable)
 
-        val targetPos = if (event is HudEvent.Disconnected) HudPosition.Center else hudPosition
-        ensureViewInstalled(targetPos)
+            val targetPos = if (event is HudEvent.Disconnected) HudPosition.Center else hudPosition
+            ensureViewInstalled(targetPos)
 
-        currentEvent = event
-        val durationMs = when (event) {
-            is HudEvent.GestureRecognised -> 800L
-            is HudEvent.Reconnected       -> 1000L
-            is HudEvent.Disconnected      -> Long.MAX_VALUE        // persistent until hide()
-            else                          -> 2000L
-        }
-        if (durationMs != Long.MAX_VALUE) {
-            main.postDelayed(hideRunnable, durationMs)
+            currentEvent = event
+            val durationMs = when (event) {
+                is HudEvent.GestureRecognised -> 800L
+                is HudEvent.Reconnected       -> 1000L
+                is HudEvent.Disconnected      -> Long.MAX_VALUE        // persistent until hide()
+                else                          -> 2000L
+            }
+            if (durationMs != Long.MAX_VALUE) {
+                main.postDelayed(hideRunnable, durationMs)
+            }
         }
     }
 
     /** Force-hide the HUD (e.g. when Disconnected resolves into Reconnected). */
     fun hide() {
-        main.removeCallbacks(hideRunnable)
-        currentEvent = null
-        removeView()
+        runOnMain {
+            main.removeCallbacks(hideRunnable)
+            currentEvent = null
+            removeView()
+        }
+    }
+
+    /** Run [block] on the main thread synchronously if we're already there, else post. */
+    private inline fun runOnMain(crossinline block: () -> Unit) {
+        if (Looper.myLooper() == Looper.getMainLooper()) block() else main.post { block() }
     }
 
     private fun ensureViewInstalled(pos: HudPosition) {

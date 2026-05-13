@@ -17,6 +17,11 @@ import com.halo.ring.core.power.PowerPolicy
  *   (and *only* if identical — see §20.3 for why a wider window is dangerous).
  * - Deliver every (non-deduped) frame as a parsed [RingEvent] on a single dedicated looper/thread
  *   so the downstream synthesizer sees no races. Carry the monotonic timestamp.
+ * - **Idempotence for power control**: [setTouchEnabled] and [setIntervalMode] are driven by
+ *   the [PowerPolicy] reconcile loop, which fires on every BLE event. Implementations MUST
+ *   suppress redundant writes when the requested state is unchanged since the last call on the
+ *   same connection. State trackers reset on disconnect / [stop] so the next connection re-arms
+ *   the writes. (Doc/13 §audit-2026-05-13j.)
  */
 interface R08BleClient {
 

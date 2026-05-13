@@ -77,6 +77,16 @@ class AndroidR08BleClient(
     @Volatile private var lastBytes: ByteArray? = null
     @Volatile private var lastBytesAt: Long = 0L
 
+    /**
+     * Idempotence trackers — Doc/13 §audit-2026-05-13j: [reconcilePower] runs on every BLE event
+     * + wear/screen change. Without these guards, every gesture caused a redundant
+     * `TOUCH_ENABLE` write to the ring (+ a `TOUCH_MODE` 500 ms later) and a redundant
+     * `requestConnectionPriority` to the BT stack. Both reset to null on disconnect so a fresh
+     * connection re-issues the writes.
+     */
+    @Volatile private var lastTouchEnabledRequested: Boolean? = null
+    @Volatile private var lastIntervalModeRequested: PowerPolicy.IntervalMode? = null
+
     // ── R08BleClient ───────────────────────────────────────────────────────────────────────────
 
     override fun events() = RingEventSource { onEvent ->
@@ -121,6 +131,8 @@ class AndroidR08BleClient(
             try { gatt?.disconnect(); gatt?.close() } catch (_: SecurityException) {}
             gatt = null
             writeChar = null
+            lastTouchEnabledRequested = null
+            lastIntervalModeRequested = null
             transitionTo(ConnectionState.DISCONNECTED)
         }
     }
@@ -130,6 +142,11 @@ class AndroidR08BleClient(
             // Talking to the ring when we're not connected is pointless — and used to spam
             // `writeChar not yet available` once per reconcile cycle. Now silently ignored.
             if (state != ConnectionState.READY) return@post
+            // Doc/13 §audit-2026-05-13j: reconcilePower fires on every BLE event, so without
+            // this guard every gesture writes TOUCH_ENABLE + TOUCH_MODE redundantly. The flag
+            // is cleared on disconnect so a fresh connection re-arms the writes.
+            if (lastTouchEnabledRequested == enabled) return@post
+            lastTouchEnabledRequested = enabled
             writeBytes(if (enabled) R08Protocol.TOUCH_ENABLE else R08Protocol.TOUCH_DISABLE)
             if (enabled) {
                 scheduler.postDelayed(TOUCH_MODE_DELAY_MS) {
@@ -146,6 +163,12 @@ class AndroidR08BleClient(
     @SuppressLint("MissingPermission")
     override fun setIntervalMode(mode: PowerPolicy.IntervalMode) {
         scheduler.post {
+            // Doc/13 §audit-2026-05-13j: same idempotence guard as setTouchEnabled. Every gesture
+            // triggers reconcilePower, but the requested band rarely changes between gestures —
+            // hitting requestConnectionPriority(...) every time burns a BLE LL control PDU per
+            // gesture for no benefit.
+            if (lastIntervalModeRequested == mode) return@post
+            lastIntervalModeRequested = mode
             val priority = when (mode) {
                 PowerPolicy.IntervalMode.HIGH     -> BluetoothGatt.CONNECTION_PRIORITY_HIGH
                 PowerPolicy.IntervalMode.BALANCED -> BluetoothGatt.CONNECTION_PRIORITY_BALANCED
@@ -287,6 +310,12 @@ class AndroidR08BleClient(
                             vitalsSnapshotInFlight = false
                         }
                         writeChar = null
+                        // Audit-2026-05-13j: clear idempotence trackers so the next connection's
+                        // init sequence re-issues TOUCH_ENABLE/TOUCH_MODE and the first
+                        // reconcilePower writes a fresh connection priority. Stale flags would
+                        // suppress these and leave the ring with no touch IC after reconnect.
+                        lastTouchEnabledRequested = null
+                        lastIntervalModeRequested = null
                         transitionTo(ConnectionState.CONNECTING)   // autoConnect is alive
                     }
                 }
@@ -318,9 +347,16 @@ class AndroidR08BleClient(
                 } catch (_: SecurityException) {}
 
                 // §5 init sequence — staggered writes are necessary; the BLE stack will queue them.
-                scheduler.postDelayed(TOUCH_ENABLE_DELAY_MS) { writeBytes(R08Protocol.TOUCH_ENABLE) }
+                // Audit-2026-05-13j: also tick [lastTouchEnabledRequested] so the first
+                // [reconcilePower]-driven [setTouchEnabled] doesn't re-issue a duplicate write.
+                scheduler.postDelayed(TOUCH_ENABLE_DELAY_MS) {
+                    if (state == ConnectionState.READY) {
+                        writeBytes(R08Protocol.TOUCH_ENABLE)
+                        lastTouchEnabledRequested = true
+                    }
+                }
                 scheduler.postDelayed(TOUCH_ENABLE_DELAY_MS + TOUCH_MODE_DELAY_MS) {
-                    writeBytes(R08Protocol.TOUCH_MODE)
+                    if (state == ConnectionState.READY) writeBytes(R08Protocol.TOUCH_MODE)
                 }
                 scheduler.postDelayed(BATTERY_FIRST_DELAY_MS) {
                     writeBytes(R08Protocol.BATTERY_QUERY)

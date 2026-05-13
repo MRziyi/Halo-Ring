@@ -58,7 +58,13 @@ object PowerPolicy {
     )
 
     fun decide(i: Inputs): Decision {
-        val recentlyActive = (i.nowMs - i.lastActivityMs) < ACTIVE_WINDOW_MS
+        // Audit-2026-05-13j: explicit MIN_VALUE guard. `nowMs - Long.MIN_VALUE` overflows to a
+        // small negative Long, which then accidentally satisfied `< ACTIVE_WINDOW_MS` and made
+        // "never-active" register as recently-active. Caller (HaloRingService) seeds
+        // lastActivityMs on BLE READY so first connection still gets HIGH; this is defence in
+        // depth + correctness when no connection has ever happened.
+        val recentlyActive = i.lastActivityMs != Long.MIN_VALUE &&
+            (i.nowMs - i.lastActivityMs) < ACTIVE_WINDOW_MS
         val notWornLongEnough = i.lastWornMs != Long.MIN_VALUE &&
             (i.nowMs - i.lastWornMs) > NOT_WORN_DISCONNECT_MS
         val intervalMode = when {

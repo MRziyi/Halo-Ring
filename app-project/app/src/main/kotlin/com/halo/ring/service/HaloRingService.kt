@@ -262,6 +262,12 @@ class HaloRingService : Service() {
                     graph.ringInfoFlow.value = graph.ringInfoFlow.value.copy(connected = true)
                     hud?.show(HudEvent.Reconnected)
                     synthesizer.armWakeSwallow()
+                    // Audit-2026-05-13j (P3): "just-connected" counts as activity for the policy —
+                    // otherwise the very first gesture rides whatever interval Android negotiated
+                    // by default (~30-100 ms) instead of HIGH (15-30 ms). Seed first, then
+                    // reconcile so [setIntervalMode(HIGH)] goes out before the user's first tap.
+                    lastActivityMs = graph.scheduler.nowMs()
+                    reconcilePower()
                     // First-time pairing teaching aid: enable HUD hints for 5 minutes.
                     if (feedbackPrefs.autoHintAfterPairing) {
                         serviceScope.launch { graph.feedbackPrefs.armAutoHintAfterPairing() }
@@ -338,11 +344,19 @@ class HaloRingService : Service() {
             addAction(Intent.ACTION_SCREEN_ON); addAction(Intent.ACTION_SCREEN_OFF)
         })
         cleanup += { try { unregisterReceiver(screenReceiver) } catch (_: IllegalArgumentException) {} }
-        // Seed initial state.
+        // Seed initial state. Audit-2026-05-13j (P3): also pre-fetch wear state via the synchronous
+        // [WearStateProvider.isWorn] (the observer fires on *changes* — may never fire if the user
+        // is already wearing the glasses when our service starts), then trigger one reconcile so
+        // the BLE client's [setTouchEnabled] / [setIntervalMode] guards have known good initial
+        // values before the first ring event arrives.
         val pm = getSystemService(POWER_SERVICE) as PowerManager
         graph.scheduler.post {
             screenOnState = pm.isInteractive
             interactionRouter.screenOn = pm.isInteractive
+            val initiallyWorn = try { graph.wearProvider.isWorn() } catch (_: Throwable) { false }
+            worn = initiallyWorn
+            if (initiallyWorn) lastWornMs = graph.scheduler.nowMs()
+            reconcilePower()
         }
 
         // ── 8. FeedbackPrefs DataStore → cached snapshot ──────────────────────────────────────
