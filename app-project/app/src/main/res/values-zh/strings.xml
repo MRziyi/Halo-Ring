@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 中文系统下显示的名称与文案。简体 + 繁体共用此 values-zh；如果以后要分繁简，
+         再拆 values-zh-rCN / values-zh-rTW。 -->
+    <string name="app_name">环意</string>
+    <string name="app_name_bilingual">环意 · Halo Ring</string>
+    <string name="app_tagline">环之所至，意之所达</string>
+    <string name="app_byline">作者 紫意 · Zack</string>
+
+    <string name="a11y_service_label">环意（前台 &amp; 返回/主页辅助）</string>
+
+    <string name="notification_channel_name">环意</string>
+    <string name="notification_title">环意</string>
+    <string name="notification_text">戒指已就绪</string>
+</resources>

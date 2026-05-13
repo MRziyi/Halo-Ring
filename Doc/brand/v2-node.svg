@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- V2 "Node" — V1 + a bright touch-sensor node at 12 o'clock embedded in the ring.
+     Adds product meaning (the touch surface IS the top of the ring) and a tiny focal point. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <radialGradient id="atmosphereHalo" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0.55" stop-color="#5EE08C" stop-opacity="0"/>
+      <stop offset="0.62" stop-color="#5EE08C" stop-opacity="0.22"/>
+      <stop offset="0.78" stop-color="#5EE08C" stop-opacity="0.06"/>
+      <stop offset="1.0"  stop-color="#5EE08C" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="rimGlow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0.83" stop-color="#5EE08C" stop-opacity="0"/>
+      <stop offset="0.87" stop-color="#5EE08C" stop-opacity="0.55"/>
+      <stop offset="0.93" stop-color="#5EE08C" stop-opacity="0.10"/>
+      <stop offset="1.0"  stop-color="#5EE08C" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="ringMetal" x1="0.2" y1="0.15" x2="0.85" y2="0.95">
+      <stop offset="0"   stop-color="#9CF2C0"/>
+      <stop offset="0.5" stop-color="#5EE08C"/>
+      <stop offset="1"   stop-color="#3FB872"/>
+    </linearGradient>
+    <!-- Node halo (small, bright, white-mint) -->
+    <radialGradient id="nodeHalo" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="1"/>
+      <stop offset="0.35" stop-color="#E0FFEC" stop-opacity="0.9"/>
+      <stop offset="1" stop-color="#5EE08C" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="1024" height="1024" fill="#000000"/>
+  <circle cx="512" cy="512" r="480" fill="url(#atmosphereHalo)"/>
+  <circle cx="512" cy="512" r="320" fill="url(#rimGlow)"/>
+
+  <path fill="url(#ringMetal)" fill-rule="evenodd" d="
+    M 222 512 a 290 290 0 1 0 580 0 a 290 290 0 1 0 -580 0 Z
+    M 282 512 a 230 230 0 1 1 460 0 a 230 230 0 1 1 -460 0 Z
+  "/>
+
+  <!-- Touch node: embedded in ring at 12 o'clock; center of ring stroke = y=252.
+       Two-layer dot: bright glow + tight white core. -->
+  <circle cx="512" cy="252" r="36" fill="url(#nodeHalo)"/>
+  <circle cx="512" cy="252" r="14" fill="#FFFFFF"/>
+</svg>

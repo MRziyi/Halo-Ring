@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- BLE central role -->
+    <uses-permission android:name="android.permission.BLUETOOTH" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN"
+        android:usesPermissionFlags="neverForLocation" />
+    <!-- Pre-Android-12 BLE scan needs location. Both must be declared together. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+
+    <!-- AdbMdnsDiscovery uses Android NsdManager → mDNS over loopback → requires INTERNET.
+         (No actual outbound network — the daemon is local. NsdManager.create() still throws
+         SecurityException without this permission on Android 14+.) -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- Resident foreground service for the BLE central + ring lifecycle -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
+    <!-- Granted by `pm grant ...` via the ADB-bootstrap wizard; lets us toggle wireless debugging -->
+    <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS"
+        tools:ignore="ProtectedPermissions" />
+
+    <!-- BLE is functionally required, but we leave it as "not required" to keep the same APK
+         installable on the GENERIC_ANDROID dev fallback (e.g. an emulator without a BLE stack).
+         The runtime guards in AndroidR08BleClient.start() degrade gracefully when adapter==null. -->
+    <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />
+    <!-- We surface the LEANBACK_LAUNCHER category so Rokid Sprite Launcher's big-icon grid picks
+         us up. We are NOT an Android TV app, so explicitly mark TV-only features optional. -->
+    <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+    <uses-feature android:name="android.software.leanback" android:required="false" />
+
+    <application
+        android:name=".HaloRingApplication"
+        android:label="@string/app_name"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:theme="@style/Theme.HaloRing"
+        android:allowBackup="false"
+        android:supportsRtl="true"
+        tools:ignore="MissingTvBanner"><!-- not deploying to Android TV; the LEANBACK_LAUNCHER intent is there to look right in Rokid Sprite Launcher's big-icon grid -->
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:theme="@style/Theme.HaloRing.Splash"
+            android:launchMode="singleTask">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+                <!-- Both Rokid (Sprite) and RayNeo launchers honour LEANBACK_LAUNCHER for big-icon TV-style grids -->
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <service
+            android:name=".service.HaloRingService"
+            android:exported="false"
+            android:foregroundServiceType="connectedDevice" />
+
+        <receiver
+            android:name=".receiver.BootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- AccessibilityService is OPTIONAL: enables foreground-package auto-switch + Back/Home
+             fallback. The app works without it (ADB agent does everything), but enabling it lets us
+             reduce the cases where we need the ADB connection alive. -->
+        <service
+            android:name=".accessibility.HaloRingAccessibilityService"
+            android:exported="false"
+            android:label="@string/a11y_service_label"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/halo_ring_accessibility_config" />
+        </service>
+    </application>
+</manifest>

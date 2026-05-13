@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- App branding. Public name = "Halo Ring"; bilingual mark in About.
+         Internal codename "R08-Remote" is reserved for repository + design docs only;
+         never user-visible. -->
+    <string name="app_name">Halo Ring</string>
+    <string name="app_name_bilingual">Halo Ring · 环意</string>
+    <string name="app_tagline">Where the ring goes, the world moves.</string>
+    <string name="app_byline">by Zack 紫意</string>
+
+    <!-- Accessibility service label. Surfaces in Settings → Accessibility → installed services. -->
+    <string name="a11y_service_label">Halo Ring (foreground &amp; back/home helper)</string>
+
+    <!-- Foreground service notification. -->
+    <string name="notification_channel_name">Halo Ring</string>
+    <string name="notification_title">Halo Ring</string>
+    <string name="notification_text">Ring listening</string>
+</resources>

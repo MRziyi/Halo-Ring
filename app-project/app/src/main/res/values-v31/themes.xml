@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Android 12+ splash screen: a black canvas with our launcher icon centered.
+         Reusing @drawable/ic_launcher_foreground keeps the splash visually continuous with
+         the home-screen icon — when the launcher icon shrinks into the splash circle, both
+         look identical. MainActivity.onCreate calls setTheme(Theme_HaloRing) before the first
+         Compose render to hand off back to the main theme. -->
+    <style name="Theme.HaloRing.Splash" parent="android:Theme.DeviceDefault.NoActionBar">
+        <item name="android:windowBackground">@color/halo_black</item>
+        <item name="android:windowSplashScreenBackground">@color/halo_black</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="android:windowSplashScreenIconBackgroundColor">@color/halo_black</item>
+    </style>
+</resources>

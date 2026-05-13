@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Minimal AccessibilityService config. We only need:
+  - The set of global actions (BACK / HOME / RECENTS / NOTIFICATIONS) the service can perform.
+  - WINDOW_STATE_CHANGED events so we can read the current foreground package and feed it into
+    ModeManager.onForegroundPackage() for auto-switch.
+
+  We intentionally do NOT request canRetrieveWindowContent (we don't need to read screen text) or
+  flagRequestEnhancedWebAccessibility — keep the surface minimal so the system & user trust it.
+-->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:accessibilityEventTypes="typeWindowStateChanged|typeWindowsChanged"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:accessibilityFlags="flagDefault"
+    android:canPerformGestures="false"
+    android:canRetrieveWindowContent="false"
+    android:notificationTimeout="100"
+    android:summary="Lets R08 Remote do Back/Home/Recents without an active ADB connection, and auto-switch profiles based on the foreground app." />

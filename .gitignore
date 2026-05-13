@@ -1,0 +1,65 @@
+# ────────────────────────────────────────────────────────────────────────────
+# Halo Ring · 环意 — .gitignore
+# ────────────────────────────────────────────────────────────────────────────
+
+# ───────── Gradle / Android build artefacts ──────────────────────────────────
+**/build/
+**/.gradle/
+**/.cxx/
+**/captures/
+
+# Build outputs / signed APKs
+**/outputs/
+*.apk
+*.aab
+*.dex.jar
+
+
+# ───────── IDE / editor metadata ─────────────────────────────────────────────
+.idea/
+*.iml
+.vscode/
+.fleet/
+.DS_Store
+Thumbs.db
+
+
+# ───────── Local environment + secrets ───────────────────────────────────────
+# Absolute paths and SDK locations — different per developer machine.
+**/local.properties
+
+# Signing config — never commit.
+*.keystore
+*.jks
+keystore.properties
+
+
+# ───────── Vendor SDK (proprietary, must be obtained separately) ─────────────
+# RayNeo Mercury SDK — see app-project/app/libs/README.md for how to obtain.
+app-project/app/libs/*.aar
+!app-project/app/libs/README.md
+
+
+# ───────── Build tool caches ─────────────────────────────────────────────────
+**/.kotlin/
+**/.cache/
+**/.tmp/
+.kotlin-js-store/
+
+
+# ───────── Python bytecode (phase0 probe) ────────────────────────────────────
+__pycache__/
+*.pyc
+phase0/.venv/
+
+
+# ───────── Profiling / debug ─────────────────────────────────────────────────
+*.hprof
+*.log
+*.tmp
+
+
+# ───────── Misc dev artefacts ────────────────────────────────────────────────
+*.swp
+*~
+.envrc

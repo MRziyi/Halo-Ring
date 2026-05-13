@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Halo Ring app theme — pure black canvas, no Material chrome, edge-to-edge. -->
+    <style name="Theme.HaloRing" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/halo_black</item>
+        <item name="android:colorBackground">@color/halo_black</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+
+    <!-- Splash theme for Android 26–30: identical to the main theme. On these older versions
+         the system has no `windowSplashScreen*` machinery; cold-start just shows the black
+         windowBackground, which is on-brand. The full splash icon is applied via the
+         values-v31/themes.xml variant below. -->
+    <style name="Theme.HaloRing.Splash" parent="Theme.HaloRing"/>
+</resources>

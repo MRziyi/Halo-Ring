@@ -1,0 +1,104 @@
+package com.halo.ring.adb
+
+import android.util.Log
+import org.bouncycastle.asn1.x500.X500NameBuilder
+import org.bouncycastle.asn1.x500.style.BCStyle
+import org.bouncycastle.asn1.x509.BasicConstraints
+import org.bouncycastle.asn1.x509.Extension
+import org.bouncycastle.cert.X509v3CertificateBuilder
+import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter
+import org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder
+import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder
+import java.io.ByteArrayOutputStream
+import java.math.BigInteger
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
+import java.security.KeyPair
+import java.security.KeyPairGenerator
+import java.security.cert.X509Certificate
+import java.security.interfaces.RSAPublicKey
+import java.util.Date
+
+/**
+ * Generates the RSA-2048 keypair + self-signed X.509 cert that the ADB-over-Wi-Fi flow uses for
+ * the TLS client side. Ported (in spirit) from the decompiled v2 `AdbConnection.java`'s
+ * `generateRSAKey` + cert-builder logic, simplified with BouncyCastle's high-level builders.
+ *
+ * The cert is **self-signed**, valid for 365 days, with `CN=r08remote-client`. ADB on the glasses
+ * side trusts any cert presented during pairing — we're proving the keypair is consistent across
+ * the auth handshake, not establishing an external PKI.
+ *
+ * Threading: pure computation; ~50 ms one-shot cost. Generate once at first wizard run; cache the
+ * encoded PKCS#8 + X.509 in DataStore so subsequent connects skip the cost.
+ */
+object AdbCrypto {
+
+    private const val TAG = "AdbCrypto"
+
+    /** Generates a fresh RSA-2048 keypair. */
+    fun generateRsaKeyPair(): KeyPair {
+        val gen = KeyPairGenerator.getInstance("RSA")
+        gen.initialize(2048)
+        return gen.generateKeyPair()
+    }
+
+    /** Builds a self-signed X.509 v3 cert valid for [validDays] days. */
+    fun selfSignCert(keyPair: KeyPair, commonName: String = "r08remote-client", validDays: Int = 365): X509Certificate {
+        val now = Date()
+        val end = Date(now.time + validDays * 24L * 3600L * 1000L)
+        val serial = BigInteger.valueOf(System.currentTimeMillis())
+        val name = X500NameBuilder(BCStyle.INSTANCE).addRDN(BCStyle.CN, commonName).build()
+
+        val builder: X509v3CertificateBuilder = JcaX509v3CertificateBuilder(
+            name, serial, now, end, name, keyPair.public,
+        )
+        builder.addExtension(Extension.basicConstraints, false, BasicConstraints(false))
+
+        val signer = JcaContentSignerBuilder("SHA256withRSA").build(keyPair.private)
+        val holder = builder.build(signer)
+        return JcaX509CertificateConverter().getCertificate(holder)
+    }
+
+    /**
+     * ADB's old-style RSA public-key encoding used for the initial AUTH handshake (before TLS was
+     * mandated in API 30+). The format is little-endian:
+     *   uint32 modulus_size_words
+     *   uint32 n0inv (Montgomery)
+     *   uint32[64] modulus
+     *   uint32[64] rr  (Montgomery R^2 mod n)
+     *   uint32 publicExponent
+     * For the wireless TLS flow we don't strictly need this — pairing uses the cert directly — but
+     * the regular CONNECT/AUTH handshake on legacy USB ADB does. Ported here for completeness.
+     */
+    fun encodeAdbPublicKey(keyPair: KeyPair): ByteArray {
+        val rsa = keyPair.public as RSAPublicKey
+        val modulus = rsa.modulus
+        val r32 = BigInteger.ONE.shiftLeft(32)
+        val n0inv = (r32 - modulus.modInverse(r32)).toInt()
+        val rr = BigInteger.ONE.shiftLeft(2048).mod(modulus)
+
+        val baos = ByteArrayOutputStream()
+        baos.write(ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(64).array())
+        baos.write(ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(n0inv).array())
+        baos.write(toLittleEndianWords(modulus, 64))
+        baos.write(toLittleEndianWords(rr, 64))
+        baos.write(ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(rsa.publicExponent.toInt()).array())
+        return baos.toByteArray()
+    }
+
+    private fun toLittleEndianWords(n: BigInteger, words: Int): ByteArray {
+        val be = n.toByteArray()
+        val le = ByteArray(words * 4)
+        // Reverse + left-pad to fit `words * 4` little-endian bytes.
+        for (i in be.indices) le[be.size - 1 - i] = be[i]
+        return le
+    }
+
+    init {
+        // Make sure BouncyCastle is in the JCA provider list. Idempotent.
+        if (java.security.Security.getProvider("BC") == null) {
+            java.security.Security.addProvider(org.bouncycastle.jce.provider.BouncyCastleProvider())
+            Log.d(TAG, "BouncyCastle provider registered")
+        }
+    }
+}

@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  V10a "Aperture Arcs" — V6's coaxial 3-blade aperture, but each blade is a V3-style swept
+  arc. Three "fresh gestures" at 12/4/8 o'clock, 120° rotational symmetry.
+
+  Tuning (this revision, addresses "too high black-white contrast + muddy"):
+   • Head color: #B8FFD4 (bright mint), NOT pure white. Single-arc value range now stays
+     firmly inside the green family — no harsh white-against-black stripe.
+   • Tail: fades to alpha=0 at gradient offset 0.867, which is the projected position of
+     clock-angle 120° on a 150° blade. So each blade's *visible* portion covers exactly
+     120° of clock-arc, and the three blades tile a full 360° ring without overlap. No
+     mix-blend-mode tricks needed.
+   • Removed the previous dark-green low-opacity tail (#3FB872 @ 0.3 alpha) — that was the
+     "muddy shadow" against black. Now the tail is just primary green fading to
+     transparent, then nothing.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <radialGradient id="atmosphereHalo" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0.55" stop-color="#5EE08C" stop-opacity="0"/>
+      <stop offset="0.62" stop-color="#5EE08C" stop-opacity="0.22"/>
+      <stop offset="0.78" stop-color="#5EE08C" stop-opacity="0.07"/>
+      <stop offset="1.0"  stop-color="#5EE08C" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="rimGlow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0.83" stop-color="#5EE08C" stop-opacity="0"/>
+      <stop offset="0.87" stop-color="#5EE08C" stop-opacity="0.42"/>
+      <stop offset="0.93" stop-color="#5EE08C" stop-opacity="0.08"/>
+      <stop offset="1.0"  stop-color="#5EE08C" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Blade gradient: bright mint head → primary green body → clean fade to invisible at
+         offset 0.867. Body holds at ≥ 0.65 opacity through the middle (no smoky mid-tones). -->
+    <linearGradient id="blade1" x1="512" y1="252" x2="642" y2="737.17" gradientUnits="userSpaceOnUse">
+      <stop offset="0"     stop-color="#B8FFD4" stop-opacity="1.0"/>
+      <stop offset="0.30"  stop-color="#5EE08C" stop-opacity="0.92"/>
+      <stop offset="0.60"  stop-color="#5EE08C" stop-opacity="0.65"/>
+      <stop offset="0.80"  stop-color="#5EE08C" stop-opacity="0.28"/>
+      <stop offset="0.867" stop-color="#5EE08C" stop-opacity="0"/>
+      <stop offset="1"     stop-color="#5EE08C" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="blade2" x1="737.17" y1="642" x2="252" y2="512" gradientUnits="userSpaceOnUse">
+      <stop offset="0"     stop-color="#B8FFD4" stop-opacity="1.0"/>
+      <stop offset="0.30"  stop-color="#5EE08C" stop-opacity="0.92"/>
+      <stop offset="0.60"  stop-color="#5EE08C" stop-opacity="0.65"/>
+      <stop offset="0.80"  stop-color="#5EE08C" stop-opacity="0.28"/>
+      <stop offset="0.867" stop-color="#5EE08C" stop-opacity="0"/>
+      <stop offset="1"     stop-color="#5EE08C" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="blade3" x1="286.83" y1="642" x2="642" y2="286.83" gradientUnits="userSpaceOnUse">
+      <stop offset="0"     stop-color="#B8FFD4" stop-opacity="1.0"/>
+      <stop offset="0.30"  stop-color="#5EE08C" stop-opacity="0.92"/>
+      <stop offset="0.60"  stop-color="#5EE08C" stop-opacity="0.65"/>
+      <stop offset="0.80"  stop-color="#5EE08C" stop-opacity="0.28"/>
+      <stop offset="0.867" stop-color="#5EE08C" stop-opacity="0"/>
+      <stop offset="1"     stop-color="#5EE08C" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1024" height="1024" fill="#000000"/>
+  <circle cx="512" cy="512" r="500" fill="url(#atmosphereHalo)"/>
+  <circle cx="512" cy="512" r="320" fill="url(#rimGlow)"/>
+
+  <!-- No blend mode: each blade fades to alpha=0 exactly where the next blade's bright head
+       begins (clock-angle offset = 120° = gradient offset 0.867). Three blades, one ring. -->
+  <g fill="none" stroke-width="62" stroke-linecap="round">
+    <path d="M 512 252       A 260 260 0 0 1 642    737.17" stroke="url(#blade1)"/>
+    <path d="M 737.17 642    A 260 260 0 0 1 252    512"    stroke="url(#blade2)"/>
+    <path d="M 286.83 642    A 260 260 0 0 1 642    286.83" stroke="url(#blade3)"/>
+  </g>
+</svg>

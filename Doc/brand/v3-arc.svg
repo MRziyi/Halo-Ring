@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- V3 "Arc" — V1 + a bright crescent overlay across the top half of the ring,
+     suggesting the trace of a finger sweep. Adds motion + gesture semantic. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <radialGradient id="atmosphereHalo" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0.55" stop-color="#5EE08C" stop-opacity="0"/>
+      <stop offset="0.62" stop-color="#5EE08C" stop-opacity="0.22"/>
+      <stop offset="0.78" stop-color="#5EE08C" stop-opacity="0.06"/>
+      <stop offset="1.0"  stop-color="#5EE08C" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="rimGlow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0.83" stop-color="#5EE08C" stop-opacity="0"/>
+      <stop offset="0.87" stop-color="#5EE08C" stop-opacity="0.55"/>
+      <stop offset="0.93" stop-color="#5EE08C" stop-opacity="0.10"/>
+      <stop offset="1.0"  stop-color="#5EE08C" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="ringMetal" x1="0.2" y1="0.15" x2="0.85" y2="0.95">
+      <stop offset="0"   stop-color="#9CF2C0"/>
+      <stop offset="0.5" stop-color="#5EE08C"/>
+      <stop offset="1"   stop-color="#3FB872"/>
+    </linearGradient>
+    <!-- Arc trail: bright mint, fades at both ends to invisible.
+         Drawn as a horizontal gradient masked along the top of the ring. -->
+    <linearGradient id="arcTrail" x1="0.15" y1="0.5" x2="0.85" y2="0.5">
+      <stop offset="0"    stop-color="#B8FFD4" stop-opacity="0"/>
+      <stop offset="0.5"  stop-color="#FFFFFF" stop-opacity="1.0"/>
+      <stop offset="1"    stop-color="#B8FFD4" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1024" height="1024" fill="#000000"/>
+  <circle cx="512" cy="512" r="480" fill="url(#atmosphereHalo)"/>
+  <circle cx="512" cy="512" r="320" fill="url(#rimGlow)"/>
+
+  <path fill="url(#ringMetal)" fill-rule="evenodd" d="
+    M 222 512 a 290 290 0 1 0 580 0 a 290 290 0 1 0 -580 0 Z
+    M 282 512 a 230 230 0 1 1 460 0 a 230 230 0 1 1 -460 0 Z
+  "/>
+
+  <!-- Bright trail arc: 60° wide at the top of ring (10 o'clock → 2 o'clock).
+       Stroke 38 px (about 2/3 of the ring's body), opacity-fades at endpoints. -->
+  <path d="M 263.7 367.7 A 290 290 0 0 1 760.3 367.7"
+        fill="none" stroke="url(#arcTrail)" stroke-width="38"
+        stroke-linecap="round" opacity="0.85"/>
+</svg>

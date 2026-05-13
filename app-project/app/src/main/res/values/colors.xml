@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Halo Ring brand palette (mirrors Doc/08-ui-design.md tokens). -->
+    <color name="halo_black">#000000</color>
+    <color name="halo_accent">#5EE08C</color>
+    <color name="halo_mint_bright">#B8FFD4</color>
+
+    <!-- Adaptive launcher icon background. Pure black, OLED-friendly,
+         matches the SVG master in Doc/brand/v10a-aperture-arcs.svg. -->
+    <color name="ic_launcher_background">#000000</color>
+</resources>

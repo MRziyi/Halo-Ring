@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Halo Ring · 环意 — adaptive launcher icon foreground.
+  Converted from Doc/brand/v10a-aperture-arcs.svg, scaled to 75 % of the SVG master + halo
+  alphas boosted (atmospheric peak 0.22 → 0.34, rim peak 0.42 → 0.62) so the launcher tile
+  reads as "glowing" rather than "thin ring".
+
+  Geometry (in 108-dp viewport, center 54,54):
+    - Ring centerline radius: 20.57 dp  (was 27.42; 75 % of master)
+    - Stroke width:           4.91 dp
+    - Atmospheric halo r:     39.55 dp
+    - Rim glow r:             25.31 dp
+    - Visible outer ring edge: 20.57 + 2.45 ≈ 23 dp  (safe-zone radius is 33 dp)
+
+  Three 150 °-arc blades at 12 / 4 / 8 o'clock heads; gradient fades to alpha 0 at offset
+  0.867 so the visible bright portion of each blade tiles the ring without overlap.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Atmospheric halo — alpha boost: peak 0.34 (was 0.22), shoulder 0.12 (was 0.07) -->
+    <path android:pathData="M0,0 h108 v108 h-108 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="radial"
+                android:centerX="54"
+                android:centerY="54"
+                android:gradientRadius="39.55">
+                <item android:offset="0.55" android:color="#005EE08C"/>
+                <item android:offset="0.62" android:color="#575EE08C"/>
+                <item android:offset="0.78" android:color="#1F5EE08C"/>
+                <item android:offset="1.0"  android:color="#005EE08C"/>
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Rim glow — alpha boost: peak 0.62 (was 0.42), shoulder 0.18 (was 0.08) -->
+    <path android:pathData="M0,0 h108 v108 h-108 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="radial"
+                android:centerX="54"
+                android:centerY="54"
+                android:gradientRadius="25.31">
+                <item android:offset="0.83" android:color="#005EE08C"/>
+                <item android:offset="0.87" android:color="#9E5EE08C"/>
+                <item android:offset="0.93" android:color="#2E5EE08C"/>
+                <item android:offset="1.0"  android:color="#005EE08C"/>
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Blade 1: head at 12 o'clock (θ=0°), tail at θ=150° -->
+    <path android:pathData="M 54,33.44 A 20.57,20.57 0 0 1 64.28,71.81"
+          android:fillColor="#00000000"
+          android:strokeWidth="4.91"
+          android:strokeLineCap="round">
+        <aapt:attr name="android:strokeColor">
+            <gradient
+                android:type="linear"
+                android:startX="54"     android:startY="33.44"
+                android:endX="64.28"    android:endY="71.81">
+                <item android:offset="0"     android:color="#FFB8FFD4"/>
+                <item android:offset="0.30"  android:color="#EB5EE08C"/>
+                <item android:offset="0.60"  android:color="#A65EE08C"/>
+                <item android:offset="0.80"  android:color="#475EE08C"/>
+                <item android:offset="0.867" android:color="#005EE08C"/>
+                <item android:offset="1"     android:color="#005EE08C"/>
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Blade 2: head at 4 o'clock (θ=120°), tail at θ=270° -->
+    <path android:pathData="M 71.81,64.28 A 20.57,20.57 0 0 1 33.44,54"
+          android:fillColor="#00000000"
+          android:strokeWidth="4.91"
+          android:strokeLineCap="round">
+        <aapt:attr name="android:strokeColor">
+            <gradient
+                android:type="linear"
+                android:startX="71.81"  android:startY="64.28"
+                android:endX="33.44"    android:endY="54">
+                <item android:offset="0"     android:color="#FFB8FFD4"/>
+                <item android:offset="0.30"  android:color="#EB5EE08C"/>
+                <item android:offset="0.60"  android:color="#A65EE08C"/>
+                <item android:offset="0.80"  android:color="#475EE08C"/>
+                <item android:offset="0.867" android:color="#005EE08C"/>
+                <item android:offset="1"     android:color="#005EE08C"/>
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Blade 3: head at 8 o'clock (θ=240°), tail at θ=30° -->
+    <path android:pathData="M 36.19,64.28 A 20.57,20.57 0 0 1 64.28,36.19"
+          android:fillColor="#00000000"
+          android:strokeWidth="4.91"
+          android:strokeLineCap="round">
+        <aapt:attr name="android:strokeColor">
+            <gradient
+                android:type="linear"
+                android:startX="36.19"  android:startY="64.28"
+                android:endX="64.28"    android:endY="36.19">
+                <item android:offset="0"     android:color="#FFB8FFD4"/>
+                <item android:offset="0.30"  android:color="#EB5EE08C"/>
+                <item android:offset="0.60"  android:color="#A65EE08C"/>
+                <item android:offset="0.80"  android:color="#475EE08C"/>
+                <item android:offset="0.867" android:color="#005EE08C"/>
+                <item android:offset="1"     android:color="#005EE08C"/>
+            </gradient>
+        </aapt:attr>
+    </path>
+</vector>

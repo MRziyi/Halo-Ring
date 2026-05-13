@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- V8 "Mosaic" — the ring is built from 8 independent arc segments at 45° intervals with
+     small dark gaps between them. Each segment has a slightly different brightness modulated
+     by clock-position, giving a precision-instrument / cyber feel. Reads as "this ring is a
+     touchpad divided into zones" — direct visual metaphor for the gesture vocabulary. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <radialGradient id="atmosphereHalo" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0.55" stop-color="#5EE08C" stop-opacity="0"/>
+      <stop offset="0.62" stop-color="#5EE08C" stop-opacity="0.22"/>
+      <stop offset="0.78" stop-color="#5EE08C" stop-opacity="0.06"/>
+      <stop offset="1.0"  stop-color="#5EE08C" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="rimGlow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0.83" stop-color="#5EE08C" stop-opacity="0"/>
+      <stop offset="0.87" stop-color="#5EE08C" stop-opacity="0.55"/>
+      <stop offset="0.93" stop-color="#5EE08C" stop-opacity="0.10"/>
+      <stop offset="1.0"  stop-color="#5EE08C" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="1024" height="1024" fill="#000000"/>
+  <circle cx="512" cy="512" r="480" fill="url(#atmosphereHalo)"/>
+  <circle cx="512" cy="512" r="320" fill="url(#rimGlow)"/>
+
+  <!-- 8 segments: each a 38° arc at radius 260, 60 px stroke, 7° gap between segments.
+       Segments labeled by clock position; brightness modulates around the circle.
+       Stroke-linecap=butt so the gaps look intentional (not rounded into nothingness). -->
+  <g fill="none" stroke-width="60" stroke-linecap="butt">
+    <!-- Top (12 o'clock area, segment 1) — brightest -->
+    <path d="M 423 268 A 260 260 0 0 1 601 268" stroke="#B8FFD4" opacity="0.98"/>
+    <!-- 1-2 o'clock (segment 2) -->
+    <path d="M 660 296 A 260 260 0 0 1 762 412" stroke="#9CF2C0" opacity="0.85"/>
+    <!-- 3 o'clock (segment 3) -->
+    <path d="M 772 470 A 260 260 0 0 1 772 554" stroke="#5EE08C" opacity="0.74"/>
+    <!-- 4-5 o'clock (segment 4) -->
+    <path d="M 762 612 A 260 260 0 0 1 660 728" stroke="#5EE08C" opacity="0.62"/>
+    <!-- 6 o'clock (segment 5) — dimmest -->
+    <path d="M 601 756 A 260 260 0 0 1 423 756" stroke="#3FB872" opacity="0.52"/>
+    <!-- 7-8 o'clock (segment 6) -->
+    <path d="M 364 728 A 260 260 0 0 1 262 612" stroke="#5EE08C" opacity="0.62"/>
+    <!-- 9 o'clock (segment 7) -->
+    <path d="M 252 554 A 260 260 0 0 1 252 470" stroke="#5EE08C" opacity="0.74"/>
+    <!-- 10-11 o'clock (segment 8) -->
+    <path d="M 262 412 A 260 260 0 0 1 364 296" stroke="#9CF2C0" opacity="0.85"/>
+  </g>
+</svg>

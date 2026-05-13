@@ -1,0 +1,96 @@
+package com.halo.ring.ui
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.unit.dp
+
+/** The three top-level tabs of the app. */
+enum class AppTab(val label: String) {
+    VITALS("VITALS"),
+    SETTINGS("SETTINGS"),
+    STATUS("STATUS"),
+}
+
+/**
+ * Top tab strip. Three labels, green underline on the active one. Custom (not Material `TabRow`)
+ * to keep chrome minimal. Spans full width; no horizontal padding so the underline aligns with
+ * screen edges naturally.
+ */
+@Composable
+fun TabBar(
+    selected: AppTab,
+    modifier: Modifier = Modifier,
+    onSelect: (AppTab) -> Unit = {},
+) {
+    // Track whether any tab is currently focused, so InAppFocusController can remap
+    // NavPrev/NavNext (= SWIPE_UP/DOWN on the ring) to tab-cycling when on the strip
+    // (Doc/08-ui-design.md §9.1.1 — the ring has no left/right swipes).
+    var anyTabFocused by remember { mutableStateOf(false) }
+    DisposableEffect(anyTabFocused) {
+        InAppFocusController.focusOnTabStrip = anyTabFocused
+        onDispose { /* leave flag as-is; next focus event will clear it */ }
+    }
+
+    Column(modifier = modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            AppTab.values().forEach { tab ->
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .onFocusChanged {
+                            // Any tab focused ⇒ we're "on the strip".
+                            if (it.isFocused) anyTabFocused = true
+                            else if (it.hasFocus.not()) {
+                                // Recompute: are *any* siblings still focused? Cheap heuristic —
+                                // when a single tab loses focus, if focus moved to another tab
+                                // we'll get the new one's isFocused = true immediately; if it
+                                // moved into content, no other tab will be focused. So just clear
+                                // here after a microtask.
+                                anyTabFocused = false
+                            }
+                        }
+                        .clickable { onSelect(tab) }
+                        .padding(vertical = 12.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = tab.label,
+                        style = if (tab == selected) HaloType.TabActive else HaloType.Tab,
+                    )
+                }
+            }
+        }
+        // 2 dp underline: grey under inactive segments, accent under the selected one.
+        Row(modifier = Modifier.fillMaxWidth().height(2.dp)) {
+            AppTab.values().forEach { tab ->
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .height(2.dp)
+                        .background(if (tab == selected) HaloColors.Accent else HaloColors.Line),
+                )
+            }
+        }
+    }
+}

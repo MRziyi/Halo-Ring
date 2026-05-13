@@ -1,0 +1,1079 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>R08 Ring Remote — UI mockup</title>
+<meta name="viewport" content="width=1200">
+<style>
+  /* ── page chrome (the docs layer, NOT the on-device UI) ─────────────── */
+  :root {
+    --doc-bg: #f6f5f1;
+    --doc-fg: #1c1c1c;
+    --doc-mute: #6e6e6e;
+    --doc-line: #e0ddd5;
+
+    /* ── on-device UI tokens — keep these MINIMAL ───────────────────── */
+    --ui-bg: #000;            /* pure black; least light-leak on see-through display */
+    --ui-fg: #fff;
+    --ui-mute: #8a8a8a;
+    --ui-line: #2a2a2a;
+    --ui-accent: #5ee08c;      /* matches the ring's green LED for visual coherence */
+    --ui-accent-dim: #2a5a36;
+    --ui-warn: #ffb84d;
+    --ui-bad: #ff7c7c;
+  }
+
+  html, body { background: var(--doc-bg); color: var(--doc-fg); margin: 0; padding: 0;
+               font: 14px/1.55 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI",
+                     "Helvetica Neue", system-ui, sans-serif; }
+
+  .doc { max-width: 1180px; margin: 0 auto; padding: 48px 32px 96px; }
+  h1 { font: 700 32px/1.2 -apple-system, system-ui, sans-serif; margin: 0 0 8px; letter-spacing: -.5px; }
+  h2 { font: 600 22px/1.3 -apple-system, system-ui, sans-serif; margin: 56px 0 12px;
+       padding-top: 24px; border-top: 1px solid var(--doc-line); letter-spacing: -.3px; }
+  h3 { font: 600 16px/1.3 -apple-system, system-ui, sans-serif; margin: 24px 0 8px; }
+  .lede { font-size: 16px; color: var(--doc-mute); max-width: 740px; }
+  p, li { color: #2a2a2a; }
+  code { font: 12px/1.4 "SF Mono", Menlo, Consolas, monospace; background: #ececec;
+         padding: 1px 6px; border-radius: 3px; }
+
+  /* ── design-token gallery ──────────────────────────────────────────── */
+  .tokens { display: grid; grid-template-columns: repeat(8, 1fr); gap: 16px; margin: 16px 0 8px; }
+  .tok { display: flex; flex-direction: column; gap: 8px; }
+  .tok .sw { height: 64px; border-radius: 4px; border: 1px solid var(--doc-line); }
+  .tok .ti { font: 12px/1.2 "SF Mono", monospace; color: var(--doc-mute); }
+  .tok .va { font: 600 13px/1.2 sans-serif; }
+
+  /* ── type-scale demo ───────────────────────────────────────────────── */
+  .ts { background: var(--ui-bg); color: var(--ui-fg); padding: 32px; border-radius: 6px;
+        display: flex; flex-direction: column; gap: 12px; margin: 12px 0; }
+  .ts .row { display: flex; align-items: baseline; gap: 24px; }
+  .ts .row .label { color: var(--ui-mute); font: 12px/1 "SF Mono", monospace; min-width: 110px; }
+  .ts .row .demo  { color: var(--ui-fg); }
+  .ts .row .demo.metric { font-variant-numeric: tabular-nums; letter-spacing: -1px; }
+
+  /* ── device-frame ──────────────────────────────────────────────────── */
+  /* Targets the smaller eye-area; both Rokid (mono ≈480px) and X3 Pro (per-eye 640×480)   */
+  /* are designed to receive the same 480×480 content, centred. No stereo / parallax.       */
+  .frame { width: 480px; height: 480px; background: var(--ui-bg); color: var(--ui-fg);
+           position: relative; box-shadow: 0 0 0 1px var(--doc-line), 0 12px 32px rgba(0,0,0,.10);
+           overflow: hidden;
+           font: 16px/1.4 -apple-system, system-ui, sans-serif; }
+  .frame *  { box-sizing: border-box; }
+  .frame .pad { padding: 24px; height: 100%; display: flex; flex-direction: column; }
+
+  /* Common UI atoms */
+  .frame .statusbar { display: flex; justify-content: space-between; align-items: center;
+                      font: 600 13px/1 -apple-system, system-ui, sans-serif; color: var(--ui-mute);
+                      padding-bottom: 12px; }
+  .frame .statusbar .left  { display: flex; gap: 10px; align-items: center; }
+  .frame .statusbar .right { display: flex; gap: 10px; align-items: center; }
+  .frame .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+                background: var(--ui-accent); }
+  .frame .dot.bad { background: var(--ui-bad); }
+  .frame .dot.dim { background: var(--ui-mute); }
+
+  .frame .tabs { display: flex; gap: 0; margin: 0 -24px 16px; padding: 0 24px 0;
+                 border-bottom: 1px solid var(--ui-line); }
+  .frame .tabs .tab { padding: 12px 0; flex: 1; text-align: center;
+                      font: 600 13px/1 -apple-system, system-ui, sans-serif;
+                      color: var(--ui-mute); letter-spacing: 1px; }
+  .frame .tabs .tab.on  { color: var(--ui-fg); border-bottom: 2px solid var(--ui-accent);
+                          margin-bottom: -1px; padding-bottom: 11px; }
+
+  .frame .title { font: 600 24px/1.1 -apple-system, system-ui, sans-serif; letter-spacing: -.3px;
+                  margin: 4px 0 18px; }
+  .frame .subtitle { font: 400 14px/1.3 -apple-system, system-ui, sans-serif;
+                     color: var(--ui-mute); margin-top: -10px; margin-bottom: 18px; }
+
+  .frame .row-list .row { display: flex; align-items: center; justify-content: space-between;
+                          padding: 14px 0; border-top: 1px solid var(--ui-line); font-size: 17px; }
+  .frame .row-list .row:first-child { border-top: 0; }
+  .frame .row-list .row .key { color: var(--ui-mute); font-size: 14px; }
+  .frame .row-list .row .val { font-weight: 600; }
+  .frame .row-list .row.focused { background: rgba(94, 224, 140, 0.07);
+                                  box-shadow: inset 2px 0 0 var(--ui-accent);
+                                  margin: 0 -24px; padding: 14px 24px; }
+
+  .frame .stat { display: flex; flex-direction: column; gap: 4px; }
+  .frame .stat .v { font: 700 56px/1 -apple-system, system-ui, sans-serif;
+                    font-variant-numeric: tabular-nums; letter-spacing: -2px; }
+  .frame .stat .v .u { font-size: 18px; color: var(--ui-mute); font-weight: 400;
+                       margin-left: 6px; letter-spacing: 0; }
+  .frame .stat .k { font: 13px/1 -apple-system, system-ui, sans-serif; color: var(--ui-mute);
+                    text-transform: uppercase; letter-spacing: 1px; }
+
+  .frame .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px 32px; }
+  .frame .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px 16px; }
+
+  .frame .cta { background: transparent; border: 1px solid var(--ui-accent); color: var(--ui-accent);
+                padding: 12px 16px; text-align: center; font: 600 14px/1 -apple-system, sans-serif;
+                letter-spacing: 1px; }
+  .frame .cta.focused { background: var(--ui-accent); color: var(--ui-bg); }
+  .frame .cta + .cta { margin-top: 8px; }
+
+  .frame .bar { height: 4px; background: var(--ui-line); position: relative; border-radius: 2px;
+                overflow: hidden; }
+  .frame .bar > i { display: block; height: 100%; background: var(--ui-accent); }
+
+  .frame .spark { display: flex; align-items: flex-end; gap: 2px; height: 28px; }
+  .frame .spark > i { flex: 1; background: var(--ui-mute); opacity: .6; }
+  .frame .spark > i.h { background: var(--ui-accent); opacity: 1; }
+
+  .frame .footer-hint { color: var(--ui-mute); font-size: 13px; margin-top: auto; padding-top: 12px;
+                        border-top: 1px solid var(--ui-line); display: flex;
+                        justify-content: space-between; align-items: center; }
+  .frame .footer-hint .pill { padding: 4px 8px; border: 1px solid var(--ui-line); border-radius: 12px;
+                              font: 11px/1 "SF Mono", monospace; color: var(--ui-mute); }
+
+  /* HUD overlay shown over arbitrary content */
+  .frame.hud-bg::after {
+    /* Simulate a background app / launcher behind our HUD */
+    content: ""; position: absolute; inset: 0; z-index: 0;
+    background:
+      radial-gradient(circle at 60% 40%, rgba(255,255,255,.06), transparent 200px),
+      radial-gradient(circle at 30% 80%, rgba(255,255,255,.04), transparent 240px);
+  }
+  .frame .hud { position: absolute; top: 16px; right: 16px; z-index: 1;
+                background: rgba(0,0,0,.78); border: 1px solid var(--ui-line);
+                color: var(--ui-fg); padding: 8px 12px; border-radius: 8px;
+                font: 600 13px/1.1 -apple-system, system-ui, sans-serif;
+                display: flex; align-items: center; gap: 10px; max-width: 260px;
+                backdrop-filter: blur(8px); }
+  .frame .hud .dot { width: 7px; height: 7px; }
+  .frame .hud .sub { color: var(--ui-mute); font-weight: 400; font-size: 12px; }
+  .frame .hud.center { top: 50%; left: 50%; transform: translate(-50%, -50%); right: auto;
+                       padding: 14px 18px; font-size: 16px; }
+
+  .frame .ghost-bg { position: absolute; inset: 0; padding: 24px; color: #2a2a2a;
+                     font: 400 14px/1.4 sans-serif; user-select: none; pointer-events: none; }
+
+  /* ── doc layout helpers ────────────────────────────────────────────── */
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(480px, 1fr));
+          gap: 32px 32px; margin-top: 16px; }
+  .group { display: flex; flex-direction: column; gap: 12px; }
+  .group .label { font: 600 13px/1.2 sans-serif; color: #1c1c1c; }
+  .group .desc  { font: 400 13px/1.4 sans-serif; color: var(--doc-mute); }
+
+  .binocular { display: flex; gap: 16px; align-items: center; margin-top: 16px; }
+  .binocular .b-eye { padding: 8px; background: #111; border-radius: 8px; }
+  .binocular .b-eye .lbl { color: var(--doc-mute); font: 12px/1 "SF Mono", monospace;
+                           padding: 4px 0 8px; text-align: center; }
+  .nasal-bridge { width: 16px; height: 40px; background: #d8d4c8; border-radius: 4px; }
+
+  .principles { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px 32px; margin-top: 16px; }
+  .principles .pr { display: flex; gap: 12px; }
+  .principles .pr .n { flex: 0 0 24px; height: 24px; border-radius: 50%; background: var(--ui-fg);
+                       color: var(--doc-bg); display: grid; place-items: center;
+                       font: 700 12px/1 sans-serif; }
+  .principles .pr .t { color: #1c1c1c; }
+  .principles .pr .t b { color: #000; }
+
+  /* mini ring icon used in some states */
+  .ring-glyph { width: 18px; height: 18px; border: 2px solid currentColor; border-radius: 50%;
+                position: relative; }
+  .ring-glyph::after { content: ""; position: absolute; top: -1px; right: -1px; width: 4px;
+                       height: 4px; background: var(--ui-accent); border-radius: 50%; }
+</style>
+</head>
+<body>
+<div class="doc">
+
+  <h1>R08 Ring Remote — UI</h1>
+  <p class="lede">
+    Three jobs, one app: (1) show the wearer's biometrics that the ring streams in the background,
+    (2) configure the ring, (3) host the resident background service that powers everything.
+    The on-device UI is designed for two pairs of AR glasses with low-resolution, see-through
+    display. Both pairs render the same content (no stereo, no parallax). Everything below is at
+    1:1 scale — the screens are <code>480 × 480 px</code>, matching what the wearer actually sees.
+  </p>
+
+  <h2>1. Visual language</h2>
+  <p>
+    Six tokens. The minimum surface area we can get away with. Everything else is composed of these.
+  </p>
+  <div class="tokens">
+    <div class="tok"><div class="sw" style="background:#000"></div><div class="ti">--ui-bg</div><div class="va">Black</div></div>
+    <div class="tok"><div class="sw" style="background:#fff"></div><div class="ti">--ui-fg</div><div class="va">White</div></div>
+    <div class="tok"><div class="sw" style="background:#8a8a8a"></div><div class="ti">--ui-mute</div><div class="va">Mute 54%</div></div>
+    <div class="tok"><div class="sw" style="background:#5ee08c"></div><div class="ti">--ui-accent</div><div class="va">Green</div></div>
+    <div class="tok"><div class="sw" style="background:#2a5a36"></div><div class="ti">--accent-dim</div><div class="va">Green-dim</div></div>
+    <div class="tok"><div class="sw" style="background:#ffb84d"></div><div class="ti">--ui-warn</div><div class="va">Warn</div></div>
+    <div class="tok"><div class="sw" style="background:#ff7c7c"></div><div class="ti">--ui-bad</div><div class="va">Bad</div></div>
+    <div class="tok"><div class="sw" style="background:#2a2a2a"></div><div class="ti">--ui-line</div><div class="va">Divider</div></div>
+  </div>
+
+  <p>
+    Pure black background — least light-leak through the see-through optic and lowest pixel draw.
+    Green matches the ring's LED so visual + tactile feedback share a single brand colour. Mute is
+    only for secondary text; if a divider would do, use one instead. Warn / Bad only fire on real
+    events; never decorative.
+  </p>
+
+  <h3>Type scale</h3>
+  <div class="ts">
+    <div class="row"><div class="label">title / 24</div><div class="demo" style="font:600 24px/1.1 sans-serif">Settings</div></div>
+    <div class="row"><div class="label">body / 17</div><div class="demo" style="font:400 17px/1.4 sans-serif">Navigation profile</div></div>
+    <div class="row"><div class="label">caption / 13</div><div class="demo" style="font:400 13px/1.4 sans-serif; color: var(--ui-mute)">Tap to edit gesture mappings</div></div>
+    <div class="row"><div class="label">tab / 13</div><div class="demo" style="font:600 13px/1 sans-serif; letter-spacing:1px">SETTINGS</div></div>
+    <div class="row"><div class="label">mono / 13</div><div class="demo" style="font:600 13px/1 'SF Mono', monospace; color: var(--ui-mute)">R08_2A3F</div></div>
+    <div class="row"><div class="label">metric / 56</div><div class="demo metric" style="font:700 56px/1 sans-serif; letter-spacing:-2px">72<span style="font-size:18px;color:var(--ui-mute); margin-left:6px; letter-spacing:0">bpm</span></div></div>
+  </div>
+
+  <h3>Principles</h3>
+  <div class="principles">
+    <div class="pr"><div class="n">1</div><div class="t"><b>Black canvas.</b> Lit pixels leak into the user's view of the world. Default to pixel-off; light only what carries information.</div></div>
+    <div class="pr"><div class="n">2</div><div class="t"><b>Transient by default.</b> The HUD is not always-on. It flashes on event, then disappears. Persistent UI only while the wearer is actively in a settings screen.</div></div>
+    <div class="pr"><div class="n">3</div><div class="t"><b>One column, one focus.</b> No multi-pane, no grids of more than 3 items. The wearer reads top-to-bottom, picks one thing.</div></div>
+    <div class="pr"><div class="n">4</div><div class="t"><b>Big text, generous space.</b> 480 px wide, viewing distance equivalent to a 43" virtual screen — overshoot intentionally.</div></div>
+    <div class="pr"><div class="n">5</div><div class="t"><b>Sound + ring LED, not just visual.</b> The wearer may be looking past the display. Click + green flash + LED blink cover every state change.</div></div>
+    <div class="pr"><div class="n">6</div><div class="t"><b>Same image to both eyes.</b> Rokid's single projector drives both eyes; X3 Pro's binocular optics receive the same content. We never compose stereo.</div></div>
+  </div>
+
+  <h2>2. The three jobs, as three tabs</h2>
+  <p class="lede">
+    Top-level app structure: three tabs across the top, current tab below. No nested chrome — keeps
+    pixel budget for content. <code>VITALS</code> shows what the ring measures. <code>SETTINGS</code>
+    is the configuration root. <code>STATUS</code> exposes the background service so the user can
+    verify it's alive and lean.
+  </p>
+
+  <div class="grid">
+
+    <!-- ─── A. Vitals dashboard ─────────────────────────────────────── -->
+    <div class="group">
+      <div class="frame">
+        <div class="pad">
+          <div class="statusbar">
+            <div class="left"><span class="dot"></span><span>R08_2A3F</span><span style="color:var(--ui-fg)">87%</span></div>
+            <div class="right"><span>Navigation</span></div>
+          </div>
+          <div class="tabs">
+            <div class="tab on">VITALS</div>
+            <div class="tab">SETTINGS</div>
+            <div class="tab">STATUS</div>
+          </div>
+          <div class="grid-3" style="margin-top: 6px;">
+            <div class="stat">
+              <div class="v" style="color: var(--ui-accent)">72<span class="u">bpm</span></div>
+              <div class="k">Heart rate</div>
+            </div>
+            <div class="stat">
+              <div class="v">97<span class="u">%</span></div>
+              <div class="k">SpO₂</div>
+            </div>
+            <div class="stat">
+              <div class="v">34</div>
+              <div class="k">Stress</div>
+            </div>
+          </div>
+          <div style="font-size:13px; color: var(--ui-mute); margin-top: 6px;">
+            measured <span style="color:var(--ui-fg)">4 min ago</span>
+          </div>
+
+          <div class="cta focused" style="margin-top: 18px;">MEASURE NOW</div>
+
+          <div class="row-list" style="margin-top: 18px;">
+            <div class="row"><span class="key">Steps today</span><span class="val">6,423</span></div>
+            <div class="row"><span class="key">Calories</span><span class="val">252 kcal</span></div>
+            <div class="row"><span class="key">Distance</span><span class="val">4.8 km</span></div>
+          </div>
+
+          <div class="footer-hint">
+            <span>Last sync just now</span>
+            <span class="pill">⤓ EXPORT LOG</span>
+          </div>
+        </div>
+      </div>
+      <div class="label">VITALS tab — main dashboard</div>
+      <div class="desc">
+        Big metrics on top (eyes glance, comprehend in one read). Tap MEASURE NOW for a fresh
+        HR + SpO₂ + stress snapshot (PPG LED stays on only during the measurement; we never
+        stream continuously). Today's activity comes "free" from the ring's passive counters.
+      </div>
+    </div>
+
+    <!-- ─── B. Settings root ────────────────────────────────────────── -->
+    <div class="group">
+      <div class="frame">
+        <div class="pad">
+          <div class="statusbar">
+            <div class="left"><span class="dot"></span><span>R08_2A3F</span><span style="color:var(--ui-fg)">87%</span></div>
+            <div class="right"><span>Navigation</span></div>
+          </div>
+          <div class="tabs">
+            <div class="tab">VITALS</div>
+            <div class="tab on">SETTINGS</div>
+            <div class="tab">STATUS</div>
+          </div>
+          <div class="row-list" style="margin-top: 6px;">
+            <div class="row focused"><span style="font-size:17px;">Profiles & Gestures</span><span style="color: var(--ui-mute)">›</span></div>
+            <div class="row"><span style="font-size:17px;">System Gestures</span><span style="color: var(--ui-mute)">›</span></div>
+            <div class="row"><span style="font-size:17px;">Ring</span><span style="color: var(--ui-mute)">›</span></div>
+            <div class="row"><span style="font-size:17px;">Power & Connection</span><span style="color: var(--ui-mute)">›</span></div>
+            <div class="row"><span style="font-size:17px;">Vitals</span><span style="color: var(--ui-mute)">›</span></div>
+            <div class="row"><span style="font-size:17px;">Advanced</span><span style="color: var(--ui-mute)">›</span></div>
+            <div class="row"><span style="font-size:17px;">About</span><span style="color: var(--ui-mute)">›</span></div>
+          </div>
+          <div class="footer-hint">
+            <span>Tap to enter · Double-tap to go back</span>
+          </div>
+        </div>
+      </div>
+      <div class="label">SETTINGS tab — configuration root</div>
+      <div class="desc">
+        Single column. The focused row uses a thin green left-edge bar + 7% green tint — visible
+        in any ambient light. Each item is one tap deeper; no multi-pane navigation.
+      </div>
+    </div>
+
+    <!-- ─── C. Status ───────────────────────────────────────────────── -->
+    <div class="group">
+      <div class="frame">
+        <div class="pad">
+          <div class="statusbar">
+            <div class="left"><span class="dot"></span><span>R08_2A3F</span><span style="color:var(--ui-fg)">87%</span></div>
+            <div class="right"><span>Navigation</span></div>
+          </div>
+          <div class="tabs">
+            <div class="tab">VITALS</div>
+            <div class="tab">SETTINGS</div>
+            <div class="tab on">STATUS</div>
+          </div>
+
+          <div class="row-list" style="margin-top: 6px;">
+            <div class="row"><span class="key">Ring</span>
+              <span class="val" style="color: var(--ui-accent)">● Connected · −56 dBm</span></div>
+            <div class="row"><span class="key">Conn interval</span>
+              <span class="val">22 ms <span style="color:var(--ui-mute);font-weight:400">(active)</span></span></div>
+            <div class="row"><span class="key">Profile</span><span class="val">Navigation <span style="color:var(--ui-mute);font-weight:400">(auto)</span></span></div>
+            <div class="row"><span class="key">Last gesture</span><span class="val">TAP · 1.2 s ago · 67 ms</span></div>
+          </div>
+
+          <div style="margin-top: 16px;">
+            <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--ui-mute);margin-bottom:6px">
+              <span>Background draw</span><span style="color:var(--ui-fg)">+ 3 mA</span>
+            </div>
+            <div class="bar"><i style="width: 12%"></i></div>
+            <div style="font-size:11px;color:var(--ui-mute);margin-top:4px">
+              foreground service · no wakelock · agent ready
+            </div>
+          </div>
+
+          <div style="margin-top: 16px;">
+            <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--ui-mute);margin-bottom:6px">
+              <span>BLE quality (1 hour)</span><span style="color:var(--ui-fg)">0 drops</span>
+            </div>
+            <div class="spark">
+              <i></i><i class="h"></i><i></i><i></i><i class="h"></i>
+              <i></i><i></i><i class="h"></i><i></i><i></i>
+              <i></i><i></i><i></i><i></i><i></i>
+              <i class="h"></i><i></i><i></i><i></i><i></i>
+              <i></i><i></i><i></i><i></i>
+            </div>
+          </div>
+
+          <div class="footer-hint">
+            <span>v0.1.0 · rokid</span>
+            <span class="pill">QUAD-TAP TO PEEK ANYTIME</span>
+          </div>
+        </div>
+      </div>
+      <div class="label">STATUS tab — service + connection telemetry</div>
+      <div class="desc">
+        Exposes the resident background service so the user can verify "is it alive + lean".
+        Background draw bar caps at 20 mA. Sparkline shows last hour of gesture activity at a
+        glance. Replaces what would be hidden in a debug menu on other apps.
+      </div>
+    </div>
+
+  </div>
+
+  <h2>3. Setting detail screens</h2>
+  <p class="lede">
+    These are reachable from the Settings tab. Same layout language — single column, focused row
+    is the green-bar one, content scrolls if needed.
+  </p>
+
+  <div class="grid">
+
+    <!-- D. Profiles list -->
+    <div class="group">
+      <div class="frame">
+        <div class="pad">
+          <div class="statusbar">
+            <div class="left"><span class="dot"></span><span>R08_2A3F</span><span style="color:var(--ui-fg)">87%</span></div>
+            <div class="right" style="color:var(--ui-mute)">SETTINGS / PROFILES</div>
+          </div>
+          <div class="title" style="margin-top: 14px">Profiles</div>
+          <div class="subtitle">Triple-tap cycles. Auto-switch by foreground app — see Edit.</div>
+
+          <div class="row-list">
+            <div class="row focused">
+              <span><span style="color:var(--ui-accent);font-weight:600;margin-right:8px">●</span>Navigation <span style="color:var(--ui-mute);font-size:13px;margin-left:8px">active</span></span>
+              <span style="color:var(--ui-mute)">›</span>
+            </div>
+            <div class="row"><span>Media</span><span style="color:var(--ui-mute)">›</span></div>
+            <div class="row"><span>Reader</span><span style="color:var(--ui-mute)">›</span></div>
+            <div class="row"><span>Fast</span><span style="color:var(--ui-mute)">›</span></div>
+          </div>
+
+          <div class="cta" style="margin-top: 16px">+ NEW PROFILE</div>
+
+          <div class="footer-hint">
+            <span>4 profiles · 5 s manual lock</span>
+          </div>
+        </div>
+      </div>
+      <div class="label">Settings → Profiles</div>
+      <div class="desc">Bullet on the currently-active profile. Selecting drills into its mapping editor.</div>
+    </div>
+
+    <!-- E. Gesture mapping editor -->
+    <div class="group">
+      <div class="frame">
+        <div class="pad">
+          <div class="statusbar">
+            <div class="left"><span class="dot"></span><span>Navigation</span></div>
+            <div class="right" style="color:var(--ui-mute)">EDIT</div>
+          </div>
+          <div class="title" style="margin-top: 14px">Gesture mapping</div>
+
+          <div class="row-list" style="font-size:15px;">
+            <div class="row"><span style="color:var(--ui-mute)">TAP</span><span class="val">Confirm</span></div>
+            <div class="row focused"><span style="color:var(--ui-mute)">DOUBLE_TAP</span><span class="val">Back</span></div>
+            <div class="row"><span style="color:var(--ui-mute)">SWIPE_UP</span><span class="val">Nav prev</span></div>
+            <div class="row"><span style="color:var(--ui-mute)">SWIPE_DOWN</span><span class="val">Nav next</span></div>
+            <div class="row"><span style="color:var(--ui-mute)">LONG_PRESS</span><span class="val">Menu</span></div>
+            <div class="row"><span style="color:var(--ui-mute)">DT + SWIPE_UP</span><span class="val">Take photo</span></div>
+            <div class="row"><span style="color:var(--ui-mute)">DT + SWIPE_DOWN</span><span class="val">Visual AI</span></div>
+            <div class="row"><span style="color:var(--ui-mute)">LP + SWIPE_UP</span><span class="val">Notifications</span></div>
+            <div class="row" style="opacity:.55">
+              <span style="color:var(--ui-mute)">TRIPLE / QUAD / LP+DOWN / 2× LP</span>
+              <span class="val" style="color:var(--ui-mute);font-weight:400">system</span>
+            </div>
+          </div>
+
+          <div class="footer-hint">
+            <span>Optimistic tap: <span style="color:var(--ui-fg)">OFF</span></span>
+            <span class="pill">LP COMBOS · ON</span>
+          </div>
+        </div>
+      </div>
+      <div class="label">Settings → Profile edit (12 slots)</div>
+      <div class="desc">
+        Mute label on the left = the gesture (small caps so it fades back), bold value on the right
+        = what the gesture does. Four reserved system slots greyed out — can't be re-bound here.
+      </div>
+    </div>
+
+    <!-- F. System gestures -->
+    <div class="group">
+      <div class="frame">
+        <div class="pad">
+          <div class="statusbar">
+            <div class="left"><span class="dot"></span><span>R08_2A3F</span></div>
+            <div class="right" style="color:var(--ui-mute)">SETTINGS</div>
+          </div>
+          <div class="title" style="margin-top: 14px">System gestures</div>
+          <div class="subtitle">Always-on. Override the active profile.</div>
+
+          <div class="row-list" style="font-size:15px;">
+            <div class="row focused">
+              <span>Wake screen</span>
+              <span class="val" style="font-family:'SF Mono', monospace; font-size:13px">LONG_PRESS</span>
+            </div>
+            <div class="row">
+              <span>Sleep screen</span>
+              <span class="val" style="font-family:'SF Mono', monospace; font-size:13px">LONG_PRESS + SWIPE_DOWN</span>
+            </div>
+            <div class="row">
+              <span>Cycle profile</span>
+              <span class="val" style="font-family:'SF Mono', monospace; font-size:13px">TRIPLE_TAP</span>
+            </div>
+            <div class="row">
+              <span>Peek HUD</span>
+              <span class="val" style="font-family:'SF Mono', monospace; font-size:13px">QUADRUPLE_TAP</span>
+            </div>
+            <div class="row">
+              <span>Force reconnect</span>
+              <span class="val" style="font-family:'SF Mono', monospace; font-size:13px">2× LONG_PRESS</span>
+            </div>
+          </div>
+
+          <div class="footer-hint">
+            <span>Wake is on the screen-off fast path</span>
+          </div>
+        </div>
+      </div>
+      <div class="label">Settings → System gestures</div>
+      <div class="desc">
+        The five always-on overrides. Tap any row to re-bind. Conflict detection: you can't bind
+        two slots to the same gesture; UI warns.
+      </div>
+    </div>
+
+    <!-- G. Ring -->
+    <div class="group">
+      <div class="frame">
+        <div class="pad">
+          <div class="statusbar">
+            <div class="left"><span class="dot"></span><span>R08_2A3F</span><span style="color:var(--ui-fg)">87%</span></div>
+            <div class="right" style="color:var(--ui-mute)">SETTINGS</div>
+          </div>
+          <div class="title" style="margin-top: 14px">Ring</div>
+
+          <div class="row-list" style="font-size:15px;">
+            <div class="row"><span class="key">MAC</span><span class="val" style="font: 600 13px/1 'SF Mono', monospace">70:CB:0D:8A:2A:3F</span></div>
+            <div class="row"><span class="key">Firmware</span><span class="val">1.4.2</span></div>
+            <div class="row"><span class="key">Signal</span><span class="val">−56 dBm</span></div>
+            <div class="row"><span class="key">Battery</span><span class="val">87%</span></div>
+          </div>
+
+          <div class="cta focused" style="margin-top: 18px">FIND MY RING · BLINK 10 s</div>
+          <div class="cta" style="margin-top: 8px">SHUT DOWN RING</div>
+          <div class="cta" style="margin-top: 8px; border-color: var(--ui-bad); color: var(--ui-bad)">FORGET &amp; RE-PAIR</div>
+
+          <div class="footer-hint">
+            <span>Auto-sleep after 60 s · double-tap to wake</span>
+          </div>
+        </div>
+      </div>
+      <div class="label">Settings → Ring</div>
+      <div class="desc">
+        Identity + actions. FIND MY RING fires <code>0x06</code> on the ring (LED blinks ~10 s).
+        Forget is danger-coloured because it requires re-pairing on every glasses.
+      </div>
+    </div>
+
+    <!-- H. Power & connection -->
+    <div class="group">
+      <div class="frame">
+        <div class="pad">
+          <div class="statusbar">
+            <div class="left"><span class="dot"></span><span>R08_2A3F</span></div>
+            <div class="right" style="color:var(--ui-mute)">SETTINGS</div>
+          </div>
+          <div class="title" style="margin-top: 14px">Power &amp; Connection</div>
+
+          <div style="margin-top: 8px; font-size: 14px;">
+            <div style="color: var(--ui-mute); margin-bottom: 6px">
+              Multi-tap window <span style="color:var(--ui-fg)">280 ms</span>
+            </div>
+            <div class="bar"><i style="width: 56%"></i></div>
+          </div>
+          <div style="margin-top: 16px; font-size: 14px;">
+            <div style="color: var(--ui-mute); margin-bottom: 6px">
+              Combo window <span style="color:var(--ui-fg)">300 ms</span>
+            </div>
+            <div class="bar"><i style="width: 60%"></i></div>
+          </div>
+          <div style="margin-top: 16px; font-size: 14px;">
+            <div style="color: var(--ui-mute); margin-bottom: 6px">
+              Long-press follow-up <span style="color:var(--ui-fg)">400 ms</span>
+            </div>
+            <div class="bar"><i style="width: 80%"></i></div>
+          </div>
+
+          <div class="row-list" style="margin-top: 16px; font-size:15px;">
+            <div class="row focused"><span>BLE interval (active)</span><span class="val">15–30 ms</span></div>
+            <div class="row"><span>BLE interval (idle)</span><span class="val">75–100 ms</span></div>
+            <div class="row"><span>Disconnect when not worn</span><span class="val">after 5 min</span></div>
+            <div class="row"><span>Keepalive while worn</span><span class="val" style="color:var(--ui-accent)">ON</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="label">Settings → Power &amp; Connection</div>
+      <div class="desc">
+        Sliders for the timing knobs; the BLE / power policy further down. Defaults are sensible
+        enough that most wearers won't touch this.
+      </div>
+    </div>
+
+    <!-- I-new. Feedback (with gesture-hint toggle) -->
+    <div class="group">
+      <div class="frame">
+        <div class="pad">
+          <div class="statusbar">
+            <div class="left"><span class="dot"></span><span>R08_2A3F</span></div>
+            <div class="right" style="color:var(--ui-mute)">SETTINGS</div>
+          </div>
+          <div class="title" style="margin-top: 14px">Feedback</div>
+          <div class="subtitle">How the app confirms recognised gestures to you.</div>
+
+          <div class="row-list" style="font-size:15px;">
+            <div class="row focused">
+              <span>
+                Show recognised gesture (HUD)
+                <div style="color:var(--ui-mute);font-size:12px;margin-top:2px">800 ms after each gesture</div>
+              </span>
+              <span class="val" style="color:var(--ui-accent)">ON</span>
+            </div>
+            <div class="row"><span>Click sound on mode switch</span><span class="val" style="color:var(--ui-accent)">ON</span></div>
+            <div class="row"><span>Ring LED feedback</span><span class="val" style="color:var(--ui-accent)">ON</span></div>
+            <div class="row"><span>HUD position</span><span class="val">Top-right</span></div>
+            <div class="row"><span>HUD duration</span><span class="val">2 s</span></div>
+            <div class="row"><span>Auto-enable hints for 5 min after pairing</span><span class="val" style="color:var(--ui-accent)">ON</span></div>
+          </div>
+
+          <div class="footer-hint">
+            <span style="color: var(--ui-mute); font-size: 12px;">Hints fire only while screen is on.</span>
+          </div>
+        </div>
+      </div>
+      <div class="label">Settings → Feedback (new)</div>
+      <div class="desc">
+        Home for all user-facing feedback channels. The gesture-hint toggle is the headline —
+        off by default, but auto-on for ~5 min after first pairing so wearers can confirm each
+        gesture's effect while learning.
+      </div>
+    </div>
+
+    <!-- I. Vitals settings -->
+    <div class="group">
+      <div class="frame">
+        <div class="pad">
+          <div class="statusbar">
+            <div class="left"><span class="dot"></span><span>R08_2A3F</span></div>
+            <div class="right" style="color:var(--ui-mute)">SETTINGS</div>
+          </div>
+          <div class="title" style="margin-top: 14px">Vitals</div>
+          <div class="subtitle">On-demand only. Never continuous (PPG draws a lot).</div>
+
+          <div class="row-list" style="font-size:15px;">
+            <div class="row focused"><span>Show HR on HUD</span><span class="val">OFF</span></div>
+            <div class="row"><span>Activity overlay on HUD</span><span class="val" style="color:var(--ui-accent)">ON</span></div>
+            <div class="row"><span>Auto-snapshot every</span><span class="val">never</span></div>
+            <div class="row"><span>Log to CSV</span><span class="val">OFF</span></div>
+            <div class="row"><span>Wear detection</span><span class="val" style="color:var(--ui-accent)">RING + GLASSES</span></div>
+          </div>
+
+          <div class="cta" style="margin-top: 16px">EXPORT 7-DAY LOG</div>
+
+          <div class="footer-hint">
+            <span>Last reading 4 min ago</span>
+          </div>
+        </div>
+      </div>
+      <div class="label">Settings → Vitals</div>
+      <div class="desc">
+        Privacy / power knob — defaults to as-little-as-needed. Continuous HR is intentionally
+        impossible to turn on (the wording "Auto-snapshot every" tops out at 60 min, not "never
+        stop").
+      </div>
+    </div>
+
+  </div>
+
+  <h2>4. The transient HUD overlay</h2>
+  <p class="lede">
+    Not always-on. Appears for ~2 s on connection / mode-switch / low-battery events, or on
+    QUADRUPLE_TAP. Top-right corner so it never blocks the centre of vision. Same widget on top
+    of whatever the wearer is doing.
+  </p>
+
+  <div class="grid">
+    <div class="group">
+      <div class="frame hud-bg">
+        <div class="ghost-bg">
+          <div style="font:600 18px sans-serif; color:#555">Translate</div>
+          <div style="font:400 14px/1.4 sans-serif; color:#333; margin-top: 8px; max-width: 280px;">
+            Hello, I'd like to order the dish you have over there with the…
+          </div>
+        </div>
+        <div class="hud">
+          <span class="dot"></span>
+          <span>Navigation</span>
+          <span class="sub">87%</span>
+        </div>
+      </div>
+      <div class="label">Default Peek HUD (quad-tap or post-event)</div>
+      <div class="desc">
+        Compact pill: connection dot + mode name + ring battery. Auto-hides after ~2 s.
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="frame hud-bg">
+        <div class="ghost-bg">
+          <div style="font:600 18px sans-serif; color:#555">Photos</div>
+        </div>
+        <div class="hud" style="border-color: var(--ui-accent); color: var(--ui-accent)">
+          <span>↻ →</span>
+          <span style="color: var(--ui-fg)">Navigation</span>
+          <span class="sub">cycle</span>
+        </div>
+      </div>
+      <div class="label">After TRIPLE_TAP — profile switched</div>
+      <div class="desc">Brief accent flash. Pair with a soft click + one green LED blink on the ring.</div>
+    </div>
+
+    <div class="group">
+      <div class="frame hud-bg">
+        <div class="ghost-bg">
+          <div style="font:600 18px sans-serif; color:#555">Sprite Launcher</div>
+        </div>
+        <div class="hud" style="border-color: var(--ui-warn); color: var(--ui-warn)">
+          <span class="dot" style="background: var(--ui-warn)"></span>
+          <span style="color: var(--ui-fg)">R08_2A3F</span>
+          <span class="sub">18%</span>
+        </div>
+      </div>
+      <div class="label">Ring battery low (≤ 20 %)</div>
+      <div class="desc">Same pill, warn-coloured dot. Repeats every 5 minutes if still low.</div>
+    </div>
+
+    <div class="group">
+      <div class="frame hud-bg">
+        <div class="ghost-bg">
+          <div style="font:600 18px sans-serif; color:#555">Camera</div>
+        </div>
+        <div class="hud center" style="border-color: var(--ui-bad)">
+          <span class="dot bad"></span>
+          <span>Ring disconnected</span>
+        </div>
+      </div>
+      <div class="label">Disconnect — only situation that uses centre overlay</div>
+      <div class="desc">
+        Single failure case where we momentarily centre + enlarge. Disappears once <code>autoConnect</code>
+        recovers (~1–2 s typical).
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="frame hud-bg">
+        <div class="ghost-bg">
+          <div style="font:600 18px sans-serif; color:#555">Sprite Launcher</div>
+        </div>
+        <div class="hud">
+          <span style="color: var(--ui-mute); font-weight: 400">Double tap</span>
+          <span style="color: var(--ui-mute)">→</span>
+          <span>Back</span>
+        </div>
+      </div>
+      <div class="label">Gesture-hint HUD — after a Double Tap (gesture-hint mode ON)</div>
+      <div class="desc">
+        Shows "what was just recognised" → "what it did". 800 ms, replaces itself on every new
+        gesture. Off by default; auto-on for 5 min after first-run pairing so the wearer learns.
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="frame hud-bg">
+        <div class="ghost-bg">
+          <div style="font:600 18px sans-serif; color:#555">Photos</div>
+        </div>
+        <div class="hud">
+          <span style="color: var(--ui-mute); font-weight: 400">Long-press + swipe down</span>
+          <span style="color: var(--ui-mute)">→</span>
+          <span style="color: var(--ui-accent)">Sleep screen</span>
+        </div>
+      </div>
+      <div class="label">Gesture-hint — system-level gesture recognised</div>
+      <div class="desc">
+        System-level actions (sleep / wake / cycle / peek / reconnect) get the accent colour on
+        the right so it's visually clear "this is a system override, not your profile mapping".
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="frame hud-bg">
+        <div class="ghost-bg">
+          <div style="font:600 18px sans-serif; color:#555">Translate</div>
+        </div>
+        <div class="hud">
+          <span style="color: var(--ui-mute); font-weight: 400">Swipe up</span>
+          <span style="color: var(--ui-mute)">→</span>
+          <span style="color: var(--ui-mute); font-weight: 400; font-style: italic">(no action)</span>
+        </div>
+      </div>
+      <div class="label">Gesture-hint — unmapped gesture (debug aid)</div>
+      <div class="desc">
+        If the wearer does a gesture that isn't bound in the current profile, the hint says so
+        clearly. Helpful for catching "wait, why didn't anything happen?".
+      </div>
+    </div>
+  </div>
+
+  <h2>5. First-run wizard</h2>
+  <p class="lede">
+    Five steps, one screen each, full-screen — the only time the wearer sees persistent UI. Each
+    step has exactly one focused action; the temple touch bar is used (the ring isn't paired yet).
+  </p>
+
+  <div class="grid">
+    <div class="group">
+      <div class="frame">
+        <div class="pad">
+          <div class="statusbar"><div class="left" style="color:var(--ui-mute)">STEP 1 / 5</div><div class="right" style="color:var(--ui-mute)">first-run</div></div>
+          <div style="display:flex;flex-direction:column;height:100%;justify-content:center;text-align:center;padding:0 12px;">
+            <div style="font:700 28px/1.2 sans-serif; letter-spacing:-.5px;">Welcome.</div>
+            <div style="font:400 17px/1.45 sans-serif; color: var(--ui-mute); margin-top: 14px;">
+              Your ring will become a wireless remote for these glasses.<br>
+              Setup takes about a minute.
+            </div>
+            <div class="cta focused" style="margin-top: 32px; align-self: center; width: 60%;">START</div>
+          </div>
+        </div>
+      </div>
+      <div class="label">1. Welcome</div><div class="desc">No content. Sets expectation.</div>
+    </div>
+
+    <div class="group">
+      <div class="frame">
+        <div class="pad">
+          <div class="statusbar"><div class="left" style="color:var(--ui-mute)">STEP 2 / 5</div><div class="right" style="color:var(--ui-mute)">first-run</div></div>
+          <div class="title" style="margin-top: 14px">Allow the app to act on the system</div>
+          <div class="subtitle">One-time. Computer needed.</div>
+
+          <div style="background:#0a0a0a; padding:14px; font: 600 13px/1.4 'SF Mono', monospace;
+                      color: var(--ui-accent); margin-top: 8px; border: 1px solid var(--ui-line);
+                      white-space: pre;">adb shell pm grant com.r08remote
+  android.permission.WRITE_SECURE_SETTINGS</div>
+
+          <div style="font:14px/1.4 sans-serif; color: var(--ui-mute); margin-top: 12px;">
+            Copy this on your computer. We need it once — to manage the
+            wireless ADB connection ourselves after this.
+          </div>
+
+          <div class="cta focused" style="margin-top: auto;">I'VE RUN IT</div>
+        </div>
+      </div>
+      <div class="label">2. ADB bootstrap</div>
+      <div class="desc">The one screen with a command-line snippet. Big monospace, fits cleanly.</div>
+    </div>
+
+    <div class="group">
+      <div class="frame">
+        <div class="pad">
+          <div class="statusbar"><div class="left" style="color:var(--ui-mute)">STEP 3 / 5</div><div class="right" style="color:var(--ui-mute)">first-run</div></div>
+          <div class="title" style="margin-top: 14px">Accessibility (optional)</div>
+          <div class="subtitle">Lets us auto-switch profiles by app, and read Back/Home without ADB.</div>
+
+          <div style="margin-top: 18px; padding: 16px; border: 1px solid var(--ui-line); font-size:14px;">
+            <div style="color: var(--ui-mute);">In the next screen, enable:</div>
+            <div style="margin-top: 6px; color: var(--ui-fg); font-weight: 600;">
+              "R08 Remote (foreground &amp; back/home helper)"
+            </div>
+          </div>
+
+          <div class="cta focused" style="margin-top: auto;">OPEN ACCESSIBILITY</div>
+          <div class="cta" style="margin-top: 8px; border-color: var(--ui-mute); color: var(--ui-mute);">SKIP FOR NOW</div>
+        </div>
+      </div>
+      <div class="label">3. Accessibility (optional)</div>
+      <div class="desc">Tutorial inside the install flow — directs to the system settings page.</div>
+    </div>
+
+    <div class="group">
+      <div class="frame">
+        <div class="pad">
+          <div class="statusbar"><div class="left" style="color:var(--ui-mute)">STEP 5 / 5</div><div class="right" style="color:var(--ui-mute)">first-run</div></div>
+          <div class="title" style="margin-top: 14px">Pair the ring</div>
+          <div class="subtitle">Take it out of the cradle and tap it once.</div>
+
+          <div style="margin-top: 32px; display: flex; gap: 16px; align-items: center;
+                      font-size: 15px;">
+            <span style="font-size:34px;">⌖</span>
+            <span style="color: var(--ui-accent);">Scanning for R08_xxxx…</span>
+          </div>
+
+          <div style="margin-top: 14px; padding: 14px; border: 1px solid var(--ui-accent);
+                      background: rgba(94,224,140,0.06); font-size: 14px;">
+            <div style="color: var(--ui-accent); font-weight: 600;">Found: R08_2A3F</div>
+            <div style="color: var(--ui-mute); margin-top: 4px;">70:CB:0D:8A:2A:3F · −58 dBm</div>
+          </div>
+
+          <div class="cta focused" style="margin-top: 16px;">CONNECT</div>
+
+          <div class="footer-hint">
+            <span>You'll feel a double LED blink on the ring</span>
+          </div>
+        </div>
+      </div>
+      <div class="label">5. Pair</div>
+      <div class="desc">Auto-detected MAC. Confirms with the ring's LED blink (the wearer feels it).</div>
+    </div>
+  </div>
+
+  <h2>6. Binocular preview</h2>
+  <p class="lede">
+    What the wearer actually sees. Same image to both eyes — no parallax, no eye-specific
+    content. Below: a 1:1 mock of one of the screens through both optics simultaneously.
+  </p>
+
+  <div class="binocular">
+    <div class="b-eye">
+      <div class="lbl">LEFT EYE</div>
+      <div class="frame" style="width: 480px; height: 480px;">
+        <div class="pad">
+          <div class="statusbar">
+            <div class="left"><span class="dot"></span><span>R08_2A3F</span><span style="color:var(--ui-fg)">87%</span></div>
+            <div class="right"><span>Navigation</span></div>
+          </div>
+          <div class="tabs">
+            <div class="tab on">VITALS</div>
+            <div class="tab">SETTINGS</div>
+            <div class="tab">STATUS</div>
+          </div>
+          <div class="grid-3" style="margin-top: 6px;">
+            <div class="stat">
+              <div class="v" style="color: var(--ui-accent)">72<span class="u">bpm</span></div>
+              <div class="k">Heart rate</div>
+            </div>
+            <div class="stat">
+              <div class="v">97<span class="u">%</span></div>
+              <div class="k">SpO₂</div>
+            </div>
+            <div class="stat">
+              <div class="v">34</div>
+              <div class="k">Stress</div>
+            </div>
+          </div>
+          <div style="font-size:13px; color: var(--ui-mute); margin-top: 6px;">
+            measured <span style="color:var(--ui-fg)">4 min ago</span>
+          </div>
+          <div class="cta focused" style="margin-top: 18px;">MEASURE NOW</div>
+          <div class="row-list" style="margin-top: 18px;">
+            <div class="row"><span class="key">Steps today</span><span class="val">6,423</span></div>
+            <div class="row"><span class="key">Calories</span><span class="val">252 kcal</span></div>
+            <div class="row"><span class="key">Distance</span><span class="val">4.8 km</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="nasal-bridge"></div>
+    <div class="b-eye">
+      <div class="lbl">RIGHT EYE</div>
+      <div class="frame" style="width: 480px; height: 480px;">
+        <div class="pad">
+          <div class="statusbar">
+            <div class="left"><span class="dot"></span><span>R08_2A3F</span><span style="color:var(--ui-fg)">87%</span></div>
+            <div class="right"><span>Navigation</span></div>
+          </div>
+          <div class="tabs">
+            <div class="tab on">VITALS</div>
+            <div class="tab">SETTINGS</div>
+            <div class="tab">STATUS</div>
+          </div>
+          <div class="grid-3" style="margin-top: 6px;">
+            <div class="stat">
+              <div class="v" style="color: var(--ui-accent)">72<span class="u">bpm</span></div>
+              <div class="k">Heart rate</div>
+            </div>
+            <div class="stat">
+              <div class="v">97<span class="u">%</span></div>
+              <div class="k">SpO₂</div>
+            </div>
+            <div class="stat">
+              <div class="v">34</div>
+              <div class="k">Stress</div>
+            </div>
+          </div>
+          <div style="font-size:13px; color: var(--ui-mute); margin-top: 6px;">
+            measured <span style="color:var(--ui-fg)">4 min ago</span>
+          </div>
+          <div class="cta focused" style="margin-top: 18px;">MEASURE NOW</div>
+          <div class="row-list" style="margin-top: 18px;">
+            <div class="row"><span class="key">Steps today</span><span class="val">6,423</span></div>
+            <div class="row"><span class="key">Calories</span><span class="val">252 kcal</span></div>
+            <div class="row"><span class="key">Distance</span><span class="val">4.8 km</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <p style="margin-top:16px; color: var(--doc-mute);">
+    On Rokid Glasses (single projector → both eyes, ~480 px wide) the same composition fills the
+    visible area. On RayNeo X3 Pro (binocular, 640 × 480 per eye) the 480 × 480 composition is
+    centred with ~80 px of pixel-off padding on each side. No code path renders different content
+    per eye.
+  </p>
+
+  <h2>7. In-app navigation</h2>
+  <p class="lede">
+    The whole UI is operable with the ring (or with the glasses' own temple touchpad). Inside
+    our Activity, gestures are short-circuited to call Compose's focus manager directly — same
+    speed-up as the agent injection but with zero process boundary.
+  </p>
+
+  <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-top: 16px;">
+    <div style="background:#fff;border:1px solid var(--doc-line); padding:16px;">
+      <div style="font:600 14px/1.2 sans-serif;">Ring gesture</div>
+      <div style="font:13px/1.5 'SF Mono', monospace; color: var(--doc-mute); margin-top:6px">SWIPE_UP / SWIPE_DOWN</div>
+      <div style="margin-top:8px; color:#333; font-size:13px;">→ Move focus up / down within the list</div>
+    </div>
+    <div style="background:#fff;border:1px solid var(--doc-line); padding:16px;">
+      <div style="font:600 14px/1.2 sans-serif;">Ring gesture</div>
+      <div style="font:13px/1.5 'SF Mono', monospace; color: var(--doc-mute); margin-top:6px">TAP</div>
+      <div style="margin-top:8px; color:#333; font-size:13px;">→ Activate focused row (Confirm)</div>
+    </div>
+    <div style="background:#fff;border:1px solid var(--doc-line); padding:16px;">
+      <div style="font:600 14px/1.2 sans-serif;">Ring gesture</div>
+      <div style="font:13px/1.5 'SF Mono', monospace; color: var(--doc-mute); margin-top:6px">DOUBLE_TAP</div>
+      <div style="margin-top:8px; color:#333; font-size:13px;">→ Pop screen (Back)</div>
+    </div>
+    <div style="background:#fff;border:1px solid var(--doc-line); padding:16px;">
+      <div style="font:600 14px/1.2 sans-serif;">Reaching the tab strip</div>
+      <div style="font:13px/1.5 'SF Mono', monospace; color: var(--doc-mute); margin-top:6px">SWIPE_UP past the top row of content</div>
+      <div style="margin-top:8px; color:#333; font-size:13px;">→ Focus moves up onto the active tab in the strip. From there, more SWIPE_UP cycles to the previous tab; SWIPE_DOWN moves to the next tab; TAP activates the focused tab. (The ring only has up/down swipes — there are no LEFT/RIGHT gestures.)</div>
+    </div>
+    <div style="background:#fff;border:1px solid var(--doc-line); padding:16px;">
+      <div style="font:600 14px/1.2 sans-serif;">System gestures (always work)</div>
+      <div style="font:13px/1.5 'SF Mono', monospace; color: var(--doc-mute); margin-top:6px">TRIPLE_TAP · QUADRUPLE_TAP · LP+SWIPE_DOWN · 2× LP</div>
+      <div style="margin-top:8px; color:#333; font-size:13px;">→ Cycle profile · Peek HUD · Sleep screen · Reconnect — same as outside our app</div>
+    </div>
+    <div style="background:#fff;border:1px solid var(--doc-line); padding:16px;">
+      <div style="font:600 14px/1.2 sans-serif;">Temple touchpad of the glasses</div>
+      <div style="font:13px/1.5 'SF Mono', monospace; color: var(--doc-mute); margin-top:6px">Rokid: DPAD keys / X3 Pro: TempleAction via ARSDK</div>
+      <div style="margin-top:8px; color:#333; font-size:13px;">→ Same focus operations. Works for first-run before the ring is paired.</div>
+    </div>
+  </div>
+
+  <p style="margin-top:16px; color: var(--doc-mute);">
+    The focus indicator (green left bar + 7% tint) makes it unambiguous which row the next TAP
+    will activate. Every focusable row uses the same indicator — list rows, CTAs, tab strip.
+  </p>
+
+  <h2>8. Notes for implementation</h2>
+  <ul>
+    <li>
+      <b>Compose target.</b> One Activity (in <code>:app</code>) with a Compose root. For
+      RayNeo, the Activity extends Mercury SDK's <code>BaseMirrorActivity</code> so the same
+      composition is mirrored to both eyes for free. For Rokid, plain Activity (the optic
+      handles the doubling).
+    </li>
+    <li>
+      <b>Theme.</b> Define <code>Colors</code> and <code>Typography</code> from the §1 tokens.
+      No <code>MaterialTheme</code> default — we want Material widgets to look like our system,
+      not the other way round.
+    </li>
+    <li>
+      <b>Focus.</b> Default Android focus traversal works on both targets (Rokid temple → DPAD,
+      RayNeo via Mercury <code>FocusHolder</code>). Apply a global focus indicator: 2 px left
+      bar + 7 % accent tint, exactly as drawn here.
+    </li>
+    <li>
+      <b>HUD.</b> Implemented as a Compose composable hosted by an overlay <code>WindowManager</code>
+      view in the foreground service (so it can appear above any app, not just ours).
+      Auto-hides after 2 s via <code>delay() + remove()</code>.
+    </li>
+    <li>
+      <b>Brightness.</b> Inherit system; never override. Wearers expect the glasses' anti-light-
+      leakage mode to apply uniformly.
+    </li>
+    <li>
+      <b>Pixel discipline.</b> If a UI element fits in less ink, prefer that. Every illuminated
+      pixel costs display power. Avoid filled icons; line icons at 1.5 px stroke.
+    </li>
+  </ul>
+
+  <p style="color: var(--doc-mute); margin-top: 48px;">
+    Mockup version v0.1 — 2026-05-13. Updates accompany changes to
+    <a href="08-ui-design.md">Doc/08-ui-design.md</a>.
+  </p>
+
+</div>
+</body>
+</html>

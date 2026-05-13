@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Halo Ring · 环意 — Icon Design Comparison</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: #0E0E10;
+    color: #EDEDED;
+    font-family: -apple-system, "SF Pro Display", "Inter", "PingFang SC", system-ui, sans-serif;
+    padding: 28px 24px 80px;
+  }
+  h1 { font-weight: 600; font-size: 22px; margin: 0 0 4px; letter-spacing: -0.02em; }
+  .sub { color: #888; font-size: 13px; margin-bottom: 22px; line-height: 1.5; }
+  h2 {
+    font-weight: 500; font-size: 14px; letter-spacing: 0.06em; text-transform: uppercase;
+    color: #5EE08C; margin: 28px 0 14px; padding-left: 4px;
+  }
+  h2 .count { color: #5C5C62; font-weight: 400; }
+
+  .row {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 18px;
+  }
+  .row.row-four { grid-template-columns: repeat(4, 1fr); max-width: calc(80vw); }
+  .row.row-two  { grid-template-columns: repeat(2, 1fr); max-width: calc(40vw); }
+  .row.row-two .cell { padding: 22px 18px 18px; }
+  .row.row-two .desc { min-height: 88px; }
+
+  .cell {
+    background: #161618;
+    border: 1px solid #28282C;
+    border-radius: 16px;
+    padding: 16px 12px 14px;
+    text-align: center;
+    transition: border-color 0.15s, transform 0.15s;
+  }
+  .cell:hover { border-color: #5EE08C; transform: translateY(-2px); }
+
+  .big {
+    width: 100%; aspect-ratio: 1;
+    border-radius: 22%;
+    overflow: hidden;
+    background: #000;
+  }
+  .big img { width: 100%; height: 100%; display: block; }
+
+  .sizes {
+    display: flex; justify-content: center; align-items: end;
+    gap: 8px; margin-top: 12px;
+  }
+  .sizes .chip {
+    border-radius: 22%;
+    overflow: hidden;
+    background: #000;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .chip.s96 { width: 84px; height: 84px; }
+  .chip.s48 { width: 48px; height: 48px; }
+  .chip.s24 { width: 24px; height: 24px; }
+  .chip img { width: 100%; height: 100%; display: block; }
+
+  .name { font-weight: 600; font-size: 14px; margin-top: 12px; letter-spacing: -0.01em; }
+  .tag  { color: #5EE08C; font-size: 11px; margin-top: 2px; letter-spacing: 0.05em; }
+  .desc { font-size: 11.5px; color: #B0B0B5; line-height: 1.5; margin-top: 10px; min-height: 70px; }
+  .tradeoff { font-size: 10.5px; color: #888; margin-top: 6px; font-style: italic; min-height: 22px; }
+  .sizes-label { font-size: 10px; color: #5C5C62; margin-top: 12px; letter-spacing: 0.06em; }
+
+  .footer-note {
+    margin-top: 28px;
+    padding: 16px 18px;
+    background: #161618;
+    border: 1px solid #28282C;
+    border-radius: 10px;
+    font-size: 13px;
+    color: #B0B0B5;
+    line-height: 1.6;
+  }
+  .footer-note b { color: #EDEDED; }
+  .footer-note .accent { color: #5EE08C; }
+</style>
+</head>
+<body>
+
+<h1>Halo Ring · 环意 — Icon Design Comparison</h1>
+<div class="sub">11 个变体，同色板 (#5EE08C on #000)，分三族。<br>
+左→右：复杂度递增。每张配 24/48/96 px 三档预览，模拟 launcher 实际大小。<br>
+24 px 这档要还能识别成「环」，才能上 launcher。</div>
+
+<h2>Today's iteration <span class="count">— V3 + V6 hybrids (latest)</span></h2>
+<div class="row row-two">
+
+  <div class="cell">
+    <div class="big"><img src="v10a-aperture-arcs.svg"></div>
+    <div class="name">V10a · Aperture Arcs 三弧聚光</div>
+    <div class="tag">对称 / 鼎立</div>
+    <div class="desc">V6 修过同轴的 3 叶光圈，但每片叶子本身就是一道 V3 式亮弧——白核领先，绿尾消散。12/4/8 三个钟位各冒出一道"刚扫过"的光，120° 鼎立旋转对称。</div>
+    <div class="tradeoff">三弧均衡，没有单一焦点</div>
+    <div class="sizes-label">launcher preview ↓</div>
+    <div class="sizes">
+      <div class="chip s96"><img src="v10a-aperture-arcs.svg"></div>
+      <div class="chip s48"><img src="v10a-aperture-arcs.svg"></div>
+      <div class="chip s24"><img src="v10a-aperture-arcs.svg"></div>
+    </div>
+  </div>
+
+  <div class="cell">
+    <div class="big"><img src="v10b-sweep-aperture.svg"></div>
+    <div class="name">V10b · Sweep Aperture 顶弧 + 光圈</div>
+    <div class="tag">非对称 / 主辅</div>
+    <div class="desc">V6 修过的 3 叶光圈降到 40% 透明度作为结构底，叠上一道更宽（130°）更亮（白核）的 V3 式顶弧。一眼锁定顶部亮弧，光圈结构是背景。"刚扫过 + 戒指底座"的解读最直白。</div>
+    <div class="tradeoff">主光弧一定要"明显"——但底部 8/4 钟位会糊</div>
+    <div class="sizes-label">launcher preview ↓</div>
+    <div class="sizes">
+      <div class="chip s96"><img src="v10b-sweep-aperture.svg"></div>
+      <div class="chip s48"><img src="v10b-sweep-aperture.svg"></div>
+      <div class="chip s24"><img src="v10b-sweep-aperture.svg"></div>
+    </div>
+  </div>
+
+</div>
+
+<h2>Minimal family <span class="count">— V1 baseline + 4 subtle additions</span></h2>
+<div class="row">
+
+  <div class="cell">
+    <div class="big"><img src="v1-classic.svg"></div>
+    <div class="name">V1 · Classic</div>
+    <div class="tag">最简</div>
+    <div class="desc">纯环 + 双层光晕 + 斜向金属渐变。零装饰。</div>
+    <div class="tradeoff">很稳但有点"千篇一律"</div>
+    <div class="sizes-label">launcher preview ↓</div>
+    <div class="sizes">
+      <div class="chip s96"><img src="v1-classic.svg"></div>
+      <div class="chip s48"><img src="v1-classic.svg"></div>
+      <div class="chip s24"><img src="v1-classic.svg"></div>
+    </div>
+  </div>
+
+  <div class="cell">
+    <div class="big"><img src="v2-node.svg"></div>
+    <div class="name">V2 · Node</div>
+    <div class="tag">触点</div>
+    <div class="desc">V1 + 12 点钟方向一个发光触点。"戒指上方就是触摸感应区"的产品提示。</div>
+    <div class="tradeoff">24 px 时白点会糊</div>
+    <div class="sizes-label">launcher preview ↓</div>
+    <div class="sizes">
+      <div class="chip s96"><img src="v2-node.svg"></div>
+      <div class="chip s48"><img src="v2-node.svg"></div>
+      <div class="chip s24"><img src="v2-node.svg"></div>
+    </div>
+  </div>
+
+  <div class="cell">
+    <div class="big"><img src="v3-arc.svg"></div>
+    <div class="name">V3 · Arc</div>
+    <div class="tag">滑过</div>
+    <div class="desc">V1 + 顶部 60° 亮弧，"手指刚扫过戒指"的动感。</div>
+    <div class="tradeoff">最有动感但偏 logo-y</div>
+    <div class="sizes-label">launcher preview ↓</div>
+    <div class="sizes">
+      <div class="chip s96"><img src="v3-arc.svg"></div>
+      <div class="chip s48"><img src="v3-arc.svg"></div>
+      <div class="chip s24"><img src="v3-arc.svg"></div>
+    </div>
+  </div>
+
+  <div class="cell">
+    <div class="big"><img src="v4-aurora.svg"></div>
+    <div class="name">V4 · Aurora</div>
+    <div class="tag">侧光</div>
+    <div class="desc">V1 但光晕偏到左上，像从一个角度被照亮。最摄影感、最有空间感。</div>
+    <div class="tradeoff">最微妙；小图差异不明显</div>
+    <div class="sizes-label">launcher preview ↓</div>
+    <div class="sizes">
+      <div class="chip s96"><img src="v4-aurora.svg"></div>
+      <div class="chip s48"><img src="v4-aurora.svg"></div>
+      <div class="chip s24"><img src="v4-aurora.svg"></div>
+    </div>
+  </div>
+
+  <div class="cell">
+    <div class="big"><img src="v5-twin.svg"></div>
+    <div class="name">V5 · Twin</div>
+    <div class="tag">环轨</div>
+    <div class="desc">V1 + 外圈一道极细同心光环。两环节奏感，最 designed 但保守。</div>
+    <div class="tradeoff">像 AirPods / 太空轨道</div>
+    <div class="sizes-label">launcher preview ↓</div>
+    <div class="sizes">
+      <div class="chip s96"><img src="v5-twin.svg"></div>
+      <div class="chip s48"><img src="v5-twin.svg"></div>
+      <div class="chip s24"><img src="v5-twin.svg"></div>
+    </div>
+  </div>
+
+</div>
+
+<h2>Bold family <span class="count">— structural departures, more design density</span></h2>
+<div class="row row-four">
+
+  <div class="cell">
+    <div class="big"><img src="v6-aperture.svg"></div>
+    <div class="name">V6 · Aperture 光圈</div>
+    <div class="tag">三叶光圈</div>
+    <div class="desc">3 条 150° 弯叶以 120° 偏移重叠成戒指。相机虹膜 / AR 镜头光圈。重叠处自然聚亮。</div>
+    <div class="tradeoff">最有"科技感"，但中心非完整环</div>
+    <div class="sizes-label">launcher preview ↓</div>
+    <div class="sizes">
+      <div class="chip s96"><img src="v6-aperture.svg"></div>
+      <div class="chip s48"><img src="v6-aperture.svg"></div>
+      <div class="chip s24"><img src="v6-aperture.svg"></div>
+    </div>
+  </div>
+
+  <div class="cell">
+    <div class="big"><img src="v7-constellation.svg"></div>
+    <div class="name">V7 · Constellation 四方</div>
+    <div class="tag">基点四方</div>
+    <div class="desc">环 + 12/3/6/9 钟位 4 个发光节点（12 点最亮）。暗示"戒指有多个触摸感应分区"。</div>
+    <div class="tradeoff">最精密仪器感；元素最多</div>
+    <div class="sizes-label">launcher preview ↓</div>
+    <div class="sizes">
+      <div class="chip s96"><img src="v7-constellation.svg"></div>
+      <div class="chip s48"><img src="v7-constellation.svg"></div>
+      <div class="chip s24"><img src="v7-constellation.svg"></div>
+    </div>
+  </div>
+
+  <div class="cell">
+    <div class="big"><img src="v8-mosaic.svg"></div>
+    <div class="name">V8 · Mosaic 镶嵌</div>
+    <div class="tag">八段</div>
+    <div class="desc">环切成 8 段独立弧，亮度从顶部最亮渐到底部最暗。赛博 / 触摸地图感。</div>
+    <div class="tradeoff">缩小后段间隙可能消失</div>
+    <div class="sizes-label">launcher preview ↓</div>
+    <div class="sizes">
+      <div class="chip s96"><img src="v8-mosaic.svg"></div>
+      <div class="chip s48"><img src="v8-mosaic.svg"></div>
+      <div class="chip s24"><img src="v8-mosaic.svg"></div>
+    </div>
+  </div>
+
+  <div class="cell">
+    <div class="big"><img src="v9-iris.svg"></div>
+    <div class="name">V9 · Iris 虹膜</div>
+    <div class="tag">镜片景深</div>
+    <div class="desc">V1 + 内部两道更细的同心环 + 微弱中心光晕。像从 AR 镜片看进去的景深，最 on-brand。</div>
+    <div class="tradeoff">复杂度最高，需慢慢看才发现细节</div>
+    <div class="sizes-label">launcher preview ↓</div>
+    <div class="sizes">
+      <div class="chip s96"><img src="v9-iris.svg"></div>
+      <div class="chip s48"><img src="v9-iris.svg"></div>
+      <div class="chip s24"><img src="v9-iris.svg"></div>
+    </div>
+  </div>
+
+</div>
+
+<div class="footer-note">
+<b>怎么挑：</b>
+盯着大图选设计感，但<span class="accent">最终看 24 px 那档</span>——大部分时间戒指主人会从眼镜主界面 16-24 px 远看到这个图标，缩到那么小还能识别成「环」才是合格的。
+<br><br>
+<b>挑完告诉我编号</b>，或者说"V6 但叶片厚一点"、"V9 但内环再细些"，我合成给你。
+我会把它一次性转成
+<span class="accent">VectorDrawable + 自适应图标 + manifest + strings.xml（中英）</span>，
+然后实装到 OnePlus 上让你看真实 launcher 效果。
+</div>
+
+</body>
+</html>

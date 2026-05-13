@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- V6 "Aperture" — three curved blades (each a 150° arc at 60 px stroke) overlapping at
+     120° offsets. Suggests a camera iris or AR-lens diaphragm. Each blade has a linear
+     gradient from bright start to dimmer end, so the overlapping zones become brightest
+     and create three "energy concentration" spots around the ring. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <radialGradient id="atmosphereHalo" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0.55" stop-color="#5EE08C" stop-opacity="0"/>
+      <stop offset="0.62" stop-color="#5EE08C" stop-opacity="0.22"/>
+      <stop offset="0.78" stop-color="#5EE08C" stop-opacity="0.06"/>
+      <stop offset="1.0"  stop-color="#5EE08C" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="rimGlow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0.83" stop-color="#5EE08C" stop-opacity="0"/>
+      <stop offset="0.87" stop-color="#5EE08C" stop-opacity="0.50"/>
+      <stop offset="0.93" stop-color="#5EE08C" stop-opacity="0.10"/>
+      <stop offset="1.0"  stop-color="#5EE08C" stop-opacity="0"/>
+    </radialGradient>
+    <!-- Each blade has the same gradient: bright at start, fading at tail. -->
+    <linearGradient id="blade1" x1="512" y1="252" x2="642" y2="737" gradientUnits="userSpaceOnUse">
+      <stop offset="0"   stop-color="#B8FFD4"/>
+      <stop offset="0.5" stop-color="#5EE08C"/>
+      <stop offset="1"   stop-color="#2D8E58" stop-opacity="0.6"/>
+    </linearGradient>
+    <linearGradient id="blade2" x1="737" y1="642" x2="252" y2="512" gradientUnits="userSpaceOnUse">
+      <stop offset="0"   stop-color="#B8FFD4"/>
+      <stop offset="0.5" stop-color="#5EE08C"/>
+      <stop offset="1"   stop-color="#2D8E58" stop-opacity="0.6"/>
+    </linearGradient>
+    <linearGradient id="blade3" x1="286.83" y1="642" x2="642" y2="286.83" gradientUnits="userSpaceOnUse">
+      <stop offset="0"   stop-color="#B8FFD4"/>
+      <stop offset="0.5" stop-color="#5EE08C"/>
+      <stop offset="1"   stop-color="#2D8E58" stop-opacity="0.6"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1024" height="1024" fill="#000000"/>
+  <circle cx="512" cy="512" r="480" fill="url(#atmosphereHalo)"/>
+  <circle cx="512" cy="512" r="320" fill="url(#rimGlow)"/>
+
+  <!-- Three blades, each a 150° arc at radius 260, all centered at (512,512), all CW.
+       Overlap zones at clock-angles 120°, 240°, 0° (the three 30° overlaps) appear brightest. -->
+  <g fill="none" stroke-width="62" stroke-linecap="round" opacity="0.92">
+    <!-- Blade 1: 12 → 5 o'clock (CW) -->
+    <path d="M 512 252 A 260 260 0 0 1 642 737.17" stroke="url(#blade1)"/>
+    <!-- Blade 2: 4 → 9 o'clock (CW) -->
+    <path d="M 737.17 642 A 260 260 0 0 1 252 512" stroke="url(#blade2)"/>
+    <!-- Blade 3: 8 → 1 o'clock (CW). Fixed: sweep-flag was 0 (CCW long way); now 1 (CW short way). -->
+    <path d="M 286.83 642 A 260 260 0 0 1 642 286.83" stroke="url(#blade3)"/>
+  </g>
+</svg>

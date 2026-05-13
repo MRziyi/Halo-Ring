@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- V10b "Sweep Aperture" — V6's coaxial 3-blade aperture rendered DIM as the structural
+     base, with ONE prominent V3-style sweep arc (130° wide, white-cored) laid across the top.
+     Reads as "you're seeing the aperture, and a finger just swept across the top." Asymmetric
+     variant of the V3+V6 combo — single hero arc, supporting iris underneath. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <radialGradient id="atmosphereHalo" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0.55" stop-color="#5EE08C" stop-opacity="0"/>
+      <stop offset="0.62" stop-color="#5EE08C" stop-opacity="0.24"/>
+      <stop offset="0.78" stop-color="#5EE08C" stop-opacity="0.08"/>
+      <stop offset="1.0"  stop-color="#5EE08C" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="rimGlow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0.83" stop-color="#5EE08C" stop-opacity="0"/>
+      <stop offset="0.87" stop-color="#5EE08C" stop-opacity="0.40"/>
+      <stop offset="0.93" stop-color="#5EE08C" stop-opacity="0.06"/>
+      <stop offset="1.0"  stop-color="#5EE08C" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Top sweep: bright at center, fades at endpoints. Spans clock-angles -65° to +65° (so
+         130° wide). Wider and brighter than V3's original 60°/opacity-0.85 arc. -->
+    <linearGradient id="topSweep" x1="276.4" y1="402.1" x2="747.6" y2="402.1" gradientUnits="userSpaceOnUse">
+      <stop offset="0"    stop-color="#5EE08C" stop-opacity="0"/>
+      <stop offset="0.15" stop-color="#9CF2C0" stop-opacity="0.8"/>
+      <stop offset="0.5"  stop-color="#FFFFFF" stop-opacity="1.0"/>
+      <stop offset="0.85" stop-color="#9CF2C0" stop-opacity="0.8"/>
+      <stop offset="1"    stop-color="#5EE08C" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1024" height="1024" fill="#000000"/>
+  <circle cx="512" cy="512" r="500" fill="url(#atmosphereHalo)"/>
+  <circle cx="512" cy="512" r="320" fill="url(#rimGlow)"/>
+
+  <!-- Layer 1: dim iris base — 3 coaxial blades at uniform low opacity, no per-blade gradient.
+       Provides the structural ring silhouette without competing with the top sweep. -->
+  <g fill="none" stroke-width="62" stroke-linecap="round" stroke="#5EE08C" opacity="0.42">
+    <path d="M 512 252       A 260 260 0 0 1 642    737.17"/>
+    <path d="M 737.17 642    A 260 260 0 0 1 252    512"/>
+    <path d="M 286.83 642    A 260 260 0 0 1 642    286.83"/>
+  </g>
+
+  <!-- Layer 2: the prominent sweep arc on top (130° wide, brighter than V3's). Sits ON TOP
+       of the iris base. The white-cored gradient is what the eye lands on first. -->
+  <path d="M 276.4 402.1 A 260 260 0 0 1 747.6 402.1"
+        fill="none" stroke="url(#topSweep)" stroke-width="54"
+        stroke-linecap="round"/>
+</svg>
