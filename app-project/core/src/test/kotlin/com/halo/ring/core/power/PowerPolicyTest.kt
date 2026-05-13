@@ -136,4 +136,19 @@ class PowerPolicyTest {
         ))
         assertEquals(IntervalMode.HIGH, d.intervalMode)
     }
+
+    @Test fun `lastActivityMs of MIN_VALUE means never-active and returns BALANCED idle`() {
+        // Doc/13 §audit-2026-05-13j: the original `(nowMs - Long.MIN_VALUE) < ACTIVE_WINDOW_MS`
+        // expression overflowed Long and accidentally classified "never-active" as
+        // "recently-active" → HIGH band on first connection. Now explicitly guarded; first
+        // connection lands in BALANCED, then HaloRingService seeds lastActivityMs on READY so
+        // the very-first reconcile after connect goes back to HIGH.
+        val d = PowerPolicy.decide(inputs(
+            worn = true, screenOn = true,
+            lastActivityMs = Long.MIN_VALUE,   // never observed a ring event yet
+            nowMs = 10_000_000L,                // arbitrary positive uptime
+        ))
+        assertEquals(IntervalMode.BALANCED, d.intervalMode)
+        assertTrue(d.touchEnabled)
+    }
 }

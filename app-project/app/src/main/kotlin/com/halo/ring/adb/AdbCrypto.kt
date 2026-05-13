@@ -75,7 +75,10 @@ object AdbCrypto {
         val modulus = rsa.modulus
         val r32 = BigInteger.ONE.shiftLeft(32)
         val n0inv = (r32 - modulus.modInverse(r32)).toInt()
-        val rr = BigInteger.ONE.shiftLeft(2048).mod(modulus)
+        // Montgomery `rr = R^2 mod n` where R = 2^2048 for a 2048-bit modulus → R^2 = 2^4096.
+        // Earlier this was 2^2048 mod n which adbd writes to adb_keys fine, then rejects on the
+        // post-TLS auth check (adbd recomputes rr from the cert modulus before matching base64).
+        val rr = BigInteger.ONE.shiftLeft(4096).mod(modulus)
 
         val baos = ByteArrayOutputStream()
         baos.write(ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(64).array())
@@ -86,11 +89,23 @@ object AdbCrypto {
         return baos.toByteArray()
     }
 
+    /**
+     * Big-endian → little-endian fixed-width byte array, taking only the last `bytes` bytes of
+     * the BigInteger's two's-complement encoding. Java's [BigInteger.toByteArray] always emits a
+     * leading sign byte for positive numbers whose high bit is set, so a 2048-bit modulus comes
+     * back as 257 bytes (0x00 + 256-byte magnitude). We always want just the magnitude.
+     */
     private fun toLittleEndianWords(n: BigInteger, words: Int): ByteArray {
+        val bytes = words * 4
         val be = n.toByteArray()
-        val le = ByteArray(words * 4)
-        // Reverse + left-pad to fit `words * 4` little-endian bytes.
-        for (i in be.indices) le[be.size - 1 - i] = be[i]
+        val le = ByteArray(bytes)
+        // Copy at most `bytes` bytes from the END of `be` (= least-significant in two's-complement
+        // big-endian order), reversing as we go to produce little-endian magnitude. Anything
+        // shorter than `bytes` is naturally left-padded with the array's default zeros.
+        val take = minOf(be.size, bytes)
+        for (i in 0 until take) {
+            le[i] = be[be.size - 1 - i]
+        }
         return le
     }
 

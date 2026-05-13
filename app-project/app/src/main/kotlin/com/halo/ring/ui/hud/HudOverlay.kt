@@ -202,7 +202,7 @@ fun HudPill(event: HudEvent) {
             is HudEvent.LowBattery    -> LowBatteryContent(event)
             is HudEvent.Disconnected  -> DisconnectedContent()
             is HudEvent.Reconnected   -> Text("● Reconnected", style = HaloType.RowVal.copy(
-                color = HaloColors.Accent, fontSize = 13.sp,
+                color = HaloColors.Accent, fontSize = 16.sp,
             ))
             is HudEvent.GestureRecognised -> GestureRecognisedContent(event)
         }
@@ -216,12 +216,12 @@ private fun PeekContent(p: HudEvent.Peek) {
         Box(Modifier.size(7.dp).clip(CircleShape).background(
             if (p.connected) HaloColors.Accent else HaloColors.Bad))
         Text(p.mode, style = HaloType.Body.copy(
-            fontSize = 13.sp,
+            fontSize = 16.sp,
             color = HaloColors.Fg,
         ))
         p.batteryPct?.let {
             Text("${it}%", style = HaloType.Caption.copy(
-                fontSize = 12.sp,
+                fontSize = 14.sp,
             ))
         }
     }
@@ -232,12 +232,12 @@ private fun ProfileSwitchedContent(p: HudEvent.ProfileSwitched) {
     Row(verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("↻ →", style = HaloType.Body.copy(color = HaloColors.Accent,
-            fontSize = 13.sp))
+            fontSize = 16.sp))
         Text(p.newMode, style = HaloType.Body.copy(
-            fontSize = 13.sp,
+            fontSize = 16.sp,
         ))
         Text("cycle", style = HaloType.Caption.copy(
-            fontSize = 12.sp,
+            fontSize = 14.sp,
         ))
     }
 }
@@ -248,10 +248,10 @@ private fun LowBatteryContent(p: HudEvent.LowBattery) {
         horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         Box(Modifier.size(7.dp).clip(CircleShape).background(HaloColors.Warn))
         Text(p.ringId, style = HaloType.Body.copy(
-            fontSize = 13.sp,
+            fontSize = 16.sp,
         ))
         Text("${p.pct}%", style = HaloType.Caption.copy(
-            fontSize = 12.sp,
+            fontSize = 14.sp,
             color = HaloColors.Warn,
         ))
     }
@@ -276,13 +276,13 @@ private fun GestureRecognisedContent(g: HudEvent.GestureRecognised) {
         horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(g.gesture.friendly(), style = HaloType.Caption.copy(
             color = HaloColors.Mute,
-            fontSize = 13.sp,
+            fontSize = 16.sp,
         ))
         Text("→", style = HaloType.Caption.copy(color = HaloColors.Mute,
-            fontSize = 13.sp))
+            fontSize = 16.sp))
         Text(g.resolvedAction.friendly(), style = HaloType.Body.copy(
             color = actionColor,
-            fontSize = 13.sp,
+            fontSize = 16.sp,
         ))
     }
 }

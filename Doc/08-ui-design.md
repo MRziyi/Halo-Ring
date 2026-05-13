@@ -66,19 +66,37 @@ Six tokens. Anything more is too much for a 480×480 see-through canvas.
 **No solid coloured fills**. No gradients. No shadows. No glass-morphism. The display is
 see-through; every lit pixel leaks into the wearer's view of the world AND costs display power.
 
+> **APL ≤ 13%** (RayNeo design spec). The X3 Pro display thermal-throttles brightness when
+> average picture level exceeds ~13%. Practical rule: large white panels dim within seconds.
+> Stay on the black canvas; only use `--ui-fg` for text and `--ui-accent` for focus / actions.
+> Our actual implementation is dominated by black + small white text, well under the cap. The
+> HUD pill uses `Color(0xCC000000)` (80% black) deliberately.
+
+> **Black = transparent** on additive see-through displays. `#000000` emits zero photons. Use
+> it as default canvas, not as "dark grey" for sections — sections should be delimited by
+> 1 px `--ui-line` dividers, not by tinted backgrounds.
+
 ### Type scale
 
 | Token | Size / weight | Use |
 |---|---|---|
 | Title | 24 / 600 | Screen headers (Settings, Profiles) |
 | Body | 17 / 400 | Default for content rows |
-| Caption | 13 / 400 (mute) | Secondary information, hints |
-| Tab | 13 / 600 (1px letter-spacing) | Tab labels — small, set-back |
-| Mono | 13 / 600 (SF Mono) | MAC addresses, gesture names, command snippets |
+| Caption | 16 / 400 (mute) | Secondary information, hints |
+| Tab | 16 / 600 (1px letter-spacing) | Tab labels — small, set-back |
+| Mono | 16 / 600 (SF Mono) | MAC addresses, gesture names, command snippets |
 | Metric | 56 / 700 (tabular nums, -2px letter-spacing) | Big numbers on Vitals (HR, SpO2, stress) |
+| MetricKey | 14 / 400 (uppercase, mute) | Tiny grouping labels above big metrics |
+| RowKey | 16 / 400 (mute) | Left-aligned row labels |
 
 System sans-serif (`SF Pro` on Apple, `Roboto` on Android) — no custom font bundled. Saves APK
 size and benefits from system optimisation.
+
+> **16 sp is the floor.** RayNeo's design guide warns anything smaller renders with sub-pixel
+> artifacts on the see-through panels (and `HarmonyOS_Sans_SC` is their system font). On our
+> 480×480 canvas mapped to a ~30° FOV, smaller fonts also become genuinely unreadable. The
+> only intentional exception is `MetricKey` (14 sp, all-caps short labels above 56 sp metric
+> numbers — reads as a label, not body copy).
 
 ### Focus indicator
 
@@ -171,13 +189,20 @@ After step 5, drop the wearer into the **Vitals** tab.
 
 | | Rokid Glasses | RayNeo X3 Pro |
 |---|---|---|
-| Display | Single projector → both eyes see the same image | Binocular, dual eye-pieces |
+| Display | Single projector, right-eye-only (Doc/03 §1.1) | Binocular, dual eye-pieces |
 | Native Activity | Plain `ComponentActivity` with a Compose root | Mercury SDK `BaseMirrorActivity` mirrors the Compose root to both eye-pieces automatically |
-| Focus traversal | Standard Android (Compose `Modifier.focusable()`); driven by DPAD key events from the temple bar | Mercury SDK's `FocusHolder` + `FocusInfo` framework (which we wire to the same Compose `focusable()` so the API surface for screens stays identical) |
+| Focus traversal | Standard Android (Compose `Modifier.focusable()`); driven by DPAD key events from the temple bar | Mercury SDK's `FocusHolder` + `FocusInfo` framework. **`Modifier.focusable()` alone is NOT enough** — Mercury's `TouchDispatcher` swallows the temple `MotionEvent`s before Compose sees them. Each focusable composable must register a `FocusInfo` via `focusHolder.addFocusTarget(...)`. The bridge layer wraps `Modifier.focusable()` so screen code stays platform-agnostic (Doc/03 §2.2). |
+| Touch input | **None.** No `pointerInput { }` / drag composables — they're dead. Use `Modifier.clickable()` (DPAD_CENTER auto-triggers it) | Yes (temple touchpad), but consumed by Mercury SDK; apps should consume `TempleAction.SlideForward/Backward/UpwardsDownwards/Click/DoubleClick` from the SDK's `Flow`, not raw `MotionEvent`s (avoids fighting the user's "Natural mode" inversion toggle) |
 | Content area | ~480 × 480 px usable, right-eye optic | 640 × 480 per eye; we centre our 480 × 480 composition with ~80 px black pad each side |
+| Safe area | Standard Android insets (status bar managed by `PageActivity`) | 16 px on all sides at 5 m depth; our 24 dp `ScreenPadding` covers it |
+| Min font | 16 sp (shared floor; see §2 type scale callout) | 16 sp (RayNeo design spec) |
+| APL ceiling | No published cap; black canvas is universally safe | ≤ 13% (above that, thermal throttling dims the panel mid-session) |
 | Anti-light-leakage | Inherit system setting (Rokid's "anti-light-leakage mode" dims brightness to min and hides status bar) | Inherit system setting (same concept) |
 
-**One Compose tree, two Activity hosts.** No per-platform UI logic.
+**One Compose tree, two Activity hosts.** No per-platform UI logic — but the RayNeo bridge
+layer (`focusable` ↔ `FocusInfo`, `TempleAction` ↔ `InAppFocusController`) is a NON-trivial
+flavor-specific module. As of 2026-05-13 it's planned but not yet wired (Doc/03 §2.3); needs
+the Mercury AAR. Verification deferred to [11 §B8](11-verification-checklists.md).
 
 ---
 

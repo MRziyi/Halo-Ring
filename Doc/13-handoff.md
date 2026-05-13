@@ -22,8 +22,20 @@ Earlier session — **audit-driven fix pass D1–D11**: PowerPolicy gains a thre
 `IntervalMode { HIGH, BALANCED, SLOW }` so worn+screen-off correctly relaxes BLE to ~200-500 ms
 (Doc/06 §3.2); battery poll + vitals snapshot now self-recover on disconnect; agent dispatch keeps
 CPU-bound mapper work off `Dispatchers.IO`; first-run wizard relabelled 5-of-5; unused WAKE_LOCK
-permission removed. The only software work left is the SPAKE2 pairing handshake and TLS-wrapped
-ADB connection, which need hardware-validated cryptographic implementation — see B12-real below.
+permission removed.
+
+Latest session (2026-05-13 h) — **B12-real done. The entire software side of the project is
+complete.** Pair → TLS connect → push agent dex → start agent → agent's `@halo.agent`
+abstract socket listening, all verified end-to-end on OnePlus 9 Pro / Android 14 loopback,
+all driven from the first-run wizard with no host-side tooling. Persistent keypair to
+DataStore, root-bypass shortcut for dev rigs, system-overlay code-entry panel for the
+production-on-glasses path, vendor-permission-lockdown tolerance for `pm grant`, FGS-crash
+hardening. Plus a full UI audit against authoritative Rokid + RayNeo specs (16 sp font
+floor, APL ≤ 13%, safe-area pad, focus model divergence between platforms). Five distinct
+TLS-connect blockers were cleared in this session — each one only visible once the previous
+was fixed; see [Doc/15 §4](15-A2-spake2-tls-guide.md#4-the-tls-connect-blockers-we-hit-and-fixed)
+for the full diagnosis trail. From here, the only remaining work is on-device hardware
+verification (Priority C1–C10).
 
 ---
 
@@ -161,20 +173,26 @@ UI (implemented + wired to runtime):
 - `app/src/main/.../ui/screens/ProfilesPrefsStore.kt` (B13) — JSON-over-DataStore persistence for
   the editable profile list + system gestures. Format: `org.json.JSONObject` + [GlassActionCodec].
   Corrupt input falls back to defaults; never crashes ✅
-- `app/src/main/.../adb/` — embedded ADB-over-Wi-Fi support (B12-real partial):
-  - `AdbBootstrap.kt` — top-level coordinator: `keyPair`, `discoverPairingEndpoint`, `pairWithCode`,
-    `pushAgentDex`, `grantWriteSecureSettings`, `startAgent`. Wires the impl files below ✅
+- `app/src/main/.../adb/` — embedded ADB-over-Wi-Fi support (B12-real ⚠️ in flight):
+  - `AdbBootstrap.kt` — top-level coordinator: `keyPair`, `discoverPairingEndpoint`,
+    `pairWithCode`, `connect` / `connectTo`, `pushAgentDex`, `grantWriteSecureSettings`,
+    `startAgent`, `disconnect`. Wires the impl files below ✅
   - `AdbCrypto.kt` — RSA-2048 keypair + self-signed X.509 cert via BouncyCastle. Plus the
-    legacy little-endian ADB-public-key encoding used for the pre-TLS AUTH handshake. **DONE.** ✅
+    legacy little-endian ADB-public-key encoding for `adb_keys`. ⚠️ has a known one-line bug:
+    `rr` is `2^2048 mod n` but should be `2^4096 mod n` (`R² mod n` with `R = 2^2048`).
+    Pairing tolerates this; TLS-connect doesn't.
   - `AdbMdnsDiscovery.kt` — `_adb-tls-pairing._tcp.` / `_adb-tls-connect._tcp.` via Android
-    [`NsdManager`](https://developer.android.com/reference/android/net/nsd/NsdManager). **DONE.** ✅
-  - Still **TODO** (need hardware to validate): the SPAKE2 pairing handshake and the TLS-wrapped
-    ADB connection. The decompiled v2 reference at
-    [`decompiled/v2/.../AdbPairingClient.java`](../decompiled/v2/sources/com/ring/r08remote/adb/AdbPairingClient.java)
-    and [`AdbConnection.java`](../decompiled/v2/sources/com/ring/r08remote/adb/AdbConnection.java)
-    is ~1600 lines combined of BigInteger SPAKE2 + BouncyCastle TLS — porting blind without a
-    test vector is dangerous. The skeleton's `pairWithCode` / `pushAgentDex` return
-    `Result.Failure("not yet implemented")` with specific pointers to the missing pieces.
+    [`NsdManager`](https://developer.android.com/reference/android/net/nsd/NsdManager) ✅
+  - `NativeSpake2.kt` + `cpp/spake2_jni.cpp` + `cpp/CMakeLists.txt` — JNI shim that statically
+    links a prebuilt BoringSSL via the `io.github.vvb2060.ndk:boringssl:20250114` Prefab AAR.
+    Exposes `SPAKE2_CTX_new` / `_generate_msg` / `_process_msg` / `_free` to Kotlin ✅
+  - `AdbPairingClient.kt` — full pairing handshake (TLS 1.3 + RFC 5705 EKM + SPAKE2 + HKDF +
+    AES-GCM peer-info) ✅ verified
+  - `AdbConnection.kt` — TLS-wrapped ADB client (`CNXN`/`STLS` dance, `sync:` push, `exec:` shell)
+    ⚠️ blocked on the `AdbCrypto.rr` bug
+  - `PairingTestReceiver.kt` — debug broadcast entry point: `am broadcast -a com.halo.ring.TEST_PAIR
+    --es host ... --ei port ... --es code ... [--ei connectPort ...]` ✅
+  - Journey + remaining steps documented in [Doc/15](15-A2-spake2-tls-guide.md).
 - `app/src/main/.../ui/screens/AdvancedPrefsStore.kt` — DataStore wrapper for the 3 Advanced
   toggles (debug HUD / latency / spatial). Mirrors [`FeedbackPrefsStore`] ✅
 - `app/src/main/.../ui/screens/VitalsPrefsStore.kt` + `VitalsPrefsScreen.kt` — 5-row Vitals prefs
@@ -386,6 +404,138 @@ Total deltas: 57 new tests (115 → 172), 1 enum + 1 interface rename in `:core`
 If you change `PowerPolicy.IntervalMode` or `R08BleClient.setIntervalMode`, also update
 `StatusScreen.intervalMode`, `FakeR08BleClient.setIntervalMode`, and `R08RemoteService.reconcilePower`.
 
+### 1.9 Third audit pass (2026-05-13 j) — BLE write storm + initial-power-state fix
+
+Triggered by a fresh handoff read asking "is the BLE link actually idempotent in the way the doc
+implies?" Answer: no, on two seams. Then fixed.
+
+- **P1 — `setTouchEnabled` BLE write storm**.
+  `HaloRingService.reconcilePower()` fires on every BLE gesture event. The reconcile unconditionally
+  called `bleClient.setTouchEnabled(decision.touchEnabled)` — and the production
+  `AndroidR08BleClient.setTouchEnabled(true)` writes `TOUCH_ENABLE` to the ring **and** schedules
+  a `TOUCH_MODE` write 500 ms later. So during active use, the ring saw two 16-byte
+  control writes per gesture. Burns ring battery + occupies BLE link slots.
+  **Fix**: track `lastTouchEnabledRequested: Boolean?` on the BLE client; skip when unchanged.
+  Reset to null on disconnect / [stop] so the next connection re-arms. The init sequence's first
+  `TOUCH_ENABLE` write also sets the flag so the next reconcile won't duplicate it.
+- **P2 — `setIntervalMode` same shape**.
+  `requestConnectionPriority` called per gesture instead of only on band changes.
+  **Fix**: `lastIntervalModeRequested: PowerPolicy.IntervalMode?`, same dedup pattern.
+- **P3 — Initial connection didn't promote to HIGH**.
+  `reconcilePower()` was only invoked from wear / screen / gesture events. The BLE connection
+  `READY` callback didn't trigger a reconcile, so the very first gesture rode whatever interval
+  Android negotiated by default (~30-100 ms) instead of HIGH (15-30 ms). The
+  `WearStateProvider.observe` callback also fires only on *changes* — a user who is already
+  wearing the glasses when the service starts wouldn't trigger any reconcile until they took
+  the glasses off and put them back on.
+  **Fix**: on connection `READY`, seed `lastActivityMs = scheduler.nowMs()` (a fresh connection
+  IS activity) then `reconcilePower()`. Also seed initial `worn` from
+  `WearStateProvider.isWorn()` synchronously at end of `onCreate` and reconcile once.
+- **P4 — `PowerPolicy` had a `Long.MIN_VALUE` overflow** that accidentally classified
+  "never-active" as "recently-active". Defence in depth: explicit `!= Long.MIN_VALUE` guard now
+  in `decide()` so the boundary is correct independent of caller seeding.
+- **B1 — HUD overlay write from scheduler thread**.
+  `HudOverlay.show()` was called from the BLE-events subscriber (scheduler thread) and directly
+  invoked `wm.addView` + mutated Compose state. `WindowManager` ops want a Looper thread (which
+  scheduler has, so it worked in practice), but the cleaner contract is "all UI ops on main".
+  **Fix**: `HudOverlay.show/hide/setPosition` now `runOnMain { ... }` internally. No caller
+  changes.
+
+R08BleClient interface kdoc now explicitly states the idempotence contract for
+`setTouchEnabled` / `setIntervalMode`, and `FakeR08BleClient` mirrors the production behaviour so
+the contract is unit-test enforceable.
+
+Total deltas: 5 new tests (3 dedup behaviour cases in `FakeR08BleClientTest`, 1 MIN_VALUE
+boundary in `PowerPolicyTest`, 1 stop()-resets-trackers regression) → **187/187 green**
+(was 182). 3 small fixes in `:app/ble/AndroidR08BleClient.kt`, 2 in `:app/service/HaloRingService.kt`,
+1 in `:app/ui/hud/HudOverlay.kt`, 1 in `:core/power/PowerPolicy.kt`,
+1 in `:core/ble/R08BleClient.kt` kdoc, idempotence trackers in `:core/ble/FakeR08BleClient.kt`.
+
+If you touch any of these, also update the audit-pass log above so the next agent can audit your audit.
+
+### 1.11 B12-real finish + UI audit (2026-05-13 h) — A-2 done, fonts ≥ 16 sp, root bypass
+
+Closed out the TLS-connect blockers, wired the wizard, added two parallel pairing paths
+(overlay for production, root-bypass for dev rigs), and audited the whole Compose tree
+against authoritative Rokid + RayNeo specs.
+
+**TLS-connect blockers** (each invisible until the previous was cleared — full diagnosis in
+[Doc/15 §4](15-A2-spake2-tls-guide.md#4-the-tls-connect-blockers-we-hit-and-fixed)):
+
+1. `AdbCrypto.encodeAdbPublicKey` had `rr = 2^2048 mod n`; AOSP wants `R² mod n` = `2^4096 mod n`. Pairing tolerated it (adbd writes whatever we send); connect rejected because adbd recomputes `rr` from the cert modulus for the base64 match.
+2. Conscrypt's default `X509KeyManager` returned null from `chooseClientAlias` on TLS 1.3 when the server's `CertificateRequest` carried no acceptable-CA filter (adbd's doesn't). No client cert was sent → adbd closed post-handshake. Fixed with a `ForcedAliasKeyManager` wrapper that defaults to our `"adbkey"` alias when the delegate declines.
+3. `openStream` mis-read stale `CLSE` frames from previously-closed streams as the new stream's reply. Fixed by filtering replies whose `arg1 != local`.
+4. Wireless-adbd's `exec:` service kills processes spawned from its stream when the stream closes — survived neither `nohup` nor `setsid`. Switched the agent spawn to `shell:` (pty-attached) which doesn't have this behaviour.
+5. OnePlus / Xiaomi vendor builds strip `GRANT_RUNTIME_PERMISSIONS` from shell, so `pm grant WRITE_SECURE_SETTINGS` fails. Treated as best-effort; stock AOSP (Rokid / RayNeo / Pixel) is unaffected.
+
+**Wizard + overlay**:
+
+- `FirstRunWizardScreen` redesigned per Doc/08 §1 — one primary CTA per sub-state; ADB step is INTRO → RUNNING → SUCCESS/FAILED; a11y / battery steps auto-detect granted state via `onResume` polls and collapse to "✓ Enabled → CONTINUE" when the user re-enters from a system Settings deep-link.
+- `AdbPairingOverlay` is a `SYSTEM_ALERT_WINDOW`-hosted Compose panel for entering the 6-digit code while the system pairing dialog is still visible. Critical flags: `TYPE_APPLICATION_OVERLAY | FLAG_NOT_TOUCH_MODAL | FLAG_ALT_FOCUSABLE_IM`; standalone `LifecycleOwner` pinned at RESUMED (same shape as `HudServiceHost`). Without `FLAG_NOT_TOUCH_MODAL` the overlay eats every touch on the screen including outside its bounds.
+- Phone caveat: `HIDE_NON_SYSTEM_OVERLAY_WINDOWS` on OnePlus Settings SubSettings hides the overlay during the Wireless-debugging sub-screen. Vendor anti-tap-jacking; apps can't bypass. Glasses ROMs probably don't carry this over — verify on C7 / C8.
+
+**Root bypass** (`RootBypass.kt`): on rooted phones, `su` appends our pubkey to `/data/misc/adb/adb_keys` directly, skipping pairing entirely. `installKeyViaRoot` is called from `startPairingFlow` only when the user taps START PAIRING (no startup-time `su` invocation), and the wizard's intro text discloses the strategy ("Will try root auto-setup first; otherwise needs a 6-digit code"). Magisk's standard `su` prompt fires once; cached after.
+
+**Persistent identity**: `AdbKeyStore` persists the RSA-2048 keypair to a per-app DataStore (`halo-adb-key`). `AdbBootstrap.keyPair()` is now `suspend`, loads on first call, generates+persists on miss. After the first successful pair, re-launching the app skips the pairing handshake entirely — DataStore-cached key + persistent TLS-connect port = direct connect.
+
+**FGS-crash fix**: pre-existing bug in `MainActivity.requestPermissions` — service was started even after the user denied Bluetooth permissions, causing `HaloRingService.onCreate` to crash from `startForeground` requiring `BLUETOOTH_CONNECT|SCAN`. Fixed by gating `tryStartForegroundService` on at least one BT permission being granted.
+
+**UI audit** vs authoritative Rokid + RayNeo specs (full findings in [Doc/03 §2.2](03-target-platforms.md) and [Doc/08 §2 / §4](08-ui-design.md)):
+
+- Bumped every text style below the 16 sp RayNeo floor: `Caption`/`Tab`/`Mono`/`RowKey` 13–14 → 16 sp; `MetricKey` 11 → 14 sp (label exception); HUD pill inline sizes 13/12 → 16/14 sp.
+- Confirmed black canvas (`#000000`) + small white text → APL well under RayNeo's 13% thermal-throttle threshold.
+- Confirmed no `pointerInput` / drag composables in shared code (Rokid has no touch).
+- Identified known gap: RayNeo's Mercury SDK `FocusHolder` bridge in our own UI not yet wired (needs Mercury AAR + on-glasses test). Doc/08 §4 now calls this out explicitly.
+
+Total deltas: 7 new Kotlin files (`AdbConnection.kt`, `NativeSpake2.kt`, `AdbKeyStore.kt`, `AdbPairingOverlay.kt`, `RootBypass.kt`, `PairingTestReceiver.kt`, `ForcedAliasKeyManager` inner class), 1 new C++ JNI shim + CMakeLists, Prefab BoringSSL added as a dep, `SYSTEM_ALERT_WINDOW` declared in the manifest, NDK r27 + CMake 3.22.1 installed for the build, 6 font tokens bumped, FirstRunWizard fully rewritten, both flavor APKs still build green.
+
+### 1.10 B12-real implementation pass (2026-05-13 g) — SPAKE2 lands, TLS-connect 1 fix away
+
+Started cutting code on the ADB pairing handshake. Original plan was "port from the decompiled
+v2 source (~1600 lines)". Actual shape that worked:
+
+- **Pairing — three pivots before something held together**:
+  1. `com.github.MuntashirAkon.spake2-java:spake2-java:2.2.1` (pure Java). Round-trips the
+     32-byte SPAKE2 messages fine, then AES-GCM decrypt of server's peer info MAC-fails every
+     time. Root cause: open upstream bug [spake2-java#1](https://github.com/MuntashirAkon/spake2-java/issues/1) — Alice/Bob shared keys diverge due to EdDSA-Java group-op bugs.
+     Deterministic failure for our params; abandoned.
+  2. JNI shim that `dlopen`'s Android's system `libcrypto.so` (Conscrypt's BoringSSL exports the
+     4 `SPAKE2_*` symbols). Linker namespace blocks plain `dlopen` post-Android-7, and the
+     `android_dlopen_ext` escape via `android_get_exported_namespace` is in libdl.so's
+     `LIBC_PLATFORM` symbol version, which apps can't link against (tried RTLD_DEFAULT,
+     explicit libdl handle, weak extern, and `--unresolved-symbols=ignore-in-object-files` —
+     all return null). Abandoned.
+  3. Prefab BoringSSL AAR (`io.github.vvb2060.ndk:boringssl:20250114`) statically linked into
+     our own `libhalo_spake2.so` (the same mechanism Shizuku uses). Five lines of CMake +
+     gradle plumbing. Resulting `.so` is ~830 KB stripped per ABI. Pairing verified
+     loopback against OnePlus 9 Pro / Android 14 — server peer info decrypts OK.
+
+- **TLS-wrapped ADB client written**, `CNXN/STLS/sync:/exec:` shapes implemented in
+  [`AdbConnection.kt`](../app-project/app/src/main/kotlin/com/halo/ring/adb/AdbConnection.kt).
+  Connect path goes TCP → CNXN → STLS → TLS upgrade → wait for CNXN. Currently the TLS
+  handshake succeeds (`TLSv1.3 / TLS_AES_128_GCM_SHA256`) but adbd closes the socket without
+  sending CNXN — meaning `RsaAuthorized` failed server-side.
+
+- **Root cause of the post-TLS close**: [`AdbCrypto.encodeAdbPublicKey`](../app-project/app/src/main/kotlin/com/halo/ring/adb/AdbCrypto.kt#L73)
+  computes the Montgomery `rr` parameter as `2^2048 mod n` but adbd expects `R² mod n` =
+  `2^4096 mod n` (`R = 2^modulus_bits`). Confirmed against AOSP `system/core/libcrypto_utils/android_pubkey.cpp`.
+  Pair tolerates the wrong `rr` because adbd just stores what we send; TLS-connect doesn't
+  because adbd computes `rr` itself from the cert's modulus to look up the match. **One-character
+  fix: `shiftLeft(2048)` → `shiftLeft(4096)`. Not yet committed.**
+
+- **Diagnostic surface**: added [`PairingTestReceiver`](../app-project/app/src/main/kotlin/com/halo/ring/adb/PairingTestReceiver.kt) — `am broadcast` entry point that
+  runs pair-only or pair-then-full-bootstrap depending on whether `--ei connectPort` is
+  provided. Debug-only, removed from release manifest with `tools:node="remove"`.
+
+- **Build system**: NDK r27c + CMake 3.22.1 installed via sdkmanager; `app/src/main/cpp/`
+  added; `prefab=true` in build features. APK gained ~800 KB (the bundled BoringSSL).
+
+Total deltas: 1 new Kotlin class (`AdbConnection.kt`, ~290 LOC), 1 new Kotlin class
+(`NativeSpake2.kt`, ~40 LOC), 1 new C++ file (`spake2_jni.cpp`, ~95 LOC), 1 CMakeLists,
+gradle wiring, JitPack repo removed (no longer needed). `AdbPairingClient.kt` rewritten
+to use `NativeSpake2`. The next agent inherits a project that's one trivial edit away from
+end-to-end pairing+install — see [Doc/15 §4](15-A2-spake2-tls-guide.md#4-the-current-tls-connect-blocker).
+
 ---
 
 ## 2. Priority-ordered TODO
@@ -426,7 +576,7 @@ hardware is in Priority C below.
 | B11 | AccessibilityBackend body + R08AccessibilityService → `ModeManager.onForegroundPackage` for auto-switch. | ✅ done | [`AccessibilityBackend.kt`](../app-project/app/src/main/kotlin/com/r08remote/app/inject/AccessibilityBackend.kt), [`R08AccessibilityService.kt`](../app-project/app/src/main/kotlin/com/r08remote/app/accessibility/R08AccessibilityService.kt) |
 | B12-skeleton | Public API for the ADB bootstrap (`pairWithCode` / `pushAgentDex` / `grantWriteSecureSettings` / `startAgent`). UI calls this. | ✅ done | [`AdbBootstrap.kt`](../app-project/app/src/main/kotlin/com/r08remote/app/adb/AdbBootstrap.kt) |
 | B12-partial | **Cryptographic + transport primitives**: RSA-2048 keypair + self-signed X.509 cert via BouncyCastle ([`AdbCrypto.kt`](../app-project/app/src/main/kotlin/com/r08remote/app/adb/AdbCrypto.kt)); ADB wire packet w/ 7 command-code constants ([`AdbMessage.kt`](../app-project/core/src/main/kotlin/com/r08remote/core/adb/AdbMessage.kt) + 5 round-trip tests); mDNS port discovery via Android `NsdManager` ([`AdbMdnsDiscovery.kt`](../app-project/app/src/main/kotlin/com/r08remote/app/adb/AdbMdnsDiscovery.kt)). | ✅ done | (links in the cell) |
-| B12-real | **Remaining**: SPAKE2 pairing handshake + TLS-wrapped ADB connection. ~1600 lines combined of BigInteger + BouncyCastle TLS to port from [`decompiled/v2/.../AdbPairingClient.java`](../decompiled/v2/sources/com/ring/r08remote/adb/AdbPairingClient.java) + [`AdbConnection.java`](../decompiled/v2/sources/com/ring/r08remote/adb/AdbConnection.java). Needs 🔌 to verify cipher parameters before shipping — porting cryptographic protocol code without a known-good test vector is dangerous. | ❌ deferred until hardware | Doc/13 §B12 above; [04 §5](04-architecture.md) |
+| B12-real | **SPAKE2 pairing + TLS-wrapped ADB + agent install — entire chain.** End-to-end verified on OnePlus 9 Pro / Android 14 loopback: pair → connect → push agent dex → `pm grant` (best-effort) → spawn agent → agent's abstract socket `@halo.agent` listening. Includes: persistent keypair (`AdbKeyStore` / DataStore), root-bypass shortcut for dev rigs (`RootBypass.installKey`), `SYSTEM_ALERT_WINDOW` pairing overlay for production glasses, first-run wizard fully wired. Full implementation log + every bug we hit in [Doc/15](15-A2-spake2-tls-guide.md). | ✅ done; hardware verification deferred to C7 / C8 | [`adb/`](../app-project/app/src/main/kotlin/com/halo/ring/adb/) (9 Kotlin files) + [`cpp/spake2_jni.cpp`](../app-project/app/src/main/cpp/spake2_jni.cpp) + Prefab `io.github.vvb2060.ndk:boringssl` |
 | B13 | Profiles + SystemGestures DataStore persistence — JSON-via-`org.json` writes; flows seeded from store at app startup; subsequent edits write through. [GlassActionCodec] handles the action serialisation. | ✅ done | [`ProfilesPrefsStore.kt`](../app-project/app/src/main/kotlin/com/r08remote/app/ui/screens/ProfilesPrefsStore.kt), [`GlassActionCodec.kt`](../app-project/core/src/main/kotlin/com/r08remote/core/action/GlassActionCodec.kt) |
 
 ### Priority C — verification (hardware-required, do in order when ring + glasses arrive)
@@ -511,7 +661,7 @@ hardware is in Priority C below.
 | Modal layer state machines (Volume / Brightness / Recents / AIDictate) | ✅ implemented + service-wired |
 | Persistence: Feedback + Profiles + SystemGestures + First-run + Advanced + Vitals | ✅ DataStore for all 6 |
 | ADB bootstrap: key/cert generation, mDNS port discovery, wire packet | ✅ implemented |
-| **ADB bootstrap: SPAKE2 pairing + TLS connection** | ❌ B12-real — needs 🔌 to validate crypto |
+| **ADB bootstrap: pair + TLS connect + agent install + wizard UI (B12-real)** | ✅ end-to-end verified on OnePlus loopback; hardware retest deferred to C7 / C8 |
 | CI: `:core:test` on push/PR | ✅ `.github/workflows/core-tests.yml` |
 | Hardware verification (C1–C10) | ⏳ blocked on ring + glasses arriving |
 
@@ -532,18 +682,21 @@ The exceptions, by design:
 ## 4. Recommended order for the next agent
 
 Priority A, B1–B11, B13, B6, **all engineering follow-ups** (agent dex automation, advanced-prefs
-persistence, CompositionLocal, CI), the audit-driven fix pass (D1–D11), and the structural part of
-B12-real (keys + mDNS + wire packet) are complete. Only two software pieces remain, both
-crypto-sensitive and 🔌 hardware-gated.
+persistence, CompositionLocal, CI), the audit-driven fix pass (D1–D11), and B12-real Step 1
+(SPAKE2 pairing) are all complete. Only the TLS-connect path is still in flight, and the next
+agent inherits a project that's one trivial edit away from end-to-end pairing+install.
 
-**Next, hardware-gated work — needs the actual glasses to verify against:**
-1. **B12-real cryptographic core** — finish the SPAKE2 pairing handshake + TLS-wrapped ADB
-   connection so the first-run wizard's "RUN PAIRING FLOW" CTA actually pairs over Wi-Fi and
-   pushes the agent dex. Reference: [`decompiled/v2/sources/com/ring/r08remote/adb/AdbPairingClient.java`](../decompiled/v2/sources/com/ring/r08remote/adb/AdbPairingClient.java)
-   (~800 lines BigInteger SPAKE2) and
-   [`AdbConnection.java`](../decompiled/v2/sources/com/ring/r08remote/adb/AdbConnection.java) (~800
-   lines BouncyCastle TLS). Suggested approach: test against Android Studio's own pairing dialog
-   on a phone before targeting the glasses.
+**Immediate next step — software-only, no hardware needed:**
+1. **B12-real finish** — apply the one-line `rr` fix in [`AdbCrypto.encodeAdbPublicKey`](../app-project/app/src/main/kotlin/com/halo/ring/adb/AdbCrypto.kt) (`shiftLeft(2048)` → `shiftLeft(4096)`,
+   see [Doc/15 §4](15-A2-spake2-tls-guide.md#4-the-current-tls-connect-blocker)), rebuild,
+   re-pair on the OnePlus loopback, and run the full bootstrap via
+   `PairingTestReceiver` with `--ei connectPort`. Should see `CNXN` after TLS, agent dex
+   pushed, `pm grant` succeeded, agent process spawned. Then wire the wizard CTA
+   ([Doc/15 §7](15-A2-spake2-tls-guide.md#7-whats-left)) and persist the keypair to DataStore.
+
+**Hardware-gated work — needs the actual glasses to verify against:**
+2. **Validate the pairing+install flow against real Rokid / RayNeo adbd** — the OnePlus 9 Pro
+   loopback is a strong proxy (same AOSP adbd), but vendor builds occasionally diverge.
 2. **B6 — validate the 0x69 real-time HR sequence on actual hardware.** The current 3-s-per-phase
    timing in `AndroidR08BleClient.requestVitalsSnapshot` is a guess based on the docs; real ring
    may need longer / shorter.
@@ -639,7 +792,27 @@ The agent dex goes into `app/src/main/assets/r08agent.dex` (when built) — see
 
 ## 8. One-line summaries of recent sessions
 
-- **2026-05-13 i** (this session): **Open-source release + A-block roadmap items finished**.
+- **2026-05-13 h** (this session): **B12-real fully closed.** Cleared five TLS-connect
+  blockers (rr=R² fix, Conscrypt forced-alias key manager, stale-CLSE filter,
+  `shell:` over `exec:` for the agent spawn, OEM `pm grant` tolerance). Wired the wizard
+  with a `SYSTEM_ALERT_WINDOW` overlay for the production code path, a root-bypass
+  shortcut for dev rigs, persistent keypair to DataStore, and an FGS-crash fix. Audited
+  the Compose tree against authoritative Rokid + RayNeo specs and bumped every font ≥ 16 sp
+  per RayNeo's design guide. Doc/03 + Doc/08 updated with the audit findings;
+  Doc/15 rewritten to the success log; this Doc/13 reflects the closed loop. Diff:
+  9 new Kotlin files in `app/src/main/.../adb/`, 1 JNI shim + CMakeLists, Prefab
+  BoringSSL dep, manifest `SYSTEM_ALERT_WINDOW`, 6 font tokens bumped, FirstRunWizard
+  fully rewritten. Both flavor APKs build green.
+
+- **2026-05-13 g**: **B12-real Step 1 lands: SPAKE2 pairing verified end-to-end on
+  OnePlus 9 Pro loopback.** Three library pivots before settling on a Prefab BoringSSL AAR
+  statically linked into a small JNI shim — pure-Java `spake2-java` was deterministically
+  broken by an upstream bug, and `dlopen` of system libcrypto was sealed off by Android's
+  linker namespace policy. [`AdbConnection.kt`](../app-project/app/src/main/kotlin/com/halo/ring/adb/AdbConnection.kt)
+  written for the post-pair TLS handshake + `sync:` push + `exec:` shell; one-line `rr`
+  bug in `AdbCrypto.encodeAdbPublicKey` left to fix in the next session.
+
+- **2026-05-13 i**: **Open-source release + A-block roadmap items finished**.
   Repo `MRziyi/Halo-Ring` pushed to GitHub; A-3 / A-4 / A-5 / A-6 complete; only A-2 (SPAKE2,
   hardware-gated) remains in the A block.
   - **A-1 OSS repo**: created `/Users/Zack/Code/Halo-Ring/`, pushed clean source (152 files,

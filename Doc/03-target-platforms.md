@@ -52,6 +52,12 @@ events that the launcher's focus framework consumes.
 **Implication for us**: to drive the launcher, **inject DPAD key events**. `dispatchGesture`
 coordinate taps via Accessibility won't help — the launcher isn't listening for taps.
 
+> **Rokid has no touchscreen at all** (confirmed by `RokidSpriteLauncher` decomp:
+> *"button-only navigation, no touchscreen"*). Any `Modifier.pointerInput { }` /
+> `detectTapGestures` / drag composables in our shared UI code are dead on Rokid. Stay
+> focus-driven: `Modifier.clickable()` (which DPAD_CENTER triggers automatically) is fine;
+> raw pointer handlers are not.
+
 ### 1.3 Launching features via Intent (the right way)
 
 The launcher has 21 exported page Activities, all launchable with `am start -n …`. So
@@ -129,7 +135,7 @@ fetchable). Practice references: cloned third-party apps at [`../research/RayDes
 | OS | **RayNeo AIOS 2.0** — custom Android 12+ (API ≥ 31 confirmed via RayDesk's `minSdk`) |
 | SoC | Qualcomm Snapdragon AR1 Gen 1 |
 | RAM / ROM | 4 GB / 32 GB |
-| Display | Full-colour MicroLED + diffractive waveguide; **dual-eye 1280×480 binocular** (640×480 per eye) |
+| Display | Full-colour MicroLED + diffractive waveguide; **dual-eye 1280×480 binocular** (640×480 per eye, 1.2× magnified vs X2); ~30° diagonal FOV; recommended safe area: 16 px on all sides (we use 24 dp `ScreenPadding`) |
 | Cameras | 12 MP main (RGB) + VGA spatial; 4K photos / 1440p video |
 | Sensors | Standard `SensorManager` `TYPE_GAME_ROTATION_VECTOR` at 219 Hz; gyro; accel; via the SDK an opaque "wear detection" signal |
 | Mic | 3 mics (X3 Pro) |
@@ -153,6 +159,20 @@ them and drives focus.
 swipe x1 y1 x2 y2 ms` or `InputManager.injectInputEvent(MotionEvent)`). The X3 Pro **might** also
 accept DPAD key events (some Android focus frameworks fall through to both); needs on-device
 verification — [11](11-verification-checklists.md) §B5.
+
+> **Critical for in-app focus**: `Modifier.focusable()` (Compose) is NOT enough on X3 Pro. The
+> temple touchpad's `MotionEvent`s are intercepted by Mercury SDK's `TouchDispatcher` *before*
+> Compose sees them. Each focusable Compose element must register a `FocusInfo` via
+> `focusHolder.addFocusTarget(...)` (Mercury SDK) so the SDK's focus tracker can drive it. On
+> Rokid, `Modifier.focusable()` works natively (DPAD events go through standard Android focus
+> traversal). Implication: same Compose code, but `rayneo` flavor needs a focus-bridge layer.
+> See [08 §9.2](08-ui-design.md#92-temple-touchpad-of-the-glasses-themselves) for the bridge plan.
+
+> **User-controllable "Natural mode" inverts swipe direction**: under Settings → Touchpad, X3 Pro
+> users can toggle "Natural" — when on, forward swipe means "previous focus" (vs default
+> "next"). Mercury SDK applies the inversion BEFORE emitting `TempleAction.SlideForward /
+> SlideBackward`, so consumers (us) get the post-toggle abstract direction and don't need to
+> handle it. Apps that hand-parse raw `MotionEvent` must respect the toggle themselves.
 
 ### 2.3 Mercury SDK — RayNeo's official Android development kit
 

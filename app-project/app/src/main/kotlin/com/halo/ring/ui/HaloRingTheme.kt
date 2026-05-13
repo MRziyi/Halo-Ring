@@ -36,20 +36,25 @@ object HaloColors {
     val FocusTint = Color(0x125EE08C)
 }
 
-/** Type scale (Doc/08-ui-design.md §2). System sans-serif, tabular nums for metrics. */
+/** Type scale (Doc/08-ui-design.md §2). System sans-serif, tabular nums for metrics.
+ *
+ *  Floor is 16 sp — RayNeo's design guide warns anything smaller renders with sub-pixel
+ *  artifacts on the see-through display (and our 480×480 canvas mapped to a ~30° FOV doesn't
+ *  have pixels to spare). MetricKey is the only intentional exception — it's an all-caps
+ *  grouping label that reads as a label, not body copy. */
 object HaloType {
     val Title    = TextStyle(fontSize = 24.sp, fontWeight = FontWeight.SemiBold, color = HaloColors.Fg)
     val Body     = TextStyle(fontSize = 17.sp, fontWeight = FontWeight.Normal, color = HaloColors.Fg)
-    val Caption  = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.Normal, color = HaloColors.Mute)
-    val Tab      = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = HaloColors.Mute, letterSpacing = 1.sp)
+    val Caption  = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.Normal, color = HaloColors.Mute)
+    val Tab      = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = HaloColors.Mute, letterSpacing = 1.sp)
     val TabActive= Tab.copy(color = HaloColors.Fg)
-    val Mono     = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+    val Mono     = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.SemiBold,
                              fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
                              color = HaloColors.Mute)
     val Metric   = TextStyle(fontSize = 56.sp, fontWeight = FontWeight.Bold, letterSpacing = (-2).sp, color = HaloColors.Fg)
     val MetricUnit = TextStyle(fontSize = 18.sp, fontWeight = FontWeight.Normal, color = HaloColors.Mute)
-    val MetricKey  = TextStyle(fontSize = 11.sp, fontWeight = FontWeight.Normal, color = HaloColors.Mute, letterSpacing = 1.sp)
-    val RowKey   = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.Normal, color = HaloColors.Mute)
+    val MetricKey  = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.Normal, color = HaloColors.Mute, letterSpacing = 1.sp)
+    val RowKey   = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.Normal, color = HaloColors.Mute)
     val RowVal   = TextStyle(fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = HaloColors.Fg)
 }
 

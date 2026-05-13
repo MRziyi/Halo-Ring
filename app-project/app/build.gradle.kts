@@ -15,11 +15,25 @@ android {
         versionCode = 1
         versionName = "0.1.0"
         ndk { abiFilters += "arm64-v8a" }
+        externalNativeBuild {
+            cmake {
+                arguments += listOf("-DANDROID_STL=c++_static")
+                cppFlags += "-std=c++17"
+            }
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
+        }
     }
 
     buildFeatures {
         compose = true
         buildConfig = true
+        prefab = true   // Enables consuming Prefab AAR modules (e.g. boringssl below).
     }
 
     // Two product flavors → two APKs, sharing 95% of code via :core and the main source set.
@@ -122,6 +136,19 @@ dependencies {
     // BouncyCastle — needed by :app/.../adb for X.509 cert generation in the ADB pairing flow.
     implementation("org.bouncycastle:bcpkix-jdk18on:1.78.1")
     implementation("org.bouncycastle:bcprov-jdk18on:1.78.1")
+
+    // SPAKE2 / crypto: statically link a prebuilt BoringSSL via Prefab. Same SPAKE2 code
+    // path as adbd → byte-for-byte compatible.
+    //
+    // Why not the simpler approaches:
+    //   • spake2-java (pure Java) has an unresolved bug (issue #1, Alice/Bob keys disagree)
+    //     traced to EdDSA-Java's group ops.
+    //   • dlopen of system /apex .../libcrypto.so is blocked: apps can't link against
+    //     `android_get_exported_namespace` (it's in libdl.so's LIBC_PLATFORM version map,
+    //     reserved for platform code).
+    //
+    // io.github.vvb2060.ndk:boringssl is the Prefab AAR Shizuku and similar tools use.
+    implementation("io.github.vvb2060.ndk:boringssl:20250114")
 }
 
 // Make sure the agent dex is up-to-date before any APK is packaged. The :agent:packageDex task

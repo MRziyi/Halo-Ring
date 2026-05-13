@@ -28,6 +28,12 @@
     <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS"
         tools:ignore="ProtectedPermissions" />
 
+    <!-- Used by HudOverlay (gesture-recognised pills) AND the pairing-code overlay that lets us
+         show a text input on top of the system Wireless-debugging pairing dialog. Without this,
+         the user has to memorise the 6-digit code and switch apps, which closes the system
+         dialog and tears down the mDNS advertisement before we can find it. -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+
     <!-- BLE is functionally required, but we leave it as "not required" to keep the same APK
          installable on the GENERIC_ANDROID dev fallback (e.g. an emulator without a BLE stack).
          The runtime guards in AndroidR08BleClient.start() degrade gracefully when adapter==null. -->
@@ -73,6 +79,18 @@
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Debug-only: kicks off the A-2 pairing flow from `adb shell am broadcast`.
+             Should NOT ship in release; tools:node="remove" suppresses it via the release
+             manifest merger. -->
+        <receiver
+            android:name=".adb.PairingTestReceiver"
+            android:exported="true"
+            tools:node="merge">
+            <intent-filter>
+                <action android:name="com.halo.ring.TEST_PAIR" />
             </intent-filter>
         </receiver>
 

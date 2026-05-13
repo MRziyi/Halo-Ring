@@ -106,4 +106,65 @@ class FakeR08BleClientTest {
         assertEquals(listOf(1234L, 5678L), captured)
         assertTrue(captured.all { it > 0 })
     }
+
+    // ── Idempotence (Doc/13 §audit-2026-05-13j) ──────────────────────────────────────────────────
+
+    @Test fun `consecutive identical setTouchEnabled is deduped on the wire`() {
+        val client = FakeR08BleClient { 0L }
+        client.setTouchEnabled(true)
+        client.setTouchEnabled(true)
+        client.setTouchEnabled(true)
+        // The reconcilePower loop fires on every gesture; without dedup the BLE link would see
+        // a TOUCH_ENABLE write per gesture. With dedup, only the first request goes through.
+        assertEquals(listOf(FakeR08BleClient.Command.TOUCH_ENABLE), client.sentCommands)
+    }
+
+    @Test fun `consecutive identical setIntervalMode is deduped`() {
+        val client = FakeR08BleClient { 0L }
+        client.setIntervalMode(PowerPolicy.IntervalMode.HIGH)
+        client.setIntervalMode(PowerPolicy.IntervalMode.HIGH)
+        client.setIntervalMode(PowerPolicy.IntervalMode.HIGH)
+        assertEquals(listOf(FakeR08BleClient.Command.INTERVAL_HIGH), client.sentCommands)
+    }
+
+    @Test fun `state change still goes through after a stable run`() {
+        val client = FakeR08BleClient { 0L }
+        client.setTouchEnabled(true)
+        client.setTouchEnabled(true)
+        client.setTouchEnabled(false)   // genuine change
+        client.setIntervalMode(PowerPolicy.IntervalMode.HIGH)
+        client.setIntervalMode(PowerPolicy.IntervalMode.HIGH)
+        client.setIntervalMode(PowerPolicy.IntervalMode.BALANCED)   // genuine change
+        client.setIntervalMode(PowerPolicy.IntervalMode.SLOW)       // genuine change
+        assertEquals(
+            listOf(
+                FakeR08BleClient.Command.TOUCH_ENABLE,
+                FakeR08BleClient.Command.TOUCH_DISABLE,
+                FakeR08BleClient.Command.INTERVAL_HIGH,
+                FakeR08BleClient.Command.INTERVAL_BALANCED,
+                FakeR08BleClient.Command.INTERVAL_SLOW,
+            ),
+            client.sentCommands,
+        )
+    }
+
+    @Test fun `stop resets idempotence trackers so reconnect re-arms`() {
+        val client = FakeR08BleClient { 0L }
+        client.setTouchEnabled(true)
+        client.setIntervalMode(PowerPolicy.IntervalMode.HIGH)
+        // Simulate disconnect + reconnect — the next setX should re-issue, NOT be skipped.
+        client.stop()
+        client.start()
+        client.setTouchEnabled(true)
+        client.setIntervalMode(PowerPolicy.IntervalMode.HIGH)
+        assertEquals(
+            listOf(
+                FakeR08BleClient.Command.TOUCH_ENABLE,    // initial
+                FakeR08BleClient.Command.INTERVAL_HIGH,
+                FakeR08BleClient.Command.TOUCH_ENABLE,    // re-armed after stop()
+                FakeR08BleClient.Command.INTERVAL_HIGH,
+            ),
+            client.sentCommands,
+        )
+    }
 }

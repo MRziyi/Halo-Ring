@@ -3,6 +3,8 @@ package com.halo.ring.adb
 import android.content.Context
 import android.util.Log
 import java.security.KeyPair
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * Embedded ADB-over-Wi-Fi bootstrap (Doc/04 §5, Doc/13 §B12). Coordinates:
@@ -31,9 +33,13 @@ import java.security.KeyPair
 class AdbBootstrap(private val context: Context) {
 
     private val mdns = AdbMdnsDiscovery(context)
+    private val keyStore = AdbKeyStore(context)
 
-    /** Lazily generated; consider caching to DataStore once we trust the impl on real hardware. */
+    /** Lazily loaded from [keyStore] on first use, then memoised. */
     @Volatile private var clientKeyPair: KeyPair? = null
+
+    /** Set by [connect]; reused by push / grant / startAgent within the same bootstrap session. */
+    @Volatile private var connection: AdbConnection? = null
 
     sealed class State {
         object Idle : State()
@@ -49,9 +55,23 @@ class AdbBootstrap(private val context: Context) {
         data class Failure(val message: String) : Result()
     }
 
-    /** Get-or-create the client identity. ~50 ms one-shot RSA-2048 cost. */
-    fun keyPair(): KeyPair = clientKeyPair ?: synchronized(this) {
-        clientKeyPair ?: AdbCrypto.generateRsaKeyPair().also { clientKeyPair = it }
+    /**
+     * Get-or-create the client identity. First load from [AdbKeyStore]; if nothing's saved,
+     * generate a fresh keypair (~50 ms) and persist it. Subsequent calls in the same process
+     * return the memoised value.
+     */
+    suspend fun keyPair(): KeyPair = clientKeyPair ?: run {
+        val loaded = keyStore.load()
+        if (loaded != null) {
+            Log.i(TAG, "loaded persisted ADB keypair")
+            synchronized(this) { clientKeyPair = loaded }
+            return@run loaded
+        }
+        val fresh = AdbCrypto.generateRsaKeyPair()
+        keyStore.save(fresh)
+        Log.i(TAG, "generated + persisted fresh ADB keypair")
+        synchronized(this) { clientKeyPair = fresh }
+        fresh
     }
 
     /**
@@ -63,46 +83,80 @@ class AdbBootstrap(private val context: Context) {
         mdns.discover(AdbMdnsDiscovery.PAIRING_SERVICE_TYPE)
 
     /**
-     * Run the SPAKE2 pairing handshake.
-     *
-     * **NOT YET IMPLEMENTED — needs hardware validation.** Port [`AdbPairingClient.java`](../../../../../../../decompiled/v2/sources/com/ring/r08remote/adb/AdbPairingClient.java).
-     * The flow is:
-     *
-     *  1. Open a TLS socket to [endpoint.host]:[endpoint.port] (any cert OK at this stage —
-     *     SPAKE2 authenticates the channel separately).
-     *  2. Derive `pwd_hash = hkdf(pairingCode)`; perform SPAKE2 (RFC9382) with X, Y, K_a/b
-     *     transcript hashes.
-     *  3. Once the shared secret is verified, send our X.509 cert encoded in
-     *     `wire_msg: { type: PEER_INFO, payload: cert_pem }`.
-     *  4. Receive the device cert (mTLS-like) so future connect sessions trust it.
-     *  5. Mark the device as paired in our app-side store.
-     *
-     * Cryptographically sensitive — verify against a known-good ADB client (e.g. Android Studio's
-     * pairing dialog) on real hardware before shipping.
+     * Root-only shortcut: write our public key straight into `/data/misc/adb/adb_keys`,
+     * skipping the SPAKE2 pairing dialog entirely. Only useful on rooted dev rigs (and on
+     * Android phones whose Settings UI auto-closes the pairing dialog the moment we leave
+     * Settings, taking adbd's pair port with it). On real glasses we don't have root, so the
+     * wizard's [pairWithCode] path remains the production code path.
      */
-    @Suppress("UNUSED_PARAMETER")
-    suspend fun pairWithCode(code: String, endpoint: AdbMdnsDiscovery.Endpoint): Result {
-        Log.w(TAG, "pairWithCode($code, ${endpoint.host}:${endpoint.port}) — SPAKE2 port NOT yet implemented (B12-real)")
-        // Ensure the keypair is ready so the UI can show "generating keys…" feedback at least.
-        keyPair()
-        return Result.Failure("ADB pairing (SPAKE2) not yet implemented; port from decompiled/v2/.../AdbPairingClient.java needed")
+    suspend fun installKeyViaRoot(): Result = withContext(Dispatchers.IO) {
+        if (!RootBypass.isRootAvailable()) {
+            return@withContext Result.Failure("root not available")
+        }
+        val install = RootBypass.installKey(keyPair())
+        if (!install.ok) return@withContext Result.Failure("adb_keys write failed: ${install.output.trim()}")
+        // adbd re-reads adb_keys on each auth attempt, so no restart is strictly needed.
+        // Send SIGHUP anyway — costs nothing and tightens the race.
+        RootBypass.reloadAdbKeys()
+        Log.i(TAG, "installed pubkey into /data/misc/adb/adb_keys via root")
+        Result.Success
     }
 
     /**
-     * Push the agent dex from app assets to `/data/local/tmp/halo-agent.dex` via the ADB
-     * `sync:` service.
+     * Run the ADB-over-Wi-Fi pairing handshake. Delegates to [AdbPairingClient] for the actual
+     * TLS + HKDF + AES-GCM dance; we only sequence the result. On success, the target's adbd has
+     * added our public key to `/data/misc/adb/adb_keys`, so subsequent [AdbConnection] (A-2
+     * step 2) connects without re-pairing.
      *
-     * **NOT YET IMPLEMENTED.** Port [`AdbConnection.java`](../../../../../../../decompiled/v2/sources/com/ring/r08remote/adb/AdbConnection.java).
-     * Once the TLS connection is up, the sync protocol is:
-     *
-     *   send `sync:` via A_OPEN → A_OKAY → SEND <path>,<mode> → DATA <chunk>... → DONE <mtime> →
-     *   read OKAY (or FAIL with error).
-     *
-     * The asset path (relative to the APK's assets/) is [AGENT_ASSET_PATH].
+     * Threading: [AdbPairingClient.pair] is suspending + blocking I/O; runs on `Dispatchers.IO`
+     * internally. Safe to call from the main thread; the wizard does.
      */
-    suspend fun pushAgentDex(): Result {
-        Log.w(TAG, "pushAgentDex — ADB sync push NOT yet implemented (B12-real)")
-        return Result.Failure("ADB sync push not yet implemented; port from decompiled/v2/.../AdbConnection.java needed")
+    suspend fun pairWithCode(code: String, endpoint: AdbMdnsDiscovery.Endpoint): Result {
+        Log.i(TAG, "pairWithCode($code, ${endpoint.host}:${endpoint.port}) starting")
+        val client = AdbPairingClient(endpoint.host, endpoint.port, code, keyPair())
+        return when (val r = client.pair()) {
+            is AdbPairingClient.Result.Success -> {
+                Log.i(TAG, "pairing OK")
+                Result.Success
+            }
+            is AdbPairingClient.Result.Failure -> {
+                Log.w(TAG, "pairing failed: ${r.message}")
+                Result.Failure(r.message)
+            }
+        }
+    }
+
+    /**
+     * Discover (via mDNS) and connect to the device's TLS-wrapped ADB service. Must be called
+     * before [pushAgentDex] / [grantWriteSecureSettings] / [startAgent]. Idempotent.
+     */
+    suspend fun connect(): Result = withContext(Dispatchers.IO) {
+        if (connection != null) return@withContext Result.Success
+        val endpoint = mdns.discover(AdbMdnsDiscovery.CONNECT_SERVICE_TYPE)
+            ?: return@withContext Result.Failure("mDNS: no _adb-tls-connect._tcp service found")
+        connectTo(endpoint.host, endpoint.port)
+    }
+
+    /** Connect directly to a known host:port (skips mDNS — useful for local-loopback test rigs). */
+    suspend fun connectTo(host: String, port: Int): Result = withContext(Dispatchers.IO) {
+        if (connection != null) return@withContext Result.Success
+        val conn = AdbConnection(host, port, keyPair())
+        if (!conn.connect()) return@withContext Result.Failure("ADB connect $host:$port failed")
+        connection = conn
+        Log.i(TAG, "ADB connected to $host:$port")
+        Result.Success
+    }
+
+    /** Push the agent dex from app assets to [AGENT_DEX_PATH] via the ADB `sync:` service. */
+    suspend fun pushAgentDex(): Result = withContext(Dispatchers.IO) {
+        val conn = connection ?: return@withContext Result.Failure("not connected — call connect() first")
+        val bytes = context.assets.open(AGENT_ASSET_PATH).use { it.readBytes() }
+        if (conn.pushFile(bytes, AGENT_DEX_PATH)) {
+            Log.i(TAG, "pushed ${bytes.size}B agent dex → $AGENT_DEX_PATH")
+            Result.Success
+        } else {
+            Result.Failure("sync push to $AGENT_DEX_PATH failed")
+        }
     }
 
     /**
@@ -110,15 +164,44 @@ class AdbBootstrap(private val context: Context) {
      * itself in the future (`Settings.Global.putInt("adb_wifi_enabled", 1)`), avoiding the
      * repeat-pairing UX on every reboot.
      */
-    suspend fun grantWriteSecureSettings(): Result {
-        Log.w(TAG, "grantWriteSecureSettings — ADB shell exec NOT yet implemented (B12-real)")
-        return Result.Failure("ADB shell exec not yet implemented")
+    suspend fun grantWriteSecureSettings(): Result = withContext(Dispatchers.IO) {
+        val conn = connection ?: return@withContext Result.Failure("not connected")
+        val pkg = context.packageName
+        val out = conn.exec("pm grant $pkg android.permission.WRITE_SECURE_SETTINGS")
+        // `pm grant` prints nothing on success, error text on failure.
+        if (out.isBlank()) Result.Success
+        else Result.Failure("pm grant returned: ${out.trim()}")
     }
 
-    /** Start the agent via `app_process`. After this [AppProcessAgentBackend] should report ready. */
-    suspend fun startAgent(): Result {
-        Log.w(TAG, "startAgent — ADB shell exec NOT yet implemented (B12-real)")
-        return Result.Failure("ADB shell exec not yet implemented")
+    /**
+     * Spawn the agent via `app_process`. After this, [AppProcessAgentBackend] should connect
+     * to the agent's LocalSocket within a few hundred ms.
+     *
+     * The `(setsid ... &)` subshell-with-background pattern double-detaches: the inner
+     * `setsid` creates a new session (so SIGHUP from the exec: shell's exit can't reach the
+     * agent), and the outer subshell + `&` lets the foreground command return immediately so
+     * the exec: stream can close cleanly. `nohup &` alone wasn't enough — the agent died
+     * when the exec: stream closed.
+     */
+    suspend fun startAgent(): Result = withContext(Dispatchers.IO) {
+        val conn = connection ?: return@withContext Result.Failure("not connected")
+        // Must use the `shell:` service, not `exec:`. The wireless-TLS adbd implementation
+        // appears to track and kill processes spawned from an `exec:` transport when that
+        // stream closes, defeating both `nohup` and `setsid`. The `shell:` service spawns
+        // a pty-attached shell that survives stream close → backgrounded children inherit
+        // the surviving shell, then we setsid them out of its session.
+        val cmd = "setsid sh -c 'CLASSPATH=$AGENT_DEX_PATH exec app_process /system/bin " +
+                "--nice-name=halo-agent com.halo.ring.agent.Main' " +
+                "</dev/null >/data/local/tmp/halo-agent.log 2>&1 &"
+        val out = conn.exec(cmd, service = "shell")
+        Log.i(TAG, "startAgent issued; shell output: '${out.trim()}'")
+        Result.Success
+    }
+
+    /** Releases the ADB connection. Safe to call multiple times. */
+    fun disconnect() {
+        connection?.close()
+        connection = null
     }
 
     companion object {

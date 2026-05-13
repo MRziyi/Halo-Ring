@@ -16,9 +16,14 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.halo.ring.adb.AdbBootstrap
+import com.halo.ring.adb.AdbPairingOverlay
+import com.halo.ring.adb.RootBypass
 import com.halo.ring.service.HaloRingService
 import com.halo.ring.ui.AppState
 import com.halo.ring.ui.LocalAppGraph
@@ -43,15 +48,22 @@ class MainActivity : ComponentActivity() {
 
     private lateinit var firstRunStore: FirstRunPrefsStore
     private lateinit var adb: AdbBootstrap
+    private var pairingOverlay: AdbPairingOverlay? = null
+
+    private val accessibilityEnabledState = kotlinx.coroutines.flow.MutableStateFlow(false)
+    private val batteryExemptedState = kotlinx.coroutines.flow.MutableStateFlow(false)
 
     private val requestPermissions = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions(),
     ) { result ->
         result.forEach { (perm, granted) -> Log.i("Halo", "permission $perm = $granted") }
-        // Whatever the user said, retry the service start — Android only blocks the FGS-with-type
-        // when *no* matching runtime permission is held; if the user denied them all we'll still
-        // try and the system will throw which we'll surface in logcat.
-        tryStartForegroundService()
+        // FGS of type `connectedDevice` requires at least one of BLUETOOTH_CONNECT / _SCAN to be
+        // granted, otherwise the service's own startForeground() throws SecurityException and
+        // crashes the service process. Only launch the service when we have what it needs.
+        val haveBt = ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED ||
+            ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED
+        if (haveBt) tryStartForegroundService()
+        else Log.w("Halo", "BT permissions denied — skipping service start; UI-only mode")
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -83,24 +95,22 @@ class MainActivity : ComponentActivity() {
                 val vitalsSnapshot by graph.vitalsSnapshotFlow.collectAsState()
 
                 if (!firstRunCompleted) {
+                    var adbStatus by remember { mutableStateOf("") }
+                    // Refreshed on every onResume — when the user comes back from a settings
+                    // deep-link, the wizard re-checks state so the "CONTINUE" CTA appears
+                    // automatically once the system permission is granted.
+                    val a11yEnabled by accessibilityEnabledState.collectAsState()
+                    val batteryExempted by batteryExemptedState.collectAsState()
                     FirstRunWizardScreen(
                         onOpenDeveloperSettings = { openSettings(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS) },
                         onStartAdbPairing = {
-                            lifecycleScope.launch {
-                                val ep = adb.discoverPairingEndpoint()
-                                if (ep == null) {
-                                    Log.w("Halo", "No ADB pairing service found via mDNS; user must open Wireless debugging on the glasses first")
-                                } else {
-                                    // The 6-digit code is read off the glasses' OS pairing dialog.
-                                    // A future revision will prompt the user for it via a Compose dialog.
-                                    val placeholder = "000000"
-                                    val res = adb.pairWithCode(placeholder, ep)
-                                    Log.i("Halo", "pair result: $res")
-                                }
-                            }
+                            startPairingFlow { adbStatus = it }
                         },
+                        adbStatus = adbStatus,
                         onOpenAccessibilitySettings = { openSettings(Settings.ACTION_ACCESSIBILITY_SETTINGS) },
+                        accessibilityEnabled = a11yEnabled,
                         onRequestBatteryExemption = ::requestBatteryExemption,
+                        batteryExempted = batteryExempted,
                         onStartRingPairing = { graph.bleClient.start() },
                         onCompleted = {
                             lifecycleScope.launch { firstRunStore.markCompleted() }
@@ -278,6 +288,141 @@ class MainActivity : ComponentActivity() {
         catch (e: Exception) { Log.w("Halo", "openSettings($action) failed: ${e.message}") }
     }
 
+    /**
+     * Kick off the pairing flow. Two paths:
+     *
+     * 1. **Root bypass** (dev rig on rooted phones) — `su` writes our pubkey directly into
+     *    `/data/misc/adb/adb_keys` and we connect on the persistent TLS-connect port. No code
+     *    entry, no overlay, no system dialog. Tried first.
+     * 2. **Overlay + mDNS** (default on glasses) — system overlay sits on top of the Settings
+     *    pairing dialog; user types the 6-digit code; we discover the pair port via mDNS.
+     */
+    private fun startPairingFlow(report: (String) -> Unit) {
+        lifecycleScope.launch {
+            report("Trying root auto-setup…")
+            if (RootBypass.isRootAvailable()) {
+                when (val r = adb.installKeyViaRoot()) {
+                    is AdbBootstrap.Result.Success -> {
+                        runRootedBootstrap(report)
+                        return@launch
+                    }
+                    is AdbBootstrap.Result.Failure -> {
+                        Log.w("Halo", "root bypass failed, falling back to manual: ${r.message}")
+                        report("Root failed — falling back to pairing code.")
+                    }
+                }
+            } else {
+                report("No root — opening pairing code entry.")
+            }
+            // No root or root bypass failed → fall through to the manual code flow.
+            startOverlayPairingFlow(report)
+        }
+    }
+
+    /** After [AdbBootstrap.installKeyViaRoot], adbd trusts our key. Just connect + provision. */
+    private suspend fun runRootedBootstrap(report: (String) -> Unit) {
+        report("Connecting…")
+        when (val r = adb.connect()) {
+            is AdbBootstrap.Result.Failure -> return report("✗ ${r.message}")
+            else -> Unit
+        }
+        report("Installing agent…")
+        when (val r = adb.pushAgentDex()) {
+            is AdbBootstrap.Result.Failure -> return report("✗ ${r.message}")
+            else -> Unit
+        }
+        when (val r = adb.grantWriteSecureSettings()) {
+            is AdbBootstrap.Result.Failure ->
+                Log.i("Halo", "pm grant skipped (vendor restriction): ${r.message}")
+            else -> Unit
+        }
+        report("Starting agent…")
+        when (val r = adb.startAgent()) {
+            is AdbBootstrap.Result.Failure -> return report("✗ ${r.message}")
+            else -> Unit
+        }
+        adb.disconnect()
+        report("✓ Agent running (via root bypass).")
+    }
+
+    private fun startOverlayPairingFlow(report: (String) -> Unit) {
+        if (!AdbPairingOverlay.hasPermission(this)) {
+            report("✗ Allow \"Display over other apps\" for Halo Ring, then try again.")
+            try { startActivity(AdbPairingOverlay.permissionIntent(this)) }
+            catch (e: Exception) { Log.w("Halo", "open overlay perm settings failed: ${e.message}") }
+            return
+        }
+
+        val overlay = pairingOverlay ?: AdbPairingOverlay(applicationContext).also { pairingOverlay = it }
+
+        report("Open Wireless debugging → Pair with code, then type the code below.")
+        overlay.show(
+            onSubmit = { code ->
+                lifecycleScope.launch {
+                    runAdbBootstrap(code, overlay::updateStatus) { final ->
+                        // Final state from runAdbBootstrap also flows back to the wizard surface
+                        // so the user sees the result after the overlay dismisses.
+                        report(final)
+                        overlay.hide()
+                    }
+                }
+            },
+            onCancel = { report("") },
+        )
+        // Drop the user into Settings so the system pairing dialog opens on top, with our
+        // overlay underneath. (Actually: our overlay window is TYPE_APPLICATION_OVERLAY which
+        // floats above Activities — including the Settings dialog. Good.)
+        try {
+            startActivity(Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        } catch (e: Exception) {
+            Log.w("Halo", "open dev settings failed: ${e.message}")
+        }
+    }
+
+    /**
+     * Run pair → connect → push agent dex → grant → start agent. Reports incremental progress
+     * via [progress] (drives the overlay's status text) and the terminal state via [done] (drives
+     * the wizard's status text after the overlay closes). The `pm grant` step is allowed to
+     * fail — some vendors (OnePlus, Xiaomi) strip `GRANT_RUNTIME_PERMISSIONS` from shell.
+     */
+    private suspend fun runAdbBootstrap(
+        code: String,
+        progress: (String) -> Unit,
+        done: (String) -> Unit,
+    ) {
+        progress("Discovering…")
+        val ep = adb.discoverPairingEndpoint()
+            ?: return done("✗ Pairing service not found. Open \"Pair with code\" and try again.")
+
+        progress("Pairing…")
+        when (val r = adb.pairWithCode(code, ep)) {
+            is AdbBootstrap.Result.Failure -> return done("✗ ${r.message}")
+            else -> Unit
+        }
+        progress("Connecting…")
+        when (val r = adb.connect()) {
+            is AdbBootstrap.Result.Failure -> return done("✗ ${r.message}")
+            else -> Unit
+        }
+        progress("Installing agent…")
+        when (val r = adb.pushAgentDex()) {
+            is AdbBootstrap.Result.Failure -> return done("✗ ${r.message}")
+            else -> Unit
+        }
+        when (val r = adb.grantWriteSecureSettings()) {
+            is AdbBootstrap.Result.Failure ->
+                Log.i("Halo", "pm grant skipped (vendor restriction): ${r.message}")
+            else -> Unit
+        }
+        progress("Starting agent…")
+        when (val r = adb.startAgent()) {
+            is AdbBootstrap.Result.Failure -> return done("✗ ${r.message}")
+            else -> Unit
+        }
+        adb.disconnect()
+        done("✓ Agent running.")
+    }
+
     private fun requestBatteryExemption() {
         val pm = getSystemService(POWER_SERVICE) as PowerManager
         if (pm.isIgnoringBatteryOptimizations(packageName)) {
@@ -298,11 +443,33 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         isInForeground.set(true)
+        refreshSetupState()
+    }
+
+    /**
+     * Re-check accessibility and battery-exemption state. Called on every onResume so the
+     * wizard auto-advances when the user comes back from a system Settings deep-link.
+     */
+    private fun refreshSetupState() {
+        val pm = getSystemService(POWER_SERVICE) as PowerManager
+        batteryExemptedState.value = pm.isIgnoringBatteryOptimizations(packageName)
+
+        val expectedSvc = "$packageName/com.halo.ring.accessibility.HaloRingAccessibilityService"
+        val enabledList = Settings.Secure.getString(
+            contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
+        ) ?: ""
+        accessibilityEnabledState.value = enabledList.split(':').any { it == expectedSvc }
     }
 
     override fun onPause() {
         super.onPause()
         isInForeground.set(false)
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        pairingOverlay?.destroy()
+        pairingOverlay = null
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
