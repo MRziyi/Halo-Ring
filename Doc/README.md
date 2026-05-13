@@ -48,6 +48,7 @@ markdown links exist for context. Reading the docs in order also works.
 | **[12](12-research-and-references.md)** | Research, References & Errata | Where we got everything from; what `R08-Dev.md` got wrong | ~10 min |
 | **[13](13-handoff.md)** | **Handoff & TODO** | Comprehensive status snapshot + priority-ordered TODO + recommended order for the next agent | ~12 min |
 | **[14](14-pre-hardware-testing.md)** | Pre-Hardware Testing Guide | What you can verify on a laptop + Android phone before the ring + glasses arrive | ~10 min |
+| **[15](15-A2-spake2-tls-guide.md)** | A-2 SPAKE2 + TLS Guide | Step-by-step guide for finishing the ADB-over-WiFi pairing flow when the glasses arrive | ~8 min |
 
 Total: ~2 hours of careful reading for an end-to-end handoff.
 
