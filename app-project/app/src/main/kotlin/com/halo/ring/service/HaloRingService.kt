@@ -387,6 +387,20 @@ class HaloRingService : Service() {
         // ── 10. foreground notification + start BLE ───────────────────────────────────────────
         startInForeground()
         graph.bleClient.start()
+
+        // ── 11. headless boot-recovery: re-spawn the agent if it died on reboot ────────────────
+        // The `app_process` agent doesn't survive reboot — nothing keeps it alive after the
+        // OS shuts down. BootReceiver brings us back, and the persisted keypair + adbd's
+        // remembered adb_keys entry let us reconnect over wireless ADB without UI. Silent on
+        // failure: the wizard CTA is the user-facing fallback.
+        serviceScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val bootstrap = com.halo.ring.adb.AdbBootstrap(applicationContext)
+            try {
+                bootstrap.bootRecoverAgent()
+            } catch (t: Throwable) {
+                Log.w(TAG, "bootRecoverAgent threw: ${t.message}")
+            }
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY

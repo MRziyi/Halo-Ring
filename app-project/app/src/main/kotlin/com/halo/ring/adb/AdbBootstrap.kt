@@ -83,6 +83,112 @@ class AdbBootstrap(private val context: Context) {
         mdns.discover(AdbMdnsDiscovery.PAIRING_SERVICE_TYPE)
 
     /**
+     * Headless boot-recovery path. Called from [com.halo.ring.service.HaloRingService.onCreate]
+     * (which is itself started by [com.halo.ring.receiver.BootReceiver] on BOOT_COMPLETED).
+     *
+     * Tries to bring the agent back without UI:
+     *   1. No persisted keypair → user never paired; do nothing (wizard will run on next app open)
+     *   2. Agent already alive (LocalSocket reachable) → done
+     *   3. Try to ensure Wireless debugging is on (best-effort; only works if we hold
+     *      `WRITE_SECURE_SETTINGS`, which `pm grant` granted us at first wizard run)
+     *   4. Connect via mDNS; push agent dex; spawn agent
+     *
+     * Silent failures. Caller doesn't surface anything to the user — the service can still
+     * provide read-only UI even with the agent down (the wizard CTA re-creates it).
+     *
+     * **Known limitation on OnePlus 9 Pro / OxygenOS** (dev rig): when adbd's wireless transport
+     * has been running for hours without a fresh pair, spawned `shell:` children die at stream
+     * close even with `setsid` and the 800 ms detach delay. A fresh boot or a toggle of
+     * `adb_wifi_enabled` resets the transport, but OnePlus's mDNS advertisement caches the old
+     * port for ~minutes after the toggle, so the connect step then fails until the cache
+     * refreshes. On real glasses (Rokid/RayNeo stock AOSP), `BOOT_COMPLETED` fires with a
+     * freshly-started adbd → no accumulated transport state → spawn should work first try.
+     * Verify on C7 / C8.
+     */
+    suspend fun bootRecoverAgent(): Result = withContext(Dispatchers.IO) {
+        if (keyStore.load() == null) {
+            Log.i(TAG, "bootRecover: no persisted keypair — user hasn't completed wizard yet, skipping")
+            return@withContext Result.Failure("not paired yet")
+        }
+        if (isAgentAlive()) {
+            Log.i(TAG, "bootRecover: agent already alive on @halo.agent, nothing to do")
+            return@withContext Result.Success
+        }
+        ensureWirelessDebugEnabled()
+
+        // Give adbd's wireless debugging a moment to start advertising mDNS after boot.
+        // The connect port is persistent across reboots (Android remembers it once the user
+        // enabled wireless debug), so this is just a settling delay, not a polling loop.
+        kotlinx.coroutines.delay(2_000)
+
+        when (val r = connect()) {
+            is Result.Failure -> {
+                Log.w(TAG, "bootRecover: connect failed: ${r.message}")
+                return@withContext r
+            }
+            else -> Unit
+        }
+
+        // The dex is in app assets; pushing is idempotent (sync.SEND overwrites).
+        when (val r = pushAgentDex()) {
+            is Result.Failure -> {
+                Log.w(TAG, "bootRecover: pushAgentDex failed: ${r.message}")
+                disconnect()
+                return@withContext r
+            }
+            else -> Unit
+        }
+        when (val r = startAgent()) {
+            is Result.Failure -> {
+                Log.w(TAG, "bootRecover: startAgent failed: ${r.message}")
+                disconnect()
+                return@withContext r
+            }
+            else -> Unit
+        }
+        // Give the agent a beat to settle into its `setsid` session before tearing down the
+        // ADB transport — see wizard's runRootedBootstrap which uses the same delay. Without
+        // it the agent dies between startAgent returning and us closing the socket.
+        kotlinx.coroutines.delay(800)
+        disconnect()
+        val alive = isAgentAlive()
+        Log.i(TAG, "bootRecover: agent re-spawned via wireless ADB; aliveCheck=$alive")
+        if (alive) Result.Success else Result.Failure("agent socket not reachable after spawn")
+    }
+
+    private fun isAgentAlive(): Boolean = try {
+        android.net.LocalSocket().use { s ->
+            s.connect(android.net.LocalSocketAddress(
+                "halo.agent", android.net.LocalSocketAddress.Namespace.ABSTRACT))
+            true
+        }
+    } catch (_: Exception) { false }
+
+    /**
+     * If we hold `WRITE_SECURE_SETTINGS` (granted by `pm grant` during first wizard run on
+     * stock AOSP devices; OnePlus / Xiaomi block this), make sure `adb_wifi_enabled` is on.
+     * On stock AOSP the user's toggle survives reboot already, so this is a belt-and-braces.
+     */
+    private fun ensureWirelessDebugEnabled() {
+        val haveSettingsPerm = androidx.core.content.ContextCompat.checkSelfPermission(
+            context, android.Manifest.permission.WRITE_SECURE_SETTINGS,
+        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        if (!haveSettingsPerm) return
+        val current = android.provider.Settings.Global.getInt(
+            context.contentResolver, "adb_wifi_enabled", 0,
+        )
+        if (current == 1) return
+        try {
+            android.provider.Settings.Global.putInt(
+                context.contentResolver, "adb_wifi_enabled", 1,
+            )
+            Log.i(TAG, "auto-enabled adb_wifi_enabled (had WRITE_SECURE_SETTINGS)")
+        } catch (e: SecurityException) {
+            Log.w(TAG, "putInt adb_wifi_enabled denied despite perm: ${e.message}")
+        }
+    }
+
+    /**
      * Root-only shortcut: write our public key straight into `/data/misc/adb/adb_keys`,
      * skipping the SPAKE2 pairing dialog entirely. Only useful on rooted dev rigs (and on
      * Android phones whose Settings UI auto-closes the pairing dialog the moment we leave

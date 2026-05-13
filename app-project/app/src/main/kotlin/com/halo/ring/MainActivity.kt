@@ -341,6 +341,10 @@ class MainActivity : ComponentActivity() {
             is AdbBootstrap.Result.Failure -> return report("✗ ${r.message}")
             else -> Unit
         }
+        // Let the agent's setsid session detach before we tear down the ADB transport — see
+        // PairingTestReceiver comment for the same pattern. Without this beat the agent dies
+        // between startAgent and disconnect.
+        kotlinx.coroutines.delay(800)
         adb.disconnect()
         report("✓ Agent running (via root bypass).")
     }
@@ -419,6 +423,7 @@ class MainActivity : ComponentActivity() {
             is AdbBootstrap.Result.Failure -> return done("✗ ${r.message}")
             else -> Unit
         }
+        kotlinx.coroutines.delay(800)  // see comment in runRootedBootstrap
         adb.disconnect()
         done("✓ Agent running.")
     }

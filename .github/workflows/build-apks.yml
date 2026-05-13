@@ -1,0 +1,78 @@
+name: build-apks
+
+# Builds both flavor APKs (rokid + rayneo) in debug and release configurations on every push
+# to main, on every PR, and on every git tag matching `v*` (which also creates a GitHub Release
+# with the APKs attached). Plus a manual `workflow_dispatch` trigger so anyone with repo write
+# access can produce a fresh APK on demand from the Actions tab.
+#
+# Build time on cold runner: ~5-8 min (downloads Android SDK + NDK r27 + Gradle deps). Warm
+# runner with Gradle cache: ~2-3 min.
+
+on:
+  push:
+    branches: [main, master]
+    tags: ['v*']
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          # NDK 27 contains the toolchain our cpp/spake2_jni.cpp links against; CMake 3.22.1
+          # matches the version pinned in app/src/main/cpp/CMakeLists.txt.
+          ndk-version: '27.2.12479018'
+          cmake-version: '3.22.1'
+          accept-android-sdk-licenses: true
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          cache-disabled: false
+
+      - name: Build agent dex
+        working-directory: app-project
+        run: ./gradlew :agent:packageDex --no-daemon
+
+      - name: Build debug APKs
+        working-directory: app-project
+        run: ./gradlew :app:assembleRokidDebug :app:assembleRayneoDebug --no-daemon
+
+      - name: Build release APKs (debug-signed for size measurement; see Doc/03)
+        working-directory: app-project
+        run: ./gradlew :app:assembleRokidRelease :app:assembleRayneoRelease --no-daemon
+
+      - name: List built APKs
+        run: find app-project/app/build/outputs/apk -name '*.apk' -exec ls -lh {} \;
+
+      - name: Upload APK artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: halo-ring-apks-${{ github.sha }}
+          path: app-project/app/build/outputs/apk/**/*.apk
+          retention-days: 14
+          if-no-files-found: error
+
+      # On a `v*` tag push, also publish a GitHub Release with the APKs attached so users can
+      # download them without needing GitHub login / Actions access.
+      - name: Attach APKs to GitHub Release (on tag)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: app-project/app/build/outputs/apk/**/*.apk
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
