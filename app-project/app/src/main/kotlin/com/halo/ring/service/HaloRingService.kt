@@ -154,11 +154,6 @@ class HaloRingService : Service() {
                     connected = s.connected,
                 ))
             },
-            onForceReconnect = {
-                Log.i(TAG, "force reconnect requested")
-                graph.bleClient.stop()
-                graph.bleClient.start()
-            },
             onEnterModal = { entryAction ->
                 val modal = when (entryAction) {
                     GlassAction.EnterVolumeModal     -> VolumeModal()

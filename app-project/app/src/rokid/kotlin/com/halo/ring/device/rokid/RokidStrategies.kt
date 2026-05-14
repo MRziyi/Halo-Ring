@@ -72,6 +72,7 @@ class RokidActionMapper(private val intents: FeatureIntents) : GlassActionMapper
         // ── feature intents (Sprite Launcher activities — see §12.1) ──
         GlassAction.OpenCamera     -> intents.openCamera()
         GlassAction.TakePhoto      -> intents.takePhoto()
+        GlassAction.OpenAIAssistant -> intents.openAIAssistant()
         GlassAction.AskVisualAI    -> intents.askVisualAI()
         GlassAction.OpenTranslate  -> intents.openTranslate()
         GlassAction.OpenChat       -> intents.openChat()
@@ -111,8 +112,13 @@ class RokidFeatureIntents : FeatureIntents {
         InjectionPrimitive.StartActivity("$launcher/.page.camera.CameraPageActivity"),
         InjectionPrimitive.Key(android.view.KeyEvent.KEYCODE_CAMERA),
     )
+    /** Everyday voice/chat AI — Rokid Sprite's ChatPageActivity. Distinct from visual AI which
+     *  takes a camera frame as context (`askVisualAI`). Audit-pass 2026-05-14w. */
+    override fun openAIAssistant() = listOf(InjectionPrimitive.StartActivity("$launcher/.page.chat.ChatPageActivity"))
     override fun askVisualAI() = listOf(InjectionPrimitive.Broadcast("com.rokid.visualaidemo.ACTION_START"))
     override fun openTranslate() = listOf(InjectionPrimitive.StartActivity("$launcher/.page.translate.TranslatePageActivity"))
+    /** Sprite Chat page — same as `openAIAssistant()`. Kept distinct so user-bindable bindings can
+     *  reference the "open the chat UI explicitly" semantic vs the more abstract "wake AI" one. */
     override fun openChat() = listOf(InjectionPrimitive.StartActivity("$launcher/.page.chat.ChatPageActivity"))
     override fun openMusic() = listOf(InjectionPrimitive.StartActivity("$launcher/.page.music.MusicPageActivity"))
     override fun openSettings() = listOf(InjectionPrimitive.StartActivity("$launcher/.setting.SettingPageActivity"))

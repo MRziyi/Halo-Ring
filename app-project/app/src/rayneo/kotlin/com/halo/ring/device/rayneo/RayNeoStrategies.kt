@@ -71,6 +71,7 @@ class RayNeoActionMapper(private val intents: FeatureIntents) : GlassActionMappe
         // ── feature intents (TBD by on-device discovery) ──
         GlassAction.OpenCamera     -> intents.openCamera()
         GlassAction.TakePhoto      -> intents.takePhoto()
+        GlassAction.OpenAIAssistant -> intents.openAIAssistant()
         GlassAction.AskVisualAI    -> intents.askVisualAI()
         GlassAction.OpenTranslate  -> intents.openTranslate()
         GlassAction.OpenChat       -> intents.openChat()
@@ -137,6 +138,23 @@ class RayNeoFeatureIntents : FeatureIntents {
     override fun askVisualAI()   = emptyList<InjectionPrimitive>()
     override fun openTranslate() = emptyList<InjectionPrimitive>()
     override fun openChat()      = emptyList<InjectionPrimitive>()
+    /**
+     * Best-effort "wake the assistant" on X3 Pro. RayNeo bundles Google Gemini (West) / a domestic
+     * LLM (CN) as the system assistant; wake word is "Hey RayNeo" or a long-press on the left
+     * temple. **No public Intent / package name is documented** for third-party triggering.
+     *
+     * The standard `android.speech.action.VOICE_SEARCH_HANDS_FREE` is the canonical Android voice-
+     * assistant entry point and **may** fall through to Gemini on AIOS 2.0 (Pixel-style behaviour),
+     * but this is unverified pending hardware. If it fails, the user just sees nothing happen and
+     * can rebind to something supported via Settings → Profiles. The `ActionRouter.supports()`
+     * default impl returns true here (non-empty primitives list), so the ActionPicker shows it as
+     * bindable rather than "coming soon" — accepting the tradeoff that we want users to be able to
+     * try it before we know for certain. Audit-pass 2026-05-14w. Doc/11 §B6 has the on-device
+     * verification recipe.
+     */
+    override fun openAIAssistant() = listOf(
+        InjectionPrimitive.Shell("am start -a android.speech.action.VOICE_SEARCH_HANDS_FREE"),
+    )
     override fun openMusic() = listOf(
         // MEDIA_PLAY_FROM_SEARCH with empty query opens whichever music app is registered as default.
         InjectionPrimitive.Shell("am start -a android.media.action.MEDIA_PLAY_FROM_SEARCH --es query ''"),

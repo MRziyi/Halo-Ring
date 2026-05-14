@@ -102,7 +102,10 @@ class ProfilesPrefsStore(private val context: Context) {
         .put("sleep",           sg.sleep?.name)
         .put("profileCycle",    sg.profileCycle?.name)
         .put("peekHud",         sg.peekHud?.name)
-        .put("forceReconnect",  sg.forceReconnect?.name)
+        // Audit-pass 2026-05-14w: renamed key `forceReconnect` → `aiAssistant`. Legacy
+        // `forceReconnect` reads are handled in `decodeSystemGestures` as a forward-compat
+        // fallback so existing on-device DataStore values still load.
+        .put("aiAssistant",     sg.aiAssistant?.name)
         .toString()
 
     // ── decode ──────────────────────────────────────────────────────────────────────────────────
@@ -156,12 +159,15 @@ class ProfilesPrefsStore(private val context: Context) {
             obj.optString(key, "").takeIf { it.isNotEmpty() }?.let {
                 runCatching { Gesture.valueOf(it) }.getOrNull()
             }
+        // Forward-compat: prefer the new `aiAssistant` key; fall back to the legacy
+        // `forceReconnect` key so users upgrading from <0.2.3 still get the same gesture binding
+        // (DOUBLE_LONG_PRESS) preserved on the new AI slot.
         return SystemGestures(
             wake = g("wake"),
             sleep = g("sleep"),
             profileCycle = g("profileCycle"),
             peekHud = g("peekHud"),
-            forceReconnect = g("forceReconnect"),
+            aiAssistant = g("aiAssistant") ?: g("forceReconnect"),
         )
     }
 

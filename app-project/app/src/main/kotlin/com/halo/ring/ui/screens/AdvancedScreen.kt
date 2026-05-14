@@ -17,6 +17,7 @@ import androidx.compose.ui.unit.sp
 import com.halo.ring.R
 import com.halo.ring.ui.FocusableRow
 import com.halo.ring.ui.HaloColors
+import com.halo.ring.ui.HaloSwitch
 import com.halo.ring.ui.HaloType
 import com.halo.ring.ui.ScreenPadding
 
@@ -58,11 +59,14 @@ fun AdvancedScreen(
             modifier = Modifier.padding(horizontal = ScreenPadding, vertical = 12.dp),
         )
 
+        // Audit-pass 2026-05-13t: `debugHudEnabled` is persisted but no consumer reads it
+        // (there's no actual debug-HUD renderer wired). Mark disabled so we don't lie about it.
         ToggleRow(
             title = stringResource(R.string.advanced_debug_hud),
             description = stringResource(R.string.advanced_debug_hud_desc),
             on = prefs.debugHudEnabled,
             onToggle = onToggleDebugHud,
+            disabled = true,
         )
         ToggleRow(
             title = stringResource(R.string.advanced_latency_measure),
@@ -70,11 +74,13 @@ fun AdvancedScreen(
             on = prefs.latencyMeasurementEnabled,
             onToggle = onToggleLatency,
         )
+        // Phase-3 (spatial / air gestures). Toggle has no runtime effect until phase-3 ships.
         ToggleRow(
             title = stringResource(R.string.advanced_spatial_mode),
             description = stringResource(R.string.advanced_spatial_desc),
             on = prefs.spatialModeEnabled,
             onToggle = onToggleSpatial,
+            disabled = true,
         )
 
         Spacer(Modifier.height(16.dp))
@@ -105,16 +111,19 @@ private fun SectionHeader(text: String) {
 }
 
 @Composable
-private fun ToggleRow(title: String, description: String, on: Boolean, onToggle: () -> Unit) {
-    FocusableRow(onClick = onToggle) {
-        Column(Modifier.padding(end = 8.dp)) {
-            Text(title, style = HaloType.Body)
+private fun ToggleRow(
+    title: String,
+    description: String,
+    on: Boolean,
+    onToggle: () -> Unit,
+    disabled: Boolean = false,
+) {
+    FocusableRow(onClick = { if (!disabled) onToggle() }) {
+        Column(Modifier.padding(end = 8.dp).weight(1f)) {
+            Text(title, style = HaloType.Body.copy(color = if (disabled) HaloColors.Mute else HaloColors.Fg))
             Text(description, style = HaloType.Caption.copy(fontSize = 11.sp))
         }
-        Text(
-            text = stringResource(if (on) R.string.common_on else R.string.common_off),
-            style = HaloType.RowVal.copy(color = if (on) HaloColors.Accent else HaloColors.Mute),
-        )
+        HaloSwitch(on = on, disabled = disabled)
     }
     Box(Modifier.fillMaxWidth().height(1.dp).background(HaloColors.Line))
 }
@@ -122,7 +131,7 @@ private fun ToggleRow(title: String, description: String, on: Boolean, onToggle:
 @Composable
 private fun ActionRow(title: String, description: String, onClick: () -> Unit) {
     FocusableRow(onClick = onClick) {
-        Column(Modifier.padding(end = 8.dp)) {
+        Column(Modifier.padding(end = 8.dp).weight(1f)) {
             Text(title, style = HaloType.Body)
             Text(description, style = HaloType.Caption.copy(fontSize = 11.sp))
         }

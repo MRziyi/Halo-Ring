@@ -3,7 +3,115 @@
 > **For the next agent picking up this project.** This document is the canonical "where we are,
 > what's left, and where to look" — keep it current as you work. If a TODO here is wrong, fix it.
 
-Last updated: 2026-05-13 (after **audit-pass-s**: full EN/ZH i18n across every UI surface
+Last updated: 2026-05-14 (after **audit-pass-w**: AI / system-slot / profile-content
+redesign on top of audit-pass-u/v.
+
+**OpenAIAssistant action split from AskVisualAI**: new `GlassAction.OpenAIAssistant` distinct
+from camera-grounded `AskVisualAI`. Rokid maps to `am start
+com.rokid.os.sprite.launcher/.page.chat.ChatPageActivity` (everyday chat); RayNeo to
+best-effort `am start -a android.speech.action.VOICE_SEARCH_HANDS_FREE` — RayNeo Mercury SDK
+publishes no AI Intent / package and "Hey RayNeo" wake word can't be triggered programmatically
+per the audit, so the standard Android voice-assistant Intent is our best guess pending
+on-device verification (Doc/11 §B6 already tracks the discovery recipe).
+
+**System gesture slot retired**: `SystemGestures.Slot.FORCE_RECONNECT` (DOUBLE_LONG_PRESS) →
+`SystemGestures.Slot.AI_ASSISTANT` (same gesture). BLE auto-reconnect handles 99% of
+disconnects, so the slot is more valuable as a daily-use AI entry point. Force-reconnect
+lives on as a "RECONNECT" `Cta` in Settings → Ring beside FIND / SHUTDOWN / FORGET. HUD's
+disconnected hint changed from "long-press × 2 to reconnect" to "Open app → Settings → Ring
+→ Reconnect". `ProfilesPrefsStore` reads the legacy `forceReconnect` JSON key as a
+forward-compat fallback so users upgrading from v0.2.2 keep their DOUBLE_LONG_PRESS binding
+mapped onto the new slot.
+
+**InteractionRouter**: `onForceReconnect` callback removed; AI_ASSISTANT slot routes through
+the standard `dispatch()` path so per-flavor `FeatureIntents.openAIAssistant()` handles
+the actual launch.
+
+**DefaultProfiles redesigned** for usefulness + intuition:
+- Navigation: `DOUBLE_TAP_SWIPE_DOWN` swapped AskVisualAI → OpenAIAssistant (everyday AI more
+  useful than VQA on average).
+- Media: swipes now do Volume (most-frequent media op), long-press + combo do track
+  navigation. `DOUBLE_TAP_SWIPE_UP` was TakePhoto → Screenshot (capture lyrics / frame).
+- Reader: long-press now does BrightnessUp (reading-light affordance) instead of Home;
+  LONG_PRESS_SWIPE_UP = BrightnessDown. Translate stays on DOUBLE_TAP_SWIPE_DOWN.
+- Fast: unchanged (low-latency profile, no auto-trigger).
+
+**Profile auto-switch wired**: `triggerPackages` populated with real defaults — Media catches
+Sprite Music, Spotify, YouTube, NetEase, QQMusic, B 站, 抖音, 快手; Reader catches Sprite
+Translate / WordTips, Kindle, Adobe Reader, Play Books, Chrome, Firefox. `ModeManager`
+matches via `pkg.startsWith(trigger)` (was `pkg in list`), and **falls back to
+`DefaultProfiles.DEFAULT_FALLBACK_ID` ("navigation")** when the foreground app matches
+nothing AND the current profile has its own non-empty triggers — so leaving Spotify drops
+Media → Navigation instead of stranding the user on Media.
+
+**Tests**: 1 retired (`inAppShortCircuit is NOT consulted for system pseudo-actions` —
+DOUBLE_LONG_PRESS no longer fits the "pseudo" category) + 1 new (verifies DOUBLE_LONG_PRESS
+dispatches OpenAIAssistant). **207/207 green** (was 206).
+
+**Shipped as v0.2.3 / versionCode 5** after user verified the changes on the OnePlus
+burn-test rig.
+
+Previously the audit was at: **audit-pass-u/v** — three related rounds against the same UI:
+
+**About-page slim**: stripped the BLE-source / Phase-0 / credits / docs / brand-slogan blocks
+that wasted pixels on the 480×480 / 1280×480 waveguide. Kept the version + detected-device
++ "show operation guide" rows + the open-source disclaimer. The "commercial license" line
+was added then removed at the user's request — About is consumer-facing, commercial
+conversations live in `COMMERCIAL-LICENSE.md` in the repo.
+
+**Test Arena hardening**: every row in the gesture grid uses `BringIntoViewRequester` so
+the freshly-recognised gesture auto-scrolls into view. **No exit button** (glasses have no
+touchscreen so a bottom button was unreachable); instead the screen hardcodes
+`Gesture.DOUBLE_TAP → onExit()` inside the gesture collector — exit gesture is universal
+double-tap, same as Back everywhere else in the app, and works regardless of how the user
+has rebound DOUBLE_TAP in their active profile.
+
+**SettingsCatalog i18n**: `Entry.friendly: String` deleted; every consumer now goes through
+the shared `actionFriendlyText(action)` so HUD + Test Arena + Profile Editor all draw from
+one `R.string.action_*` source of truth. `ActionGroup.title: String` → `@StringRes
+titleRes: Int`. New `GlassActionMapper.supports(action: GlassAction): Boolean` (in `:core`)
+with a default impl that returns false when `primitives(action).isEmpty()` and the action
+isn't an in-app pseudo-action (`PeekHud` / `ProfileCycle` / `ForceReconnect` / Modal
+sentinels / `None`). `ActionPickerScreen` reads it via `LocalAppGraph.current?.mapper` and
+greys out unsupported entries with the localised "coming soon / 即将推出" caption — this
+catches the three RayNeo X3 Pro entries (`AskVisualAI` / `OpenTranslate` / `OpenChat`)
+whose `RayNeoFeatureIntents` returns `emptyList()` pending on-device discovery per Doc/11
+§B6.
+
+**Placeholder marking**: every persisted-but-not-yet-consumed pref is now visibly
+`disabled` in the UI. `AdvancedPrefs.debugHudEnabled` (no consumer reads it) +
+`AdvancedPrefs.spatialModeEnabled` (phase-3 stub) + all five `VitalsPrefs` fields
+(`showHrOnHud` / `activityOverlay` / `autoSnapshotIntervalMin` / `csvExportEnabled` /
+`wearDetectionEnabled` — none of which are read at runtime; the actual vitals scheduler
+lives in a future B-9 task). Vitals tab's Steps / Calories / Distance show `—` instead of
+"0" + a "(coming soon)" caption because the pedometer BLE notifs aren't decoded yet
+(Doc/07 §3).
+
+**HaloSwitch widget** + **`FocusableRow.content` → `RowScope.() -> Unit`**: every Settings
+toggle (Feedback / Power / Vitals prefs / Advanced) renders a fixed-width pill with the
+indicator dot pinned left = OFF, pinned right = ON, plus muted "coming soon" variant. Long
+descriptions used to push the prior plain-text ON/OFF off-screen because `FocusableRow`'s
+content slot wasn't `RowScope`-receivered — toggling
+`PowerConnectionScreen.optimisticSingleTap` / `awaitLongPressCombos` LOOKED unresponsive
+because the switch indicator was literally clipped off the right edge. Adding `weight(1f)`
+to the title column + the `RowScope` receiver makes the switch always present.
+
+Audit-pass-u also fixed an actual **stale-capture bug** in Power-screen toggles:
+`it.copy(optimisticSingleTap = !cfg.optimisticSingleTap)` was reading the *captured outer*
+`cfg`, which under certain Compose recomposition timings carried the previous frame's
+value, so the second click silently re-set the same value. Now reads `!it.optimisticSingleTap`
+(the live cfg passed by the transform parameter) — clicks are idempotently correct.
+
+**License switch**: MIT → **dual AGPLv3 + commercial**. Full FSF-canonical AGPLv3 text in
+`LICENSE`. New `COPYRIGHT.md` (project copyright + which-license-applies table + trademark
+policy). New `COMMERCIAL-LICENSE.md` (template terms — commercial use cases / what the
+license grants / how to engage). `scripts/sync-to-oss.sh` SHIPPED_FILES updated so both new
+files land in the public mirror. Both READMEs (private + public, EN + ZH) and the in-app
+About string now say "AGPLv3 + see COMMERCIAL-LICENSE.md for commercial use". Versions of
+the strings remain v0.2.2 — user requested hold on bumping versionCode until
+local-burn verification on glasses passes.
+
+Previously the audit was at: **audit-pass-s**: full EN/ZH i18n across every UI surface
 (~280 string keys, `res/values-zh/strings.xml`, `res/xml/locales_config.xml`, `Settings →
 Language → 跟随系统 / English / 中文`); `MainActivity` ported `ComponentActivity → AppCompatActivity`
 + `Theme.HaloRing` re-parented onto `Theme.AppCompat.DayNight.NoActionBar` so per-app locale

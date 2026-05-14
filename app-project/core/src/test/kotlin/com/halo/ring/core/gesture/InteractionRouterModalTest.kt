@@ -64,7 +64,7 @@ class InteractionRouterModalTest {
             modeManager = mm,
             actionRouter = router,
             onPeekHud = {},
-            onForceReconnect = {},
+            
             onEnterModal = { modalEntries += it },
         )
         ir.screenOn = true

@@ -19,6 +19,26 @@ interface GlassActionMapper {
 
     /** Render the action as a list of injection primitives the backend will execute in order. */
     fun primitives(action: GlassAction): List<InjectionPrimitive>
+
+    /**
+     * True if this device can actually realise [action]. Used by [com.halo.ring.ui.screens.ActionPickerScreen]
+     * to grey out the rows that would otherwise be silently no-op when bound — e.g. RayNeo X3 Pro
+     * doesn't have a known Visual-AI / Translate / Chat package yet, so binding those actions on
+     * X3 Pro would do nothing without telling the user.
+     *
+     * Default impl: in-app pseudo-actions (`PeekHud`, `ProfileCycle`, `ForceReconnect`, the
+     * `Enter*Modal` sentinels, and `None`) are always supported because [com.halo.ring.core.interaction.InteractionRouter]
+     * intercepts them before they reach this mapper. Everything else is supported iff
+     * [primitives] yields a non-empty list.
+     */
+    fun supports(action: GlassAction): Boolean = when (action) {
+        GlassAction.PeekHud, GlassAction.ProfileCycle, GlassAction.ForceReconnect,
+        GlassAction.EnterVolumeModal, GlassAction.EnterBrightnessModal,
+        GlassAction.EnterRecentsModal, GlassAction.EnterAIDictateModal,
+        GlassAction.None,
+        -> true
+        else -> primitives(action).isNotEmpty()
+    }
 }
 
 /** Tiny IR. The agent supports all of these (see :agent README); other backends do their best. */
@@ -60,6 +80,9 @@ interface FeatureIntents {
     /** Returns the primitives that open the feature, or empty if not supported on this device. */
     fun openCamera(): List<InjectionPrimitive>
     fun takePhoto(): List<InjectionPrimitive>
+    /** Wake the everyday voice/chat AI (Rokid Chat / RayNeo Gemini). Distinct from [askVisualAI]
+     *  which is camera-grounded VQA. */
+    fun openAIAssistant(): List<InjectionPrimitive>
     fun askVisualAI(): List<InjectionPrimitive>
     fun openTranslate(): List<InjectionPrimitive>
     fun openChat(): List<InjectionPrimitive>

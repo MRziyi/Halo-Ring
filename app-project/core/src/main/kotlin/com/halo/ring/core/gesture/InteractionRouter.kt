@@ -32,8 +32,6 @@ class InteractionRouter(
     private val actionRouter: ActionRouter,
     /** Show the HUD overlay for ~2s. UI-layer concern; usually a callback to a flow/livedata. */
     private val onPeekHud: () -> Unit,
-    /** Re-establish the BLE link. Implementation in R08BleClient. */
-    private val onForceReconnect: () -> Unit,
     /** Engage a modal — implementation TBD when the modal layer ships (see §25.1). */
     private val onEnterModal: (GlassAction) -> Unit = {},
     /** Dispatch a side-effect-free system action that the router itself handles (e.g. for telemetry). */
@@ -48,6 +46,14 @@ class InteractionRouter(
      * The [HudOverlay] in `:app` subscribes here for the gesture-hint feature
      * (Doc/08-ui-design.md §10). Telemetry can also tap in. The callback runs on the same
      * pipeline thread as the rest of the router — keep it non-blocking.
+     *
+     * Note on `ForceReconnect`: kept in the [GlassAction] vocabulary because user-bound profiles
+     * may still reference it, and the in-app "Reconnect" button (Settings → Ring) dispatches it
+     * via the same path. The system slot was retired in audit-pass 2026-05-14w in favour of
+     * [GlassAction.OpenAIAssistant] (`SystemGestures.aiAssistant`). If a profile maps a gesture
+     * to ForceReconnect, the router still dispatches through ActionRouter → executor backend,
+     * where the rokid/rayneo mappers treat it as a no-injection in-app action and the foreground
+     * service's listener calls `BleClient.stop()` + `start()`.
      */
     var onGestureRecognized: ((Gesture, GlassAction) -> Unit)? = null,
     /** Fired from the screen-off fast path. raw == the gesture configured as ScreenWake (or
@@ -114,10 +120,14 @@ class InteractionRouter(
                 onSystemAction(GlassAction.PeekHud)
                 onGestureRecognized?.invoke(gesture, GlassAction.PeekHud); return
             }
-            systemGestures.forceReconnect -> {
-                onForceReconnect()
-                onSystemAction(GlassAction.ForceReconnect)
-                onGestureRecognized?.invoke(gesture, GlassAction.ForceReconnect); return
+            systemGestures.aiAssistant    -> {
+                // Routes through the standard dispatch path so the per-flavor `FeatureIntents`
+                // impl handles the actual launch (Rokid ChatPageActivity / RayNeo
+                // VOICE_SEARCH_HANDS_FREE best-effort). Same path used when a profile binds
+                // OpenAIAssistant via the picker. Audit-pass 2026-05-14w.
+                onSystemAction(GlassAction.OpenAIAssistant)
+                onGestureRecognized?.invoke(gesture, GlassAction.OpenAIAssistant)
+                dispatch(GlassAction.OpenAIAssistant); return
             }
             else -> Unit
         }

@@ -122,23 +122,36 @@ fun VitalsScreen(
 
         Spacer(Modifier.height(18.dp))
 
-        // Today's passive activity (zero extra cost — ring counts these continuously)
+        // Today's passive activity. Audit-pass 2026-05-13t: pedometer streaming from the ring
+        // isn't decoded yet (Doc/07 §3 — needs the steps/cal/dist BLE notifs hooked up). The
+        // VitalsState fields default to 0; showing "0 / 0 kcal / 0.0 km" would be a lie, so we
+        // surface the dash placeholder + a "(coming soon)" caption until the wiring lands.
+        val dash = stringResource(R.string.common_dash)
+        val hasActivityData = state.stepsToday > 0 || state.caloriesToday > 0f || state.distanceKmToday > 0f
         Column {
             ListRow(
                 key = stringResource(R.string.vitals_steps_today),
-                value = "%,d".format(state.stepsToday),
+                value = if (hasActivityData) "%,d".format(state.stepsToday) else dash,
                 focused = focusedIndex == 1,
             )
             ListRow(
                 key = stringResource(R.string.vitals_calories),
-                value = stringResource(R.string.vitals_calories_unit, "%.0f".format(state.caloriesToday)),
+                value = if (hasActivityData) stringResource(R.string.vitals_calories_unit, "%.0f".format(state.caloriesToday)) else dash,
                 focused = focusedIndex == 2,
             )
             ListRow(
                 key = stringResource(R.string.vitals_distance),
-                value = stringResource(R.string.vitals_distance_unit, "%.1f".format(state.distanceKmToday)),
+                value = if (hasActivityData) stringResource(R.string.vitals_distance_unit, "%.1f".format(state.distanceKmToday)) else dash,
                 focused = focusedIndex == 3,
             )
+            if (!hasActivityData) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    stringResource(R.string.common_coming_soon),
+                    style = HaloType.Caption.copy(color = HaloColors.Mute),
+                    modifier = Modifier.padding(horizontal = ScreenPadding),
+                )
+            }
         }
     }
 }

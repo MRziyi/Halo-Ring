@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -94,7 +95,7 @@ fun FocusableRow(
     modifier: Modifier = Modifier,
     focused: Boolean = false,
     onClick: () -> Unit = {},
-    content: @Composable () -> Unit,
+    content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit,
 ) {
     var composeFocused by remember { mutableStateOf(false) }
     val effective = focused || composeFocused
@@ -107,7 +108,8 @@ fun FocusableRow(
             .padding(horizontal = ScreenPadding, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
-    ) { content() }
+        content = content,
+    )
 }
 
 /** A row of a list with `Key  →  Value` layout. */
@@ -196,5 +198,85 @@ fun MetricCell(
             }
         }
         Text(label.uppercase(), style = HaloType.MetricKey)
+    }
+}
+
+/**
+ * The visual switch indicator used by every Settings toggle (Feedback / Power / Vitals prefs /
+ * Advanced). Earlier revisions used plain ON/OFF text in `HaloType.RowVal` (17 sp semibold,
+ * green vs mute). On the 480×480 / 1280×480 waveguide and on a busy phone preview the colour
+ * difference alone was easy to miss; the user couldn't tell whether their tap had landed.
+ * This widget makes the toggle state structural, not just chromatic:
+ *
+ *  - **OFF** — narrow mute-grey pill with a thin grey border, indicator dot pinned LEFT.
+ *  - **ON**  — accent-tinted pill with a 1 dp accent border, indicator dot pinned RIGHT, text
+ *    in accent green.
+ *
+ * The pill width is constant so the focused-row content doesn't reflow when the state changes.
+ * If [disabled] is true, the pill renders in mute colors regardless of [on], the "ON/OFF" text
+ * is replaced by the localised "coming soon" caption, and the widget no longer reads as
+ * interactive.
+ *
+ * Audit-pass 2026-05-14u — see Doc/08-ui-design.md §6.
+ */
+@Composable
+fun HaloSwitch(
+    on: Boolean,
+    modifier: Modifier = Modifier,
+    disabled: Boolean = false,
+) {
+    val activeColor = HaloColors.Accent
+    val mute = HaloColors.Mute
+    val borderColor = when {
+        disabled -> HaloColors.Line
+        on       -> activeColor
+        else     -> mute
+    }
+    val bg = when {
+        disabled -> Color.Transparent
+        on       -> activeColor.copy(alpha = 0.18f)
+        else     -> Color.Transparent
+    }
+    val labelColor = when {
+        disabled -> mute
+        on       -> activeColor
+        else     -> mute
+    }
+    val labelRes = when {
+        disabled -> com.halo.ring.R.string.common_coming_soon
+        on       -> com.halo.ring.R.string.common_on
+        else     -> com.halo.ring.R.string.common_off
+    }
+    Row(
+        modifier = modifier
+            .width(if (disabled) 96.dp else 64.dp)
+            .height(28.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(bg)
+            .border(1.dp, borderColor, RoundedCornerShape(14.dp))
+            .padding(horizontal = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = if (on && !disabled) Arrangement.End else Arrangement.Start,
+    ) {
+        if (!disabled && on) {
+            Text(
+                text = androidx.compose.ui.res.stringResource(labelRes),
+                style = HaloType.Tab.copy(color = labelColor, fontSize = 12.sp),
+            )
+            Spacer(Modifier.width(6.dp))
+            Box(Modifier.size(10.dp).clip(CircleShape).background(activeColor))
+        } else if (!disabled) {
+            Box(Modifier.size(10.dp).clip(CircleShape).background(mute))
+            Spacer(Modifier.width(6.dp))
+            Text(
+                text = androidx.compose.ui.res.stringResource(labelRes),
+                style = HaloType.Tab.copy(color = labelColor, fontSize = 12.sp),
+            )
+        } else {
+            Text(
+                text = androidx.compose.ui.res.stringResource(labelRes),
+                style = HaloType.Caption.copy(color = labelColor, fontSize = 11.sp),
+            )
+        }
     }
 }

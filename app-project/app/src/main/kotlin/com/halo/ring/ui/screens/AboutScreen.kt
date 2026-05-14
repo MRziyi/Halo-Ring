@@ -21,9 +21,12 @@ import com.halo.ring.ui.ScreenPadding
 import com.halo.ring.core.DeviceProfile
 
 /**
- * Settings → About (mockup §3 K). Read-only summary: version, detected device profile, BLE-protocol
- * source, credits, link to docs. The link rows are stub-only (no IntentResolver) — implementing
- * deep-link to a webview is B7-style follow-up.
+ * Settings → About. Audit-pass 2026-05-13t: stripped down for the on-glasses display.
+ * Previously had the brand slogan, BLE-protocol-source row, Phase-0 probe row, credits
+ * block, and docs block — useful on a phone, **wasted pixels on a 480×480 / 1280×480
+ * waveguide**. Kept the version + detected-device + reopen-guide rows + the open-source
+ * disclaimer (the "you were scammed if you paid" sentence is load-bearing — it tells the
+ * wearer not to pay anyone for this app).
  */
 @Composable
 fun AboutScreen(
@@ -32,56 +35,27 @@ fun AboutScreen(
     detectedProfile: DeviceProfile,
     onShowGuide: () -> Unit = {},
 ) {
-    // No verticalScroll here — the outer host (HaloRingApp's content area) already wraps
-    // sub-screens in a vertical scroll. Nesting two scrollables triggers the
-    // "infinity maximum height constraints" measurement crash (audit-2026-05-13q).
     Column(modifier = Modifier
         .fillMaxSize()
         .padding(top = 4.dp)) {
-        // Brand block — bilingual name + slogan + byline. Pure typography, no logo image
-        // (the launcher icon already carries the visual identity).
+        // Bilingual brand name — single line, no slogan / byline (those live in the launcher
+        // icon + the public README; redundant inside the app).
         Text(
             text = stringResource(R.string.app_name_bilingual),
             style = HaloType.Title,
             color = HaloColors.Accent,
             modifier = Modifier.padding(horizontal = ScreenPadding, vertical = 12.dp),
         )
-        Text(
-            text = stringResource(R.string.app_tagline),
-            style = HaloType.Caption,
-            modifier = Modifier.padding(horizontal = ScreenPadding),
-        )
-        Text(
-            text = stringResource(R.string.app_byline),
-            style = HaloType.Caption,
-            color = HaloColors.Mute,
-            modifier = Modifier.padding(horizontal = ScreenPadding, vertical = 4.dp),
-        )
 
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(4.dp))
         Box(Modifier.fillMaxWidth().height(1.dp).background(HaloColors.Line))
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(4.dp))
 
         ListRow(stringResource(R.string.about_app_version), "$versionName ($versionCode)")
         ListRow(stringResource(R.string.about_detected_device), stringResource(detectedProfile.labelRes()))
-        ListRow(stringResource(R.string.about_protocol_source), stringResource(R.string.about_protocol_source_value))
-        ListRow(stringResource(R.string.about_phase0_probe), "phase0/r08_probe.py")
         ListRow(stringResource(R.string.about_show_guide), "›", onClick = onShowGuide)
 
-        Spacer(Modifier.height(16.dp))
-        Text(
-            stringResource(R.string.about_credits_label),
-            style = HaloType.RowKey,
-            modifier = Modifier.padding(horizontal = ScreenPadding),
-        )
-        Spacer(Modifier.height(4.dp))
-        Text(
-            stringResource(R.string.about_credits_body),
-            style = HaloType.Caption,
-            modifier = Modifier.padding(horizontal = ScreenPadding),
-        )
-
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(12.dp))
         Box(Modifier.fillMaxWidth().height(1.dp).background(HaloColors.Line))
         Text(
             stringResource(R.string.about_source_label),
@@ -90,19 +64,6 @@ fun AboutScreen(
         )
         Text(
             text = stringResource(R.string.about_source_body),
-            style = HaloType.Caption,
-            modifier = Modifier.padding(horizontal = ScreenPadding),
-        )
-
-        Spacer(Modifier.height(16.dp))
-        Box(Modifier.fillMaxWidth().height(1.dp).background(HaloColors.Line))
-        Text(
-            stringResource(R.string.about_docs_label),
-            style = HaloType.RowKey,
-            modifier = Modifier.padding(horizontal = ScreenPadding, vertical = 8.dp),
-        )
-        Text(
-            stringResource(R.string.about_docs_body),
             style = HaloType.Caption,
             modifier = Modifier.padding(horizontal = ScreenPadding),
         )

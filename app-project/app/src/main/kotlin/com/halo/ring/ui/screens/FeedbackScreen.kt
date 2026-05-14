@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.sp
 import com.halo.ring.R
 import com.halo.ring.ui.FocusableRow
 import com.halo.ring.ui.HaloColors
+import com.halo.ring.ui.HaloSwitch
 import com.halo.ring.ui.HaloType
 import com.halo.ring.ui.ScreenPadding
 
@@ -135,12 +136,7 @@ enum class FeedbackPrefField {
 
 @Composable
 private fun OnOff(on: Boolean) {
-    Text(
-        text = stringResource(if (on) R.string.common_on else R.string.common_off),
-        style = HaloType.RowVal.copy(
-            color = if (on) HaloColors.Accent else HaloColors.Mute,
-        ),
-    )
+    HaloSwitch(on = on)
 }
 
 @Composable

@@ -47,7 +47,7 @@ class InteractionRouterTest {
             modeManager = mm,
             actionRouter = router,
             onPeekHud = {},
-            onForceReconnect = {},
+            
         )
         ir.screenOn = screenOn
         return Quad(ir, mm, router, backend)
@@ -131,17 +131,28 @@ class InteractionRouterTest {
         assertEquals(listOf<GlassAction>(GlassAction.Confirm), b.dispatched)
     }
 
-    @Test fun `inAppShortCircuit is NOT consulted for system pseudo-actions`() = runBlocking<Unit> {
-        // ScreenSleep / PeekHud / ProfileCycle / ForceReconnect — already handled by the system layer
-        // before the shortcut would fire. The backend list lists this expectation explicitly: only
-        // ScreenSleep flows through to actionRouter; the in-app rules above ScreenSleep are noop.
+    @Test fun `inAppShortCircuit is NOT consulted for in-app pseudo-actions`() = runBlocking<Unit> {
+        // PeekHud / ProfileCycle — handled by the router itself (no dispatch() call). The
+        // dispatch() function early-returns for these so the in-app shortcut isn't even given the
+        // chance to handle them. (ForceReconnect used to be in this list; it was retired from the
+        // system slot in audit-pass 2026-05-14w in favour of OpenAIAssistant, which IS routed
+        // through dispatch() because it's a real Intent-launching action.)
         val (ir, _, _, b) = fixture()
         val seen = mutableListOf<GlassAction>()
         ir.inAppShortCircuit = { seen += it; true }
         ir.onGesture(Gesture.TRIPLE_TAP)    // ProfileCycle, handled before dispatch()
         ir.onGesture(Gesture.QUADRUPLE_TAP) // PeekHud,      handled before dispatch()
-        ir.onGesture(Gesture.DOUBLE_LONG_PRESS) // ForceReconnect, ditto
-        assertTrue(seen.isEmpty(), "system-layer pseudos are returned-before-dispatch")
+        assertTrue(seen.isEmpty(), "in-app pseudos are returned-before-dispatch")
         assertTrue(b.dispatched.isEmpty())
+    }
+
+    @Test fun `DOUBLE_LONG_PRESS triggers OpenAIAssistant via the standard dispatch path`() = runBlocking<Unit> {
+        // Audit-pass 2026-05-14w: the DOUBLE_LONG_PRESS system slot now points at
+        // GlassAction.OpenAIAssistant (was ForceReconnect). It's routed through dispatch() so
+        // the per-flavor FeatureIntents impl can handle the actual launch — distinct from PeekHud
+        // / ProfileCycle which the router handles itself.
+        val (ir, _, _, b) = fixture()
+        ir.onGesture(Gesture.DOUBLE_LONG_PRESS)
+        assertEquals(listOf<GlassAction>(GlassAction.OpenAIAssistant), b.dispatched)
     }
 }

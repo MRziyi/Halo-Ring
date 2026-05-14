@@ -40,6 +40,10 @@ sealed interface GlassAction {
     // ── glasses-specific features (per-device FeatureIntents) ────────────────────────────────────
     data object OpenCamera   : GlassAction { override val needs = Capability.LAUNCH_INTENT }
     data object TakePhoto    : GlassAction { override val needs = Capability.LAUNCH_INTENT }
+    /** "Wake the everyday voice / chat assistant" — Gemini / Rokid Chat / Hey-RayNeo etc. Distinct
+     *  from [AskVisualAI] (which is camera-grounded VQA). Most-used AI entry point for both flavors;
+     *  default system gesture is DOUBLE_LONG_PRESS. Audit-pass 2026-05-14w. */
+    data object OpenAIAssistant : GlassAction { override val needs = Capability.LAUNCH_INTENT }
     data object AskVisualAI  : GlassAction { override val needs = Capability.LAUNCH_INTENT }
     data object OpenTranslate: GlassAction { override val needs = Capability.LAUNCH_INTENT }
     data object OpenChat     : GlassAction { override val needs = Capability.LAUNCH_INTENT }

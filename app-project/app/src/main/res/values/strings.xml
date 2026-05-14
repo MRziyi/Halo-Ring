@@ -54,6 +54,7 @@
     <string name="common_never">Never</string>
     <string name="common_unknown">Unknown</string>
     <string name="common_dash">—</string>
+    <string name="common_coming_soon">(coming soon)</string>
 
     <!-- ════════════════════════════════════════════════════════════════════════
          Status bar (top of every tab).
@@ -128,6 +129,12 @@
     <string name="profiles_bindings_count">%1$d bindings ›</string>
     <string name="action_picker_current">(current)</string>
     <string name="action_picker_footer">System actions are advanced — they short-circuit the normal routing. Use cautiously.</string>
+    <string name="action_group_nav">Navigation</string>
+    <string name="action_group_media_vol">Media / Volume / Brightness</string>
+    <string name="action_group_feature">Glasses features</string>
+    <string name="action_group_modal">Modal-entry</string>
+    <string name="action_group_system">System (advanced)</string>
+    <string name="action_group_none">Unbind</string>
 
     <!-- ════════════════════════════════════════════════════════════════════════
          System gestures.
@@ -138,7 +145,7 @@
     <string name="system_gestures_slot_sleep">Sleep screen</string>
     <string name="system_gestures_slot_cycle">Cycle profile</string>
     <string name="system_gestures_slot_peek">Peek HUD</string>
-    <string name="system_gestures_slot_reconnect">Force reconnect</string>
+    <string name="system_gestures_slot_ai_assistant">AI assistant</string>
     <string name="system_gestures_footer">Wake is on the screen-off fast path</string>
     <string name="system_gestures_disabled">(disabled)</string>
 
@@ -164,6 +171,7 @@
     <string name="ring_status_disconnected">Disconnected</string>
     <string name="ring_battery_pct">%1$d %%</string>
     <string name="ring_find_short">FIND RING</string>
+    <string name="ring_reconnect_short">RECONNECT</string>
     <string name="ring_shutdown_short">SHUTDOWN</string>
     <string name="ring_forget_short">FORGET</string>
     <string name="ring_screen_footer">Shutdown powers the ring off — you\'ll need to put it on the cradle briefly to wake it.\nForget drops the MAC whitelist so a different ring can be paired.</string>
@@ -294,7 +302,7 @@
     <string name="about_credits_label">Credits</string>
     <string name="about_credits_body">• Touch + gesture protocol reverse-engineered from `com.ring.r08remote` v2\n• Broader R02-family commands from `tahnok/colmi_r02_client`\n• RF03 SoC + firmware research: `atc1441/ATC_RF03_Ring`\n• Rokid platform docs: `buildwithfenna/rokid-docs`\n• Mercury SDK example: `Quad-Labs/RayDesk`</string>
     <string name="about_source_label">Source &amp; contact</string>
-    <string name="about_source_body">Halo Ring · 环意 is open source under the MIT licence.\nIt is, and will always be, free.\n\nRepository:  github.com/MRziyi/Halo-Ring\nAuthor:      ziyi-zhang.vercel.app\n\nIf you paid anyone for this app, you were scammed. The official build is always at the URL above; verify the package signing certificate matches.</string>
+    <string name="about_source_body">Halo Ring · 环意 is open source under the GNU AGPLv3.\nFor personal use it is, and will always be, free.\n\nRepository:  github.com/MRziyi/Halo-Ring\nAuthor:      ziyi-zhang.vercel.app\n\nIf you paid anyone for this app, you were scammed. The official build is always at the URL above; verify the package signing certificate matches.</string>
     <string name="about_docs_label">Documentation</string>
     <string name="about_docs_body">Design docs at Doc/ in the source tree. Per-doc index in Doc/README.md.</string>
     <string name="about_device_rokid">Rokid Glasses</string>
@@ -306,7 +314,7 @@
          ════════════════════════════════════════════════════════════════════════ -->
     <string name="test_arena_title">Test Arena</string>
     <string name="test_arena_subtitle">Try any gesture from your ring. The matching row below will light up.</string>
-    <string name="test_arena_inactive_hint">Nothing is dispatched while you\'re here — actions resume on Back.</string>
+    <string name="test_arena_inactive_hint">Double-tap to exit (same as Back everywhere else).</string>
 
     <!-- ════════════════════════════════════════════════════════════════════════
          Guided tour.
@@ -440,7 +448,7 @@
          ════════════════════════════════════════════════════════════════════════ -->
     <string name="hud_reconnected">● Reconnected</string>
     <string name="hud_disconnected">Ring disconnected</string>
-    <string name="hud_disconnected_hint">Long-press × 2 to reconnect</string>
+    <string name="hud_disconnected_hint">Open app → Settings → Ring → Reconnect</string>
     <string name="hud_profile_cycle">cycle</string>
 
     <!-- ════════════════════════════════════════════════════════════════════════
@@ -484,6 +492,7 @@
     <string name="action_media_next">Next</string>
     <string name="action_open_camera">Camera</string>
     <string name="action_take_photo">Photo</string>
+    <string name="action_open_ai_assistant">AI assistant</string>
     <string name="action_visual_ai">Visual AI</string>
     <string name="action_open_translate">Translate</string>
     <string name="action_open_chat">Chat</string>

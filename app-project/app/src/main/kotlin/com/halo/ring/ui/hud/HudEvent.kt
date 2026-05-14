@@ -79,6 +79,7 @@ fun actionFriendlyRes(a: GlassAction): Int = when (a) {
     GlassAction.MediaNext      -> com.halo.ring.R.string.action_media_next
     GlassAction.OpenCamera     -> com.halo.ring.R.string.action_open_camera
     GlassAction.TakePhoto      -> com.halo.ring.R.string.action_take_photo
+    GlassAction.OpenAIAssistant -> com.halo.ring.R.string.action_open_ai_assistant
     GlassAction.AskVisualAI    -> com.halo.ring.R.string.action_visual_ai
     GlassAction.OpenTranslate  -> com.halo.ring.R.string.action_open_translate
     GlassAction.OpenChat       -> com.halo.ring.R.string.action_open_chat

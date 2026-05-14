@@ -318,7 +318,9 @@ fun HaloRingApp(
                         onSelect = { onLanguageSelected(it) },
                     )
 
-                    SubScreen.TestArena -> com.halo.ring.ui.screens.TestArenaScreen()
+                    SubScreen.TestArena -> com.halo.ring.ui.screens.TestArenaScreen(
+                        onExit = { pop() },
+                    )
                 }
             }
         }
@@ -346,7 +348,7 @@ private fun SystemGestureSlot.toCore(): SystemGestures.Slot = when (this) {
     SystemGestureSlot.SLEEP           -> SystemGestures.Slot.SLEEP
     SystemGestureSlot.PROFILE_CYCLE   -> SystemGestures.Slot.PROFILE_CYCLE
     SystemGestureSlot.PEEK_HUD        -> SystemGestures.Slot.PEEK_HUD
-    SystemGestureSlot.FORCE_RECONNECT -> SystemGestures.Slot.FORCE_RECONNECT
+    SystemGestureSlot.AI_ASSISTANT -> SystemGestures.Slot.AI_ASSISTANT
 }
 
 /**

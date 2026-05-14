@@ -18,7 +18,6 @@ import com.halo.ring.ui.FocusableRow
 import com.halo.ring.ui.HaloColors
 import com.halo.ring.ui.HaloType
 import com.halo.ring.ui.ScreenPadding
-import com.halo.ring.ui.SettingsCatalog
 import com.halo.ring.ui.hud.actionFriendlyText
 import com.halo.ring.ui.hud.gestureFriendlyText
 import com.halo.ring.ui.hud.profileFriendlyText
@@ -50,8 +49,11 @@ fun ProfileEditorScreen(
         Gesture.values().forEach { gesture ->
             val isSystem = gesture in SYSTEM_SLOTS
             val action = profile.actionFor(gesture)
-            val valueText = if (isSystem) systemValueText
-                            else SettingsCatalog.entryFor(action)?.friendly ?: actionFriendlyText(action)
+            // Audit-pass 2026-05-13t: SettingsCatalog.entryFor was returning a hard-coded English
+            // `friendly` String which never got localised. Now we always go through
+            // [actionFriendlyText], which routes via R.string.action_* — same source of truth
+            // used by the HUD's GestureRecognised pill and the Test Arena rows.
+            val valueText = if (isSystem) systemValueText else actionFriendlyText(action)
             FocusableRow(onClick = { if (!isSystem) onGestureTapped(gesture) }) {
                 Text(gestureFriendlyText(gesture), style = HaloType.Body)
                 Text(

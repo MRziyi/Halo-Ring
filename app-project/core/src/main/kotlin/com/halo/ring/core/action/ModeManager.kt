@@ -51,12 +51,37 @@ class ModeManager(
         notifyChanged()
     }
 
-    /** Called by the AccessibilityBackend with the current foreground package name. */
+    /**
+     * Called by the AccessibilityBackend with the current foreground package name.
+     *
+     * Audit-pass 2026-05-14w: matching is now **prefix-based** so a partial package name in
+     * `triggerPackages` covers related apps (e.g. `com.spotify` matches both `com.spotify.music`
+     * and `com.spotify.tv.android`; `com.rokid.os.sprite.launcher.page.music` matches the
+     * fully-qualified component pkg).
+     *
+     * **Fallback to default**: when the foreground pkg matches nothing AND the active profile is
+     * not the default-fallback ([DefaultProfiles.DEFAULT_FALLBACK_ID], normally "navigation"),
+     * switch back to the fallback. This means leaving Spotify and going back to the system
+     * launcher correctly drops Media → Navigation instead of leaving us stuck on Media.
+     */
     fun onForegroundPackage(pkg: String?) {
         if (pkg == null) return
         if (nowMs() < manualLockUntilMs) return  // user just chose; respect them
-        val match = profiles.firstOrNull { it.id != active().id && pkg in it.triggerPackages } ?: return
-        activeIndex = profiles.indexOf(match)
+        val match = profiles.firstOrNull { p ->
+            p.id != active().id && p.triggerPackages.any { trigger -> pkg.startsWith(trigger) }
+        }
+        if (match != null) {
+            activeIndex = profiles.indexOf(match)
+            notifyChanged()
+            return
+        }
+        // No profile matches. If we're already on a profile with NO triggerPackages (e.g.
+        // Navigation as the fallback, or Fast which the user picked manually), stay there.
+        // Otherwise fall back to DEFAULT_FALLBACK_ID.
+        if (active().triggerPackages.isEmpty()) return
+        val fallback = profiles.indexOfFirst { it.id == DefaultProfiles.DEFAULT_FALLBACK_ID }
+        if (fallback < 0 || fallback == activeIndex) return
+        activeIndex = fallback
         notifyChanged()
     }
 

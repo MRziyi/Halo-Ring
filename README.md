@@ -120,8 +120,10 @@ Mercury Android SDK AAR (committed at [`app-project/app/libs/mercury-release.aar
 ### Contributing
 
 This started as a personal hardware-tinkering project (the full design-decisions trail lives
-in [Doc/](Doc/)) and is open-sourced under MIT in case anyone else wants a similar bridge
-between a smart ring and AR glasses. Especially welcome:
+in [Doc/](Doc/)) and is open-sourced under **GNU AGPLv3** in case anyone else wants a similar
+bridge between a smart ring and AR glasses. Forks must stay open-source under AGPLv3; for
+proprietary / commercial use see [COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md). Especially
+welcome:
 
 - Phase-0 probe runs against your own R08 ring — every dedup-window or accel-frame variant
   found in the wild is worth a PR to [`phase0/r08_probe.py`](phase0/r08_probe.py).
@@ -135,12 +137,25 @@ also [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ### Legal
 
-MIT licensed; © 2026 Zack Zhang (紫意). The QRing R08 BLE protocol is documented from public
-sources ([`tahnok/colmi_r02_client`](https://github.com/tahnok/colmi_r02_client),
+**Dual-licensed:**
+
+- **GNU AGPLv3** (see [`LICENSE`](LICENSE)) for personal, community, research, and
+  open-source use. Modifications and network-service deployments must publish their
+  corresponding source under AGPLv3.
+- **Commercial license** for closed-source embedding, proprietary SaaS, OEM bundling, or any
+  use incompatible with AGPL's copyleft — see [`COMMERCIAL-LICENSE.md`](COMMERCIAL-LICENSE.md).
+  Email `zackzhang0813@gmail.com` to start a conversation.
+
+© 2026 Zack Zhang (紫意). The QRing R08 BLE protocol is documented from public sources
+([`tahnok/colmi_r02_client`](https://github.com/tahnok/colmi_r02_client),
 [`atc1441/ATC_RF03_Ring`](https://github.com/atc1441/ATC_RF03_Ring)) plus direct reverse
 engineering — see [Doc/12-research-and-references.md](Doc/12-research-and-references.md).
 Protocol facts (byte values, command sequences) are not copyrightable; no third-party source
 code is incorporated. Not affiliated with QRing, Rokid, RayNeo, Mercury, or any vendor.
+
+"Halo Ring" + "环意" + the launcher icon are unregistered trademarks of the author; forks
+should use "based on Halo Ring" framing rather than claiming the name. See
+[`COPYRIGHT.md`](COPYRIGHT.md) for full trademark policy.
 
 ---
 
@@ -234,8 +249,9 @@ AAR 已直接提交在 [`app-project/app/libs/mercury-release.aar`](app-project/
 
 ### 贡献
 
-这个项目从个人硬件折腾起步（设计决策的全过程见 [Doc/](Doc/)），MIT 协议开源，欢迎想做类似
-"智能戒指 ↔ AR 眼镜"桥接的人参考。特别欢迎：
+这个项目从个人硬件折腾起步（设计决策的全过程见 [Doc/](Doc/)），采用 **GNU AGPLv3** 协议开源，
+欢迎想做类似"智能戒指 ↔ AR 眼镜"桥接的人参考。Fork 必须仍以 AGPLv3 开源；商业 / 闭源用途
+请见 [COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md)。特别欢迎：
 
 - 用你的 R08 戒指跑 Phase-0 探针——发现的任何 dedup 窗口、加速度计帧格式的变体都欢迎 PR 到
   [`phase0/r08_probe.py`](phase0/r08_probe.py)。
@@ -247,9 +263,19 @@ AAR 已直接提交在 [`app-project/app/libs/mercury-release.aar`](app-project/
 
 ### 法律
 
-MIT 协议，© 2026 Zack Zhang (紫意)。QRing R08 戒指的 BLE 协议来自公共资源
+**双重许可：**
+
+- **GNU AGPLv3**（见 [`LICENSE`](LICENSE)）—— 用于个人、社区、研究、开源场景。任何修改或基于网络的
+  服务部署必须将对应源码以 AGPLv3 公开。
+- **商业许可** —— 用于闭源嵌入、专有 SaaS、OEM 预装等 AGPLv3 copyleft 不兼容的场景。
+  见 [`COMMERCIAL-LICENSE.md`](COMMERCIAL-LICENSE.md)，邮件 `zackzhang0813@gmail.com` 谈。
+
+© 2026 Zack Zhang (紫意)。QRing R08 戒指的 BLE 协议来自公共资源
 ([`tahnok/colmi_r02_client`](https://github.com/tahnok/colmi_r02_client) /
 [`atc1441/ATC_RF03_Ring`](https://github.com/atc1441/ATC_RF03_Ring)) 与直接逆向工程的组合，
 详见 [`Doc/12-research-and-references.md`](Doc/12-research-and-references.md)。协议事实
 （字节值、命令序列）不受著作权保护；本仓库未含任何第三方源码。本项目与 QRing、Rokid、
 RayNeo、Mercury 等厂商无关联。
+
+"Halo Ring" / "环意" / 启动器图标 是作者未注册的商标 —— fork 请用"基于 Halo Ring"
+的措辞，不要直接占用项目名。完整商标条款见 [`COPYRIGHT.md`](COPYRIGHT.md)。

@@ -12,7 +12,7 @@ class SystemGesturesTest {
         assertEquals(Gesture.LONG_PRESS_SWIPE_DOWN, sg.sleep)
         assertEquals(Gesture.TRIPLE_TAP,            sg.profileCycle)
         assertEquals(Gesture.QUADRUPLE_TAP,         sg.peekHud)
-        assertEquals(Gesture.DOUBLE_LONG_PRESS,     sg.forceReconnect)
+        assertEquals(Gesture.DOUBLE_LONG_PRESS,     sg.aiAssistant)
     }
 
     @Test fun `withSlot rebinds the targeted slot, leaves the others`() {
@@ -22,7 +22,7 @@ class SystemGesturesTest {
         assertEquals(before.sleep,         after.sleep)
         assertEquals(before.profileCycle,  after.profileCycle)
         assertEquals(before.peekHud,       after.peekHud)
-        assertEquals(before.forceReconnect, after.forceReconnect)
+        assertEquals(before.aiAssistant, after.aiAssistant)
     }
 
     @Test fun `withSlot can clear a slot by passing null`() {
@@ -36,13 +36,13 @@ class SystemGesturesTest {
             sleep = Gesture.SWIPE_DOWN,
             profileCycle = Gesture.TAP,
             peekHud = Gesture.DOUBLE_TAP,
-            forceReconnect = Gesture.TRIPLE_TAP,
+            aiAssistant = Gesture.TRIPLE_TAP,
         )
         assertEquals(Gesture.SWIPE_UP,    sg.gestureFor(SystemGestures.Slot.WAKE))
         assertEquals(Gesture.SWIPE_DOWN,  sg.gestureFor(SystemGestures.Slot.SLEEP))
         assertEquals(Gesture.TAP,         sg.gestureFor(SystemGestures.Slot.PROFILE_CYCLE))
         assertEquals(Gesture.DOUBLE_TAP,  sg.gestureFor(SystemGestures.Slot.PEEK_HUD))
-        assertEquals(Gesture.TRIPLE_TAP,  sg.gestureFor(SystemGestures.Slot.FORCE_RECONNECT))
+        assertEquals(Gesture.TRIPLE_TAP,  sg.gestureFor(SystemGestures.Slot.AI_ASSISTANT))
     }
 
     // ── conflict detection ──────────────────────────────────────────────────────────────────────

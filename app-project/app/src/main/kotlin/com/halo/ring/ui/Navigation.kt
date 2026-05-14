@@ -38,5 +38,6 @@ enum class SystemGestureSlot(val title: String, val description: String) {
     SLEEP("Sleep screen", "Put the display back to sleep. Hard to fire accidentally."),
     PROFILE_CYCLE("Cycle profile", "Manual override for active profile."),
     PEEK_HUD("Peek HUD", "Briefly show connection / battery / current mode."),
-    FORCE_RECONNECT("Force reconnect", "Re-establish the BLE link if it gets confused."),
+    /** Audit-pass 2026-05-14w: replaced FORCE_RECONNECT (now a button in Settings → Ring). */
+    AI_ASSISTANT("AI assistant", "Wake the everyday voice / chat AI on the glasses."),
 }

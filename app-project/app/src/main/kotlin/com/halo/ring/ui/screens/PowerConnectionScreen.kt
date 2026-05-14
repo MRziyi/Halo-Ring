@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.sp
 import com.halo.ring.R
 import com.halo.ring.ui.FocusableRow
 import com.halo.ring.ui.HaloColors
+import com.halo.ring.ui.HaloSwitch
 import com.halo.ring.ui.HaloType
 import com.halo.ring.ui.ScreenPadding
 import com.halo.ring.ui.hud.profileFriendlyText
@@ -87,23 +88,28 @@ fun PowerConnectionScreen(
 
         Spacer(Modifier.height(12.dp))
         SectionHeader(stringResource(R.string.power_section_latency_label))
+        // Audit-pass 2026-05-14u: read the negation from `it` (the live cfg parameter passed
+        // through `update`'s transform), not from the captured outer `cfg`. The outer val gets
+        // re-bound on every recomposition, but the lambda factory had the previous-frame `cfg`
+        // baked in until Compose re-created it — which led to "the first click works but the
+        // second silently re-sets the same value" under some Compose recomposition timings.
         ToggleRow(
             title = stringResource(R.string.power_optimistic_single_tap),
             description = stringResource(R.string.power_optimistic_desc),
             on = cfg.optimisticSingleTap,
-            onToggle = { update(activeProfile, onActiveProfileUpdated) { it.copy(optimisticSingleTap = !cfg.optimisticSingleTap) } },
+            onToggle = { update(activeProfile, onActiveProfileUpdated) { it.copy(optimisticSingleTap = !it.optimisticSingleTap) } },
         )
         ToggleRow(
             title = stringResource(R.string.power_await_combos_title),
             description = stringResource(R.string.power_await_combos_desc),
             on = cfg.awaitCombos,
-            onToggle = { update(activeProfile, onActiveProfileUpdated) { it.copy(awaitCombos = !cfg.awaitCombos) } },
+            onToggle = { update(activeProfile, onActiveProfileUpdated) { it.copy(awaitCombos = !it.awaitCombos) } },
         )
         ToggleRow(
             title = stringResource(R.string.power_await_lp_combos),
             description = stringResource(R.string.power_await_lp_combos_desc),
             on = cfg.awaitLongPressCombos,
-            onToggle = { update(activeProfile, onActiveProfileUpdated) { it.copy(awaitLongPressCombos = !cfg.awaitLongPressCombos) } },
+            onToggle = { update(activeProfile, onActiveProfileUpdated) { it.copy(awaitLongPressCombos = !it.awaitLongPressCombos) } },
         )
 
         Spacer(Modifier.height(12.dp))
@@ -143,7 +149,7 @@ private fun CycleRow(
     onTap: () -> Unit,
 ) {
     FocusableRow(onClick = onTap) {
-        Column(Modifier.padding(end = 8.dp)) {
+        Column(Modifier.padding(end = 8.dp).weight(1f)) {
             Text(title, style = HaloType.Body)
             Text(description, style = HaloType.Caption.copy(fontSize = 11.sp))
         }
@@ -166,14 +172,16 @@ private fun cycleNext(presets: LongArray, current: Long): Long {
 @Composable
 private fun ToggleRow(title: String, description: String, on: Boolean, onToggle: () -> Unit) {
     FocusableRow(onClick = onToggle) {
-        Column(Modifier.padding(end = 8.dp)) {
+        // Audit-pass 2026-05-14u: give the title/description column a `weight(1f)` so the
+        // HaloSwitch always has room on the right. Without weight, long descriptions like
+        // "Fire TAP immediately on the 1st touch …" / "Wait the follow-up window after
+        // LONG_PRESS …" pushed the switch entirely off the screen — that's why the user
+        // reported "no toggle UI" for the optimistic-tap and await-long-press rows.
+        Column(Modifier.padding(end = 8.dp).weight(1f)) {
             Text(title, style = HaloType.Body)
             Text(description, style = HaloType.Caption.copy(fontSize = 11.sp))
         }
-        Text(
-            text = stringResource(if (on) R.string.common_on else R.string.common_off),
-            style = HaloType.RowVal.copy(color = if (on) HaloColors.Accent else HaloColors.Mute),
-        )
+        HaloSwitch(on = on)
     }
     Box(Modifier.fillMaxWidth().height(1.dp).background(HaloColors.Line))
 }

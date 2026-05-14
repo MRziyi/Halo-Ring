@@ -45,6 +45,7 @@
     <string name="common_never">从未</string>
     <string name="common_unknown">未知</string>
     <string name="common_dash">—</string>
+    <string name="common_coming_soon">（即将推出）</string>
 
     <!-- 状态栏 -->
     <string name="statusbar_ring_placeholder">R08_…</string>
@@ -109,6 +110,12 @@
     <string name="profiles_bindings_count">%1$d 个绑定 ›</string>
     <string name="action_picker_current">（当前）</string>
     <string name="action_picker_footer">系统动作较为高级 — 它们会绕过正常路由。请谨慎使用。</string>
+    <string name="action_group_nav">导航</string>
+    <string name="action_group_media_vol">媒体 / 音量 / 亮度</string>
+    <string name="action_group_feature">眼镜功能</string>
+    <string name="action_group_modal">模式入口</string>
+    <string name="action_group_system">系统（高级）</string>
+    <string name="action_group_none">解绑</string>
 
     <!-- 系统手势 -->
     <string name="system_gestures_title">系统手势</string>
@@ -117,7 +124,7 @@
     <string name="system_gestures_slot_sleep">息屏</string>
     <string name="system_gestures_slot_cycle">切换配置</string>
     <string name="system_gestures_slot_peek">查看 HUD</string>
-    <string name="system_gestures_slot_reconnect">强制重连</string>
+    <string name="system_gestures_slot_ai_assistant">AI 助手</string>
     <string name="system_gestures_footer">唤醒走的是息屏快速通路</string>
     <string name="system_gestures_disabled">（已禁用）</string>
 
@@ -141,6 +148,7 @@
     <string name="ring_status_disconnected">已断开</string>
     <string name="ring_battery_pct">%1$d %%</string>
     <string name="ring_find_short">寻找戒指</string>
+    <string name="ring_reconnect_short">重新连接</string>
     <string name="ring_shutdown_short">关机</string>
     <string name="ring_forget_short">忘记</string>
     <string name="ring_screen_footer">关机会让戒指断电 — 之后需要短暂放回充电座唤醒它。\n忘记会清空 MAC 白名单，以便配对其它戒指。</string>
@@ -261,7 +269,7 @@
     <string name="about_credits_label">致谢</string>
     <string name="about_credits_body">• 触摸 + 手势协议逆向自 `com.ring.r08remote` v2\n• 更广的 R02 系列命令来自 `tahnok/colmi_r02_client`\n• RF03 SoC + 固件研究：`atc1441/ATC_RF03_Ring`\n• Rokid 平台文档：`buildwithfenna/rokid-docs`\n• Mercury SDK 示例：`Quad-Labs/RayDesk`</string>
     <string name="about_source_label">源码 &amp; 联系</string>
-    <string name="about_source_body">Halo Ring · 环意 是 MIT 协议开源软件。\n它现在是免费的，将来也永远是免费的。\n\n仓库：github.com/MRziyi/Halo-Ring\n作者：ziyi-zhang.vercel.app\n\n如果有人向你收钱，那是被骗了。官方版本始终在上面的链接；请校对包签名证书。</string>
+    <string name="about_source_body">Halo Ring · 环意 采用 GNU AGPLv3 协议开源。\n个人使用现在免费，未来也永远免费。\n\n仓库：github.com/MRziyi/Halo-Ring\n作者：ziyi-zhang.vercel.app\n\n如果有人向你收钱，那是被骗了。官方版本始终在上面的链接；请校对包签名证书。</string>
     <string name="about_docs_label">文档</string>
     <string name="about_docs_body">设计文档在源码树的 Doc/ 目录下。逐篇索引见 Doc/README.md。</string>
     <string name="about_device_rokid">Rokid Glasses</string>
@@ -271,7 +279,7 @@
     <!-- 练习场 -->
     <string name="test_arena_title">练习场</string>
     <string name="test_arena_subtitle">用戒指做任何手势，下方对应行会亮起。</string>
-    <string name="test_arena_inactive_hint">练习时不会真的派发动作 — 返回后恢复。</string>
+    <string name="test_arena_inactive_hint">双击戒指即可退出（和别处"返回"一致）。</string>
 
     <!-- 引导教程 -->
     <string name="tour_step_counter">%1$d / %2$d</string>
@@ -397,7 +405,7 @@
     <!-- HUD -->
     <string name="hud_reconnected">● 已重连</string>
     <string name="hud_disconnected">戒指已断开</string>
-    <string name="hud_disconnected_hint">长按 × 2 重新连接</string>
+    <string name="hud_disconnected_hint">打开 app → 设置 → 戒指 → 重新连接</string>
     <string name="hud_profile_cycle">循环</string>
 
     <!-- 手势名 -->
@@ -437,6 +445,7 @@
     <string name="action_media_next">下一首</string>
     <string name="action_open_camera">相机</string>
     <string name="action_take_photo">拍照</string>
+    <string name="action_open_ai_assistant">AI 助手</string>
     <string name="action_visual_ai">视觉 AI</string>
     <string name="action_open_translate">翻译</string>
     <string name="action_open_chat">对话</string>

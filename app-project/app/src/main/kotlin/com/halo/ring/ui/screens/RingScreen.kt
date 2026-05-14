@@ -69,6 +69,17 @@ fun RingScreen(
             Cta(text = stringResource(R.string.ring_find_short), onClick = { graph.bleClient.blinkLed() })
         }
         Spacer(Modifier.height(8.dp))
+        // Audit-pass 2026-05-14w: ForceReconnect used to live on the DOUBLE_LONG_PRESS system slot,
+        // but BLE auto-reconnect handles 99% of disconnects so the slot was reallocated to
+        // OpenAIAssistant. The remaining 1% — stuck BLE stack — is rare enough that a button buried
+        // in Settings is the right home. stop() + start() = full pipeline teardown + rescan.
+        Box(Modifier.padding(horizontal = ScreenPadding)) {
+            Cta(text = stringResource(R.string.ring_reconnect_short), onClick = {
+                graph.bleClient.stop()
+                graph.bleClient.start()
+            })
+        }
+        Spacer(Modifier.height(8.dp))
         Box(Modifier.padding(horizontal = ScreenPadding)) {
             Cta(text = stringResource(R.string.ring_shutdown_short), danger = true, onClick = { graph.bleClient.shutdownRing() })
         }

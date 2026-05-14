@@ -96,7 +96,7 @@ private fun SystemGestureSlot.toCore(): SystemGestures.Slot = when (this) {
     SystemGestureSlot.SLEEP           -> SystemGestures.Slot.SLEEP
     SystemGestureSlot.PROFILE_CYCLE   -> SystemGestures.Slot.PROFILE_CYCLE
     SystemGestureSlot.PEEK_HUD        -> SystemGestures.Slot.PEEK_HUD
-    SystemGestureSlot.FORCE_RECONNECT -> SystemGestures.Slot.FORCE_RECONNECT
+    SystemGestureSlot.AI_ASSISTANT    -> SystemGestures.Slot.AI_ASSISTANT
 }
 
 private fun SystemGestures.Slot.uiTitleRes(): Int = when (this) {
@@ -104,5 +104,5 @@ private fun SystemGestures.Slot.uiTitleRes(): Int = when (this) {
     SystemGestures.Slot.SLEEP           -> R.string.system_gestures_slot_sleep
     SystemGestures.Slot.PROFILE_CYCLE   -> R.string.system_gestures_slot_cycle
     SystemGestures.Slot.PEEK_HUD        -> R.string.system_gestures_slot_peek
-    SystemGestures.Slot.FORCE_RECONNECT -> R.string.system_gestures_slot_reconnect
+    SystemGestures.Slot.AI_ASSISTANT    -> R.string.system_gestures_slot_ai_assistant
 }
