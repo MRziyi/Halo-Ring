@@ -28,8 +28,11 @@ R08-dev/                           ← repo root
       src/rokid/ + src/rayneo/     ← flavor-specific device strategies
     agent/                         ← the app_process injection agent (Main.kt is a stub)
   phase0/                          ← Python protocol-verification probe
-  decompiled/v2/                   ← jadx output for 小猪遥控戒指 v2 (protocol source of truth)
-  remote-v1/, remote-v1.1/, remote-v2/  ← the three reference APK versions
+  refs/                            ← all external reference material (see refs/README.md for index)
+    r08remote-decompiled-v2/         ← jadx output for 小猪遥控戒指 v2 (protocol source of truth)
+    r08remote-apk-{v1,v1.1,v2}/      ← the three reference APK versions
+    sdks/{rayneo,rokid}/             ← pinned vendor SDK drops + HTML doc snapshots
+    tools/                           ← AndroidWatch_ADB_ToolBox.zip, etc.
   research/
     rokid-docs/                    ← buildwithfenna/rokid-docs (Rokid platform reverse-engineering)
     colmi_r02_client/              ← tahnok/colmi_r02_client (broader R02 protocol)

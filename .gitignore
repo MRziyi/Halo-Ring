@@ -64,3 +64,12 @@ phase0/.venv/
 *.swp
 *~
 .envrc
+
+
+# ───────── Private dev workspace only (no-op in the OSS mirror) ──────────────
+# Third-party reference repos live under `research/` as their own git clones — each has its
+# own remote, mirroring them here would duplicate. See `refs/README.md` §6 for re-clone recipe.
+research/
+
+# Claude per-project local settings (memory lives outside the repo, in ~/.claude/projects/).
+.claude/

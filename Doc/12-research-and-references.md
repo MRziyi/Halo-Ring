@@ -94,10 +94,13 @@ Also useful: `RayDesk/RELEASE_NOTES.md` documents target device specs (model cod
 ## 2. Decompiled `小猪遥控戒指` — the reference app
 
 `com.ring.r08remote` (author WeChat: `qq889538`). Three versions of the APK at
-`../remote-v1/`, `../remote-v1.1/`, `../remote-v2/`. We jadx-decompiled v2 into
-`../decompiled/v2/` — that's the source of truth for the **R08 BLE protocol** (see [02](02-hardware-and-protocol.md)).
+[`../refs/r08remote-apk-v1/`](../refs/r08remote-apk-v1/),
+[`../refs/r08remote-apk-v1.1/`](../refs/r08remote-apk-v1.1/),
+[`../refs/r08remote-apk-v2/`](../refs/r08remote-apk-v2/). We jadx-decompiled v2 into
+[`../refs/r08remote-decompiled-v2/`](../refs/r08remote-decompiled-v2/) — that's the source of truth
+for the **R08 BLE protocol** (see [02](02-hardware-and-protocol.md)).
 
-Useful files in `../decompiled/v2/sources/com/ring/r08remote/`:
+Useful files in `../refs/r08remote-decompiled-v2/sources/com/ring/r08remote/`:
 
 | File | What we learned |
 |---|---|

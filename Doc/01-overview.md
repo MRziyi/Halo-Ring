@@ -108,8 +108,8 @@ If you are…
 - [`../app-project/`](../app-project/) — the Kotlin/Gradle skeleton project
 - [`../phase0/`](../phase0/) — the Python protocol-verification probe
 - [`../research/`](../research/) — cloned reference repos (rokid-docs, colmi_r02_client, ATC_RF03_Ring, RayDesk, …)
-- [`../decompiled/v2/`](../decompiled/v2/) — jadx decompilation of `小猪遥控戒指` v2
-- [`../remote-v1*/`](../remote-v1/) — the three versions of the reference APK
+- [`../refs/r08remote-decompiled-v2/`](../refs/r08remote-decompiled-v2/) — jadx decompilation of `小猪遥控戒指` v2
+- [`../refs/r08remote-apk-{v1,v1.1,v2}/`](../refs/) — the three versions of the reference APK
 - [`../R08-Dev.md`](../R08-Dev.md) — the original community hand-off doc (kept as-is for historical
   reference; corrections live in [12](12-research-and-references.md))
 - [`./_archive/`](./_archive/) — earlier monolithic versions of this design doc, preserved

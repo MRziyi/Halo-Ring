@@ -23,10 +23,10 @@ import kotlinx.coroutines.withContext
  *   - Keypair + cert generation: **implemented** ([AdbCrypto])
  *   - mDNS discovery: **implemented** ([AdbMdnsDiscovery])
  *   - ADB wire packet: **implemented** ([AdbMessage])
- *   - SPAKE2 pairing handshake: **TODO** — port [`AdbPairingClient.java`](../../../../../../../decompiled/v2/sources/com/ring/r08remote/adb/AdbPairingClient.java)
+ *   - SPAKE2 pairing handshake: **TODO** — port [`AdbPairingClient.java`](../../../../../../../refs/r08remote-decompiled-v2/sources/com/ring/r08remote/adb/AdbPairingClient.java)
  *     (~800 lines of BigInteger SPAKE2 + BouncyCastle TLS). Needs hardware to validate the cipher
  *     parameters — porting blind is dangerous.
- *   - TLS-wrapped ADB connection: **TODO** — port [`AdbConnection.java`](../../../../../../../decompiled/v2/sources/com/ring/r08remote/adb/AdbConnection.java)
+ *   - TLS-wrapped ADB connection: **TODO** — port [`AdbConnection.java`](../../../../../../../refs/r08remote-decompiled-v2/sources/com/ring/r08remote/adb/AdbConnection.java)
  *     (~800 lines). Once SPAKE2 is verified, this is mostly mechanical: connect → CNXN handshake →
  *     STLS upgrade → run the standard ADB service protocol on top.
  */

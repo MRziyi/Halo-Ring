@@ -45,7 +45,7 @@ Production code (all in `app-project/app/src/main/kotlin/com/halo/ring/adb/`):
 Reference (NOT in this repo, third-party copyright):
 
 ```
-/Users/Zack/Code/Projects/R08-dev/decompiled/v2/sources/com/ring/r08remote/adb/
+/Users/Zack/Code/Projects/R08-dev/refs/r08remote-decompiled-v2/sources/com/ring/r08remote/adb/
   AdbPairingClient.java   ~800 lines, jadx-decompiled
   AdbConnection.java      ~800 lines, jadx-decompiled
 ```

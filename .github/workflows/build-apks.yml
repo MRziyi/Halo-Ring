@@ -1,9 +1,13 @@
 name: build-apks
 
 # Builds both flavor APKs (rokid + rayneo) in debug and release configurations on every push
-# to main, on every PR, and on every git tag matching `v*` (which also creates a GitHub Release
-# with the APKs attached). Plus a manual `workflow_dispatch` trigger so anyone with repo write
-# access can produce a fresh APK on demand from the Actions tab.
+# to main, on every PR, and on every git tag matching `v*`. Outputs land in two places:
+#
+#   1. Always — uploaded as a 14-day workflow artifact (the Actions-tab download path).
+#   2. On push to main — overwrites a rolling **Latest build** GitHub Release so users can
+#      grab the freshest APKs straight from the Releases page without needing a login or
+#      navigating Actions.
+#   3. On a `v*` tag — creates a regular named GitHub Release with the APKs attached.
 #
 # Build time on cold runner: ~5-8 min (downloads Android SDK + NDK r27 + Gradle deps). Warm
 # runner with Gradle cache: ~2-3 min.
@@ -19,6 +23,11 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+
+    # softprops/action-gh-release needs `contents: write` to create / update Releases.
+    # `GITHUB_TOKEN` defaults to read-only on public repos for safety; grant write here.
+    permissions:
+      contents: write
 
     steps:
       - uses: actions/checkout@v4
@@ -66,13 +75,56 @@ jobs:
           retention-days: 14
           if-no-files-found: error
 
-      # On a `v*` tag push, also publish a GitHub Release with the APKs attached so users can
-      # download them without needing GitHub login / Actions access.
-      - name: Attach APKs to GitHub Release (on tag)
+      # Stage the four APKs in a flat directory with predictable names so the Release page
+      # shows clean labels (`halo-ring-rokid-debug.apk` etc.) instead of the Gradle output
+      # paths.
+      - name: Stage APKs for release upload
+        if: |
+          (github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')))
+        run: |
+          mkdir -p release-staging
+          cp app-project/app/build/outputs/apk/rokid/debug/app-rokid-debug.apk      release-staging/halo-ring-rokid-debug.apk
+          cp app-project/app/build/outputs/apk/rokid/release/app-rokid-release.apk  release-staging/halo-ring-rokid-release.apk
+          cp app-project/app/build/outputs/apk/rayneo/debug/app-rayneo-debug.apk    release-staging/halo-ring-rayneo-debug.apk
+          cp app-project/app/build/outputs/apk/rayneo/release/app-rayneo-release.apk release-staging/halo-ring-rayneo-release.apk
+          ls -lh release-staging/
+
+      # Rolling "Latest build" Release — overwritten on every push to main so users always
+      # have a one-click download path. Uses a fixed `latest` tag with prerelease=true so
+      # GitHub's UI shows it below proper versioned releases when those exist.
+      - name: Publish "Latest build" Release (push to main only)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: Latest build (main)
+          body: |
+            Auto-built APKs from the latest commit on `main`. Updated on every push.
+
+            Commit: ${{ github.sha }} · Built: ${{ github.event.head_commit.timestamp }}
+
+            ### Which APK do I want?
+
+            - **Rokid Glasses** → `halo-ring-rokid-release.apk` (or `…-debug.apk` if you want logs).
+            - **RayNeo X3 Pro** → `halo-ring-rayneo-release.apk` (or `…-debug.apk`).
+
+            Install via `adb install -r <apk>`; see the README for the full setup walk-through.
+
+            For a specific version, see the [tagged releases](../releases) instead.
+          files: release-staging/*.apk
+          prerelease: true
+          make_latest: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Versioned Release — created on a `v*` tag push. Same APKs, plus auto-generated
+      # release notes from commit history.
+      - name: Publish versioned Release (on tag)
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: app-project/app/build/outputs/apk/**/*.apk
+          files: release-staging/*.apk
           generate_release_notes: true
+          make_latest: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

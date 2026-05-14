@@ -61,8 +61,9 @@ Total: ~2 hours of careful reading for an end-to-end handoff.
 | [`../app-project/`](../app-project/) | The Android multi-module Kotlin project — `:core` (pure JVM), `:app` (Android, rokid/rayneo flavors), `:agent` (injection agent) |
 | [`../phase0/`](../phase0/) | Python BLE protocol-verification probe (bleak-based); includes `--tutorial` mode for end-user onboarding |
 | [`../research/`](../research/) | Cloned reference repositories — `rokid-docs`, `colmi_r02_client`, `ATC_RF03_Ring`, `RayDesk`, `moonlight-android-RayNeoX3` |
-| [`../decompiled/`](../decompiled/) | jadx decompilation of `小猪遥控戒指` v2 — the source of truth for the BLE protocol |
-| [`../remote-v1/`](../remote-v1/), [`../remote-v1.1/`](../remote-v1.1/), [`../remote-v2/`](../remote-v2/) | The three reference APK versions (`com.ring.r08remote`) |
+| [`../refs/`](../refs/) | All external reference material — vendor SDKs, reference APKs, decompilations, tools. See [`refs/README.md`](../refs/README.md) for the index + SDK source URLs. |
+| [`../refs/r08remote-decompiled-v2/`](../refs/r08remote-decompiled-v2/) | jadx decompilation of `小猪遥控戒指` v2 — the source of truth for the BLE protocol |
+| [`../refs/r08remote-apk-v1/`](../refs/r08remote-apk-v1/), [`v1.1`](../refs/r08remote-apk-v1.1/), [`v2`](../refs/r08remote-apk-v2/) | The three reference APK versions (`com.ring.r08remote`) |
 | [`../R08-Dev.md`](../R08-Dev.md) | Original community hand-off doc (historical; corrections in [12 §4](12-research-and-references.md)) |
 | [`./_archive/`](./_archive/) | Pre-split monolithic design docs preserved for history |
 
