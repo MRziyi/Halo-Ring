@@ -12,12 +12,15 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.halo.ring.R
 import com.halo.ring.ui.FocusableRow
 import com.halo.ring.ui.HaloColors
 import com.halo.ring.ui.HaloType
 import com.halo.ring.ui.ScreenPadding
+import com.halo.ring.ui.hud.profileFriendlyText
 import com.halo.ring.core.action.KeyMapProfile
 import com.halo.ring.core.gesture.GestureConfig
 
@@ -45,70 +48,68 @@ fun PowerConnectionScreen(
 
     Column(modifier = Modifier.fillMaxSize().padding(top = 4.dp)) {
         Text(
-            text = "Power & Connection",
+            text = stringResource(R.string.power_title),
             style = HaloType.Title,
             modifier = Modifier.padding(horizontal = ScreenPadding, vertical = 12.dp),
         )
         Text(
-            "Editing the active profile: ${activeProfile.name}",
+            stringResource(R.string.power_active_profile_caption, profileFriendlyText(activeProfile)),
             style = HaloType.Caption,
             modifier = Modifier.padding(horizontal = ScreenPadding),
         )
         Spacer(Modifier.height(12.dp))
 
-        SectionHeader("Timing windows")
+        SectionHeader(stringResource(R.string.power_section_timing_label))
         CycleRow(
-            title = "Multi-tap window",
-            value = "${cfg.multiTapWindowMs} ms",
-            description = "Max gap between TOUCHes that count as one multi-tap.",
+            title = stringResource(R.string.power_multi_tap_window),
+            value = stringResource(R.string.power_window_unit_ms, cfg.multiTapWindowMs.toInt()),
+            description = stringResource(R.string.power_multi_tap_desc),
             onTap = { update(activeProfile, onActiveProfileUpdated) {
                 it.copy(multiTapWindowMs = cycleNext(MULTI_TAP_PRESETS, cfg.multiTapWindowMs))
             } },
         )
         CycleRow(
-            title = "Combo window",
-            value = "${cfg.comboWindowMs} ms",
-            description = "After a double-tap, wait this long for a following swipe.",
+            title = stringResource(R.string.power_combo_window),
+            value = stringResource(R.string.power_window_unit_ms, cfg.comboWindowMs.toInt()),
+            description = stringResource(R.string.power_combo_desc),
             onTap = { update(activeProfile, onActiveProfileUpdated) {
                 it.copy(comboWindowMs = cycleNext(COMBO_PRESETS, cfg.comboWindowMs))
             } },
         )
         CycleRow(
-            title = "Long-press follow-up",
-            value = "${cfg.longPressFollowupWindowMs} ms",
-            description = "After a LONG_PRESS, wait for a swipe or 2nd long-press.",
+            title = stringResource(R.string.power_long_press_followup),
+            value = stringResource(R.string.power_window_unit_ms, cfg.longPressFollowupWindowMs.toInt()),
+            description = stringResource(R.string.power_long_press_followup_desc),
             onTap = { update(activeProfile, onActiveProfileUpdated) {
                 it.copy(longPressFollowupWindowMs = cycleNext(LP_FOLLOWUP_PRESETS, cfg.longPressFollowupWindowMs))
             } },
         )
 
         Spacer(Modifier.height(12.dp))
-        SectionHeader("Latency switches")
+        SectionHeader(stringResource(R.string.power_section_latency_label))
         ToggleRow(
-            title = "Optimistic single tap",
-            description = "Fire TAP immediately on the 1st touch (latency ~0 ms; double-tap still works, but TAP fires too).",
+            title = stringResource(R.string.power_optimistic_single_tap),
+            description = stringResource(R.string.power_optimistic_desc),
             on = cfg.optimisticSingleTap,
             onToggle = { update(activeProfile, onActiveProfileUpdated) { it.copy(optimisticSingleTap = !cfg.optimisticSingleTap) } },
         )
         ToggleRow(
-            title = "Await double-tap combos",
-            description = "Wait the combo window after a double-tap so DOUBLE_TAP_SWIPE_* can fire.",
+            title = stringResource(R.string.power_await_combos_title),
+            description = stringResource(R.string.power_await_combos_desc),
             on = cfg.awaitCombos,
             onToggle = { update(activeProfile, onActiveProfileUpdated) { it.copy(awaitCombos = !cfg.awaitCombos) } },
         )
         ToggleRow(
-            title = "Await long-press combos",
-            description = "Wait the follow-up window after LONG_PRESS so LONG_PRESS_SWIPE_* + DOUBLE_LONG_PRESS can fire.",
+            title = stringResource(R.string.power_await_lp_combos),
+            description = stringResource(R.string.power_await_lp_combos_desc),
             on = cfg.awaitLongPressCombos,
             onToggle = { update(activeProfile, onActiveProfileUpdated) { it.copy(awaitLongPressCombos = !cfg.awaitLongPressCombos) } },
         )
 
         Spacer(Modifier.height(12.dp))
-        SectionHeader("Connection (automatic)")
+        SectionHeader(stringResource(R.string.power_section_connection_label))
         Text(
-            "BLE interval is HIGH (15–30 ms) for ~10 s after each gesture and BALANCED (75–100 ms) " +
-                "otherwise. Touch IC disables when the user takes the glasses off. After 5 minutes off-wrist " +
-                "the ring disconnects entirely.",
+            stringResource(R.string.power_connection_auto_body),
             style = HaloType.Caption,
             modifier = Modifier.padding(horizontal = ScreenPadding, vertical = 4.dp),
         )
@@ -170,7 +171,7 @@ private fun ToggleRow(title: String, description: String, on: Boolean, onToggle:
             Text(description, style = HaloType.Caption.copy(fontSize = 11.sp))
         }
         Text(
-            text = if (on) "ON" else "OFF",
+            text = stringResource(if (on) R.string.common_on else R.string.common_off),
             style = HaloType.RowVal.copy(color = if (on) HaloColors.Accent else HaloColors.Mute),
         )
     }

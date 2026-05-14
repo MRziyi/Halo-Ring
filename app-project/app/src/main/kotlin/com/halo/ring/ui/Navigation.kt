@@ -25,6 +25,8 @@ sealed interface SubScreen {
     object VitalsPrefs : SubScreen
     /** Settings → Language (audit-2026-05-13o). */
     object Language : SubScreen
+    /** Settings → Test Arena — practice ground showing live recognised gestures (audit-q). */
+    object TestArena : SubScreen
     // SubScreen.Guide removed in audit-2026-05-13p — the static cheatsheet was replaced by the
     // interactive [com.halo.ring.ui.screens.GuidedTour] overlay. Re-open via About → onShowGuide
     // which propagates up to the host (MainActivity) to flip `tourActive=true`.

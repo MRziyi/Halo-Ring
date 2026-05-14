@@ -1,8 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- App branding. Public name = "Halo Ring"; bilingual mark in About.
+    <!-- ════════════════════════════════════════════════════════════════════════
+         App branding. Public name = "Halo Ring"; bilingual mark in About.
          Internal codename "R08-Remote" is reserved for repository + design docs only;
-         never user-visible. -->
+         never user-visible.
+         ════════════════════════════════════════════════════════════════════════ -->
     <string name="app_name">Halo Ring</string>
     <string name="app_name_bilingual">Halo Ring · 环意</string>
     <string name="app_tagline">Where the ring goes, the world moves.</string>
@@ -15,4 +17,490 @@
     <string name="notification_channel_name">Halo Ring</string>
     <string name="notification_title">Halo Ring</string>
     <string name="notification_text">Ring listening</string>
+
+    <!-- ════════════════════════════════════════════════════════════════════════
+         Top-level tabs.
+         ════════════════════════════════════════════════════════════════════════ -->
+    <string name="tab_vitals">VITALS</string>
+    <string name="tab_settings">SETTINGS</string>
+    <string name="tab_status">STATUS</string>
+
+    <!-- ════════════════════════════════════════════════════════════════════════
+         Settings root sections.
+         ════════════════════════════════════════════════════════════════════════ -->
+    <string name="settings_section_profiles">Profiles &amp; Gestures</string>
+    <string name="settings_section_system_gestures">System Gestures</string>
+    <string name="settings_section_ring">Ring</string>
+    <string name="settings_section_power">Power &amp; Connection</string>
+    <string name="settings_section_feedback">Feedback</string>
+    <string name="settings_section_vitals_prefs">Vitals</string>
+    <string name="settings_section_language">Language</string>
+    <string name="settings_section_test_arena">Test Arena</string>
+    <string name="settings_section_advanced">Advanced</string>
+    <string name="settings_section_about">About</string>
+
+    <!-- ════════════════════════════════════════════════════════════════════════
+         Common labels reused across screens.
+         ════════════════════════════════════════════════════════════════════════ -->
+    <string name="common_on">ON</string>
+    <string name="common_off">OFF</string>
+    <string name="common_cancel">CANCEL</string>
+    <string name="common_back">BACK</string>
+    <string name="common_done">DONE</string>
+    <string name="common_skip">SKIP</string>
+    <string name="common_next">NEXT</string>
+    <string name="common_continue">CONTINUE</string>
+    <string name="common_just_now">Just now</string>
+    <string name="common_never">Never</string>
+    <string name="common_unknown">Unknown</string>
+    <string name="common_dash">—</string>
+
+    <!-- ════════════════════════════════════════════════════════════════════════
+         Status bar (top of every tab).
+         ════════════════════════════════════════════════════════════════════════ -->
+    <string name="statusbar_ring_placeholder">R08_…</string>
+
+    <!-- ════════════════════════════════════════════════════════════════════════
+         Vitals tab.
+         ════════════════════════════════════════════════════════════════════════ -->
+    <string name="vitals_heart_rate_label">HEART RATE</string>
+    <string name="vitals_spo2_label">SPO2</string>
+    <string name="vitals_stress_label">STRESS</string>
+    <string name="vitals_measure_now">MEASURE NOW</string>
+    <string name="vitals_measuring">MEASURING…</string>
+    <string name="vitals_unit_bpm">bpm</string>
+    <string name="vitals_unit_percent">%</string>
+    <string name="vitals_measured_just_now">measured just now</string>
+    <string name="vitals_measured_min_ago">measured %1$d min ago</string>
+    <string name="vitals_steps_today">Steps today</string>
+    <string name="vitals_calories">Calories</string>
+    <string name="vitals_calories_unit">%1$s kcal</string>
+    <string name="vitals_distance">Distance</string>
+    <string name="vitals_distance_unit">%1$s km</string>
+    <string name="vitals_last_sync">Last sync</string>
+    <string name="vitals_export_log">EXPORT LOG</string>
+
+    <!-- ════════════════════════════════════════════════════════════════════════
+         Status tab.
+         ════════════════════════════════════════════════════════════════════════ -->
+    <string name="status_ring">Ring</string>
+    <string name="status_ring_connected">● Connected</string>
+    <string name="status_ring_disconnected">● Disconnected</string>
+    <string name="status_conn_interval">Conn interval</string>
+    <string name="status_conn_interval_active">active</string>
+    <string name="status_conn_interval_idle">idle</string>
+    <string name="status_conn_interval_screen_off">screen-off</string>
+    <string name="status_profile">Profile</string>
+    <string name="status_profile_auto_suffix"> (auto)</string>
+    <string name="status_last_gesture">Last gesture</string>
+    <string name="status_background_draw">Background draw</string>
+    <string name="status_background_draw_value">+ %1$s mA</string>
+    <string name="status_background_footer">foreground service · no wakelock · agent: %1$s</string>
+    <string name="status_ble_quality">BLE quality (last hour)</string>
+    <string name="status_ble_drops">%1$d drops</string>
+
+    <!-- ════════════════════════════════════════════════════════════════════════
+         Language picker.
+         ════════════════════════════════════════════════════════════════════════ -->
+    <string name="language_title">Language</string>
+    <string name="language_description">Default follows your device\'s system language. Override below if you\'d like a specific language regardless of device settings.</string>
+    <string name="language_follow_system">Follow system</string>
+    <string name="language_english">English</string>
+    <string name="language_chinese">中文 (Chinese)</string>
+
+    <!-- ════════════════════════════════════════════════════════════════════════
+         Profiles list + editor.
+         ════════════════════════════════════════════════════════════════════════ -->
+    <string name="profiles_title">Profiles</string>
+    <string name="profiles_subtitle">Triple-tap cycles. Auto-switch by foreground app — see Edit.</string>
+    <string name="profiles_active_badge">active</string>
+    <string name="profiles_new">+ NEW PROFILE</string>
+    <string name="profiles_footer">%1$d profiles · %2$d s manual lock</string>
+    <string name="profile_default_navigation">Navigation</string>
+    <string name="profile_default_media">Media</string>
+    <string name="profile_default_reader">Reader</string>
+    <string name="profile_default_fast">Fast</string>
+    <string name="profile_editor_title">Gesture mapping</string>
+    <string name="profile_editor_edit_cta">EDIT</string>
+    <string name="profile_editor_system_value">(system) ›</string>
+    <string name="profile_editor_footer">System gestures are intercepted before this profile. Edit them in Settings → System Gestures.</string>
+    <string name="profiles_list_footer">Profiles auto-switch by foreground app (when Accessibility is enabled). Triple-tap the ring to manually cycle.</string>
+    <string name="profiles_bindings_count">%1$d bindings ›</string>
+    <string name="action_picker_current">(current)</string>
+    <string name="action_picker_footer">System actions are advanced — they short-circuit the normal routing. Use cautiously.</string>
+
+    <!-- ════════════════════════════════════════════════════════════════════════
+         System gestures.
+         ════════════════════════════════════════════════════════════════════════ -->
+    <string name="system_gestures_title">System gestures</string>
+    <string name="system_gestures_subtitle">Always-on. Override the active profile.</string>
+    <string name="system_gestures_slot_wake">Wake screen</string>
+    <string name="system_gestures_slot_sleep">Sleep screen</string>
+    <string name="system_gestures_slot_cycle">Cycle profile</string>
+    <string name="system_gestures_slot_peek">Peek HUD</string>
+    <string name="system_gestures_slot_reconnect">Force reconnect</string>
+    <string name="system_gestures_footer">Wake is on the screen-off fast path</string>
+    <string name="system_gestures_disabled">(disabled)</string>
+
+    <string name="gesture_picker_title">Pick a gesture</string>
+    <string name="gesture_picker_disable_slot">(disable this slot)</string>
+    <string name="gesture_picker_in_use_by">in use by %1$s</string>
+
+    <!-- ════════════════════════════════════════════════════════════════════════
+         Ring screen.
+         ════════════════════════════════════════════════════════════════════════ -->
+    <string name="ring_title">Ring</string>
+    <string name="ring_mac">MAC</string>
+    <string name="ring_firmware">Firmware</string>
+    <string name="ring_signal">Signal</string>
+    <string name="ring_battery">Battery</string>
+    <string name="ring_find_cta">FIND MY RING · BLINK 10 s</string>
+    <string name="ring_shutdown_cta">SHUT DOWN RING</string>
+    <string name="ring_forget_cta">FORGET &amp; RE-PAIR</string>
+    <string name="ring_advertised_name">Advertised name</string>
+    <string name="ring_signal_unit_dbm">%1$d dBm</string>
+    <string name="ring_default_name">Ring</string>
+    <string name="ring_status_connected">Connected</string>
+    <string name="ring_status_disconnected">Disconnected</string>
+    <string name="ring_battery_pct">%1$d %%</string>
+    <string name="ring_find_short">FIND RING</string>
+    <string name="ring_shutdown_short">SHUTDOWN</string>
+    <string name="ring_forget_short">FORGET</string>
+    <string name="ring_screen_footer">Shutdown powers the ring off — you\'ll need to put it on the cradle briefly to wake it.\nForget drops the MAC whitelist so a different ring can be paired.</string>
+
+    <!-- ════════════════════════════════════════════════════════════════════════
+         Power &amp; Connection.
+         ════════════════════════════════════════════════════════════════════════ -->
+    <string name="power_title">Power &amp; Connection</string>
+    <string name="power_multi_tap_window">Multi-tap window</string>
+    <string name="power_combo_window">Combo window</string>
+    <string name="power_long_press_followup">Long-press follow-up</string>
+    <string name="power_ble_interval_active">BLE interval (active)</string>
+    <string name="power_ble_interval_idle">BLE interval (idle)</string>
+    <string name="power_ble_interval_screen_off">BLE interval (screen off)</string>
+    <string name="power_disconnect_not_worn">Disconnect when not worn</string>
+    <string name="power_disconnect_after">after %1$d min</string>
+    <string name="power_keepalive">Keepalive while worn</string>
+    <string name="power_optimistic_single_tap">Optimistic single tap</string>
+    <string name="power_await_combos">Await tap-swipe combos</string>
+    <string name="power_await_lp_combos">Await long-press combos</string>
+    <string name="power_window_unit_ms">%1$d ms</string>
+    <string name="power_band_high">15–30 ms</string>
+    <string name="power_band_balanced">75–100 ms</string>
+    <string name="power_band_slow">200–500 ms</string>
+    <string name="power_section_timing">Recognition windows</string>
+    <string name="power_section_ble">BLE interval policy</string>
+    <string name="power_section_latency">Latency toggles</string>
+    <string name="power_section_disconnect">Disconnect policy</string>
+    <string name="power_section_timing_label">Timing windows</string>
+    <string name="power_section_latency_label">Latency switches</string>
+    <string name="power_section_connection_label">Connection (automatic)</string>
+    <string name="power_active_profile_caption">Editing the active profile: %1$s</string>
+    <string name="power_multi_tap_desc">Max gap between TOUCHes that count as one multi-tap.</string>
+    <string name="power_combo_desc">After a double-tap, wait this long for a following swipe.</string>
+    <string name="power_long_press_followup_desc">After a LONG_PRESS, wait for a swipe or 2nd long-press.</string>
+    <string name="power_optimistic_desc">Fire TAP immediately on the 1st touch (latency ~0 ms; double-tap still works, but TAP fires too).</string>
+    <string name="power_await_combos_desc">Wait the combo window after a double-tap so DOUBLE_TAP_SWIPE_* can fire.</string>
+    <string name="power_await_combos_title">Await double-tap combos</string>
+    <string name="power_await_lp_combos_desc">Wait the follow-up window after LONG_PRESS so LONG_PRESS_SWIPE_* + DOUBLE_LONG_PRESS can fire.</string>
+    <string name="power_connection_auto_body">BLE interval is HIGH (15–30 ms) for ~10 s after each gesture and BALANCED (75–100 ms) otherwise. Touch IC disables when the user takes the glasses off. After 5 minutes off-wrist the ring disconnects entirely.</string>
+
+    <!-- ════════════════════════════════════════════════════════════════════════
+         Feedback.
+         ════════════════════════════════════════════════════════════════════════ -->
+    <string name="feedback_title">Feedback</string>
+    <string name="feedback_subtitle">How the app confirms recognised gestures to you.</string>
+    <string name="feedback_gesture_hint">Show recognised gesture (HUD)</string>
+    <string name="feedback_gesture_hint_subtitle">800 ms after each gesture</string>
+    <string name="feedback_click_sound">UI click sound</string>
+    <string name="feedback_ring_led">Ring LED feedback</string>
+    <string name="feedback_hud_position">HUD position</string>
+    <string name="feedback_hud_duration">HUD duration</string>
+    <string name="feedback_hud_duration_value">%1$d s</string>
+    <string name="feedback_auto_hint">Auto-enable hints for 5 min after pairing</string>
+    <string name="feedback_hud_pos_top_right">Top-right</string>
+    <string name="feedback_hud_pos_top_center">Top-centre</string>
+    <string name="feedback_hud_pos_bottom_right">Bottom-right</string>
+    <string name="feedback_auto_hint_subtitle">teaches new wearers the gesture set</string>
+    <string name="feedback_footer">Hints fire only while the screen is on.</string>
+    <string name="feedback_duration_seconds">%1$d s</string>
+    <string name="feedback_duration_ms">%1$d ms</string>
+
+    <!-- ════════════════════════════════════════════════════════════════════════
+         Vitals prefs.
+         ════════════════════════════════════════════════════════════════════════ -->
+    <string name="vitals_prefs_title">Vitals</string>
+    <string name="vitals_prefs_subtitle">On-demand only. PPG draws a lot.</string>
+    <string name="vitals_prefs_show_hr_hud">Show HR on HUD</string>
+    <string name="vitals_prefs_activity_overlay">Activity overlay</string>
+    <string name="vitals_prefs_auto_snapshot">Auto-snapshot interval</string>
+    <string name="vitals_prefs_log_csv">Log to CSV</string>
+    <string name="vitals_prefs_wear_detection">Wear detection</string>
+    <string name="vitals_prefs_export_log">EXPORT 7-DAY LOG</string>
+    <string name="vitals_prefs_auto_snapshot_never">never</string>
+    <string name="vitals_prefs_wear_ring_glasses">RING &amp; GLASSES</string>
+    <string name="vitals_prefs_wear_ring_only">RING ONLY</string>
+    <string name="vitals_prefs_wear_glasses_only">GLASSES ONLY</string>
+    <string name="vitals_prefs_show_hr_title">Show heart-rate on HUD</string>
+    <string name="vitals_prefs_show_hr_desc">Render the latest HR in the corner of the glasses\' display.</string>
+    <string name="vitals_prefs_activity_title">Activity overlay</string>
+    <string name="vitals_prefs_activity_desc">Show steps / calories alongside HR. Costs no extra ring power.</string>
+    <string name="vitals_prefs_auto_snapshot_title">Auto-snapshot interval</string>
+    <string name="vitals_prefs_auto_snapshot_desc">Periodic HR/SpO₂/stress sample. PPG LED only on during the read.</string>
+    <string name="vitals_prefs_csv_title">CSV export</string>
+    <string name="vitals_prefs_csv_desc">Append every reading to an internal CSV (export from Settings → Advanced).</string>
+    <string name="vitals_prefs_pause_offfinger_title">Pause when off-finger</string>
+    <string name="vitals_prefs_pause_offfinger_desc">Skip auto-snapshots while the ring isn\'t worn. Saves ring battery.</string>
+    <string name="vitals_prefs_footer">Continuous HR is intentionally not supported — the PPG LED would halve ring battery.</string>
+    <string name="vitals_prefs_interval_manual">Manual only</string>
+    <string name="vitals_prefs_interval_min">%1$d min</string>
+    <string name="vitals_prefs_interval_hour">%1$d h</string>
+    <string name="vitals_prefs_interval_hour_min">%1$d h %2$d min</string>
+
+    <!-- ════════════════════════════════════════════════════════════════════════
+         Advanced.
+         ════════════════════════════════════════════════════════════════════════ -->
+    <string name="advanced_title">Advanced</string>
+    <string name="advanced_subtitle">Diagnostics + re-runs. Most users never touch these.</string>
+    <string name="advanced_debug_hud">Debug HUD</string>
+    <string name="advanced_latency_measure">Latency measurement</string>
+    <string name="advanced_spatial_mode">Spatial mode (phase-3)</string>
+    <string name="advanced_action_a11y">A11y settings (deep-link)</string>
+    <string name="advanced_action_battery">Battery exemption (deep-link)</string>
+    <string name="advanced_action_adb">Re-run ADB bootstrap</string>
+    <string name="advanced_action_export_csv">Export latency CSV</string>
+    <string name="advanced_actions_header">Actions</string>
+    <string name="advanced_debug_hud_desc">Show RSSI, BLE interval, RTT, drop count, active backend.</string>
+    <string name="advanced_latency_desc">Log per-stage breakdown for the next 20 gestures to CSV (Doc/06 §4).</string>
+    <string name="advanced_spatial_desc">Air gestures from the IMU. Burns battery — only enable if you need it.</string>
+    <string name="advanced_a11y_title">Open Accessibility settings</string>
+    <string name="advanced_a11y_desc">Enable Halo Ring in the OS Settings list.</string>
+    <string name="advanced_battery_title">Battery exemption</string>
+    <string name="advanced_battery_desc">Allow Halo Ring to run in Doze.</string>
+    <string name="advanced_adb_title">Re-run ADB bootstrap</string>
+    <string name="advanced_adb_desc">Push the agent dex + grant WRITE_SECURE_SETTINGS again.</string>
+    <string name="advanced_export_title">Export latency log (CSV)</string>
+    <string name="advanced_export_desc">Available after you\'ve used Latency measurement.</string>
+
+    <!-- ════════════════════════════════════════════════════════════════════════
+         About.
+         ════════════════════════════════════════════════════════════════════════ -->
+    <string name="about_app_version">App version</string>
+    <string name="about_detected_device">Detected device</string>
+    <string name="about_protocol_source">BLE protocol source</string>
+    <string name="about_protocol_source_value">reverse-engineered v2 APK</string>
+    <string name="about_phase0_probe">Phase-0 probe</string>
+    <string name="about_show_guide">Show operation guide</string>
+    <string name="about_credits_label">Credits</string>
+    <string name="about_credits_body">• Touch + gesture protocol reverse-engineered from `com.ring.r08remote` v2\n• Broader R02-family commands from `tahnok/colmi_r02_client`\n• RF03 SoC + firmware research: `atc1441/ATC_RF03_Ring`\n• Rokid platform docs: `buildwithfenna/rokid-docs`\n• Mercury SDK example: `Quad-Labs/RayDesk`</string>
+    <string name="about_source_label">Source &amp; contact</string>
+    <string name="about_source_body">Halo Ring · 环意 is open source under the MIT licence.\nIt is, and will always be, free.\n\nRepository:  github.com/MRziyi/Halo-Ring\nAuthor:      ziyi-zhang.vercel.app\n\nIf you paid anyone for this app, you were scammed. The official build is always at the URL above; verify the package signing certificate matches.</string>
+    <string name="about_docs_label">Documentation</string>
+    <string name="about_docs_body">Design docs at Doc/ in the source tree. Per-doc index in Doc/README.md.</string>
+    <string name="about_device_rokid">Rokid Glasses</string>
+    <string name="about_device_rayneo">RayNeo X3 Pro</string>
+    <string name="about_device_generic">Generic Android (dev)</string>
+
+    <!-- ════════════════════════════════════════════════════════════════════════
+         Test Arena.
+         ════════════════════════════════════════════════════════════════════════ -->
+    <string name="test_arena_title">Test Arena</string>
+    <string name="test_arena_subtitle">Try any gesture from your ring. The matching row below will light up.</string>
+    <string name="test_arena_inactive_hint">Nothing is dispatched while you\'re here — actions resume on Back.</string>
+
+    <!-- ════════════════════════════════════════════════════════════════════════
+         Guided tour.
+         ════════════════════════════════════════════════════════════════════════ -->
+    <string name="tour_step_counter">%1$d / %2$d</string>
+    <string name="tour_got_it">Got it!</string>
+    <string name="tour_wrong_gesture">That was %1$s — try the one shown above</string>
+    <string name="tour_no_ring_hint">(No ring connected — tap NEXT to keep watching.)</string>
+
+    <string name="tour_welcome_title">Welcome</string>
+    <string name="tour_welcome_ring">Quick tour of how to operate the app. Tap NEXT to start.</string>
+    <string name="tour_welcome_temple">Quick tour. Tap NEXT to start.</string>
+
+    <string name="tour_move_down_title">Move cursor down</string>
+    <string name="tour_move_down_ring">Swipe DOWN on your ring → cursor moves to the next row.</string>
+    <string name="tour_move_down_temple">Slide FORWARD on the temple touchpad.</string>
+
+    <string name="tour_move_up_title">Move cursor up</string>
+    <string name="tour_move_up_ring">Swipe UP on your ring → cursor moves to the previous row.</string>
+    <string name="tour_move_up_temple">Slide BACKWARD on the temple touchpad.</string>
+
+    <string name="tour_enter_row_title">Enter the focused row</string>
+    <string name="tour_enter_row_ring">Tap once on the ring → opens whatever is currently focused.</string>
+    <string name="tour_enter_row_temple">Single-click the temple touchpad.</string>
+
+    <string name="tour_back_title">Go back</string>
+    <string name="tour_back_ring">Double-tap to return to the previous screen.</string>
+    <string name="tour_back_temple">Double-click the temple touchpad.</string>
+
+    <string name="tour_tab_focus_title">Focus the top tabs</string>
+    <string name="tour_tab_focus_ring">When the cursor\'s on the top row, one more SWIPE UP moves focus onto the tab strip.</string>
+    <string name="tour_tab_focus_temple">On the top row, slide BACKWARD again to jump up to the tab strip.</string>
+
+    <string name="tour_tab_cycle_title">Cycle tabs</string>
+    <string name="tour_tab_cycle_ring">With tabs focused, SWIPE UP / DOWN cycles VITALS ⇄ SETTINGS ⇄ STATUS.</string>
+    <string name="tour_tab_cycle_temple">Slide FORWARD / BACKWARD on the temple to cycle.</string>
+
+    <string name="tour_enter_tab_title">Enter the chosen tab</string>
+    <string name="tour_enter_tab_ring">TAP once to drop focus from the tab strip back into the tab\'s first content row.</string>
+    <string name="tour_enter_tab_temple">Single-CLICK the temple to enter the tab.</string>
+
+    <string name="tour_long_press_title">Long press — menu / wake</string>
+    <string name="tour_long_press_ring">Press and hold the ring. Opens menu; wakes the glasses when the screen is off.</string>
+    <string name="tour_long_press_temple">Long-press the temple touchpad.</string>
+
+    <string name="tour_triple_title">Triple tap — switch profile</string>
+    <string name="tour_triple_ring">Tap three times to cycle profile (Navigation → Media → Reader → Fast).</string>
+    <string name="tour_triple_temple">Triple-click the temple touchpad.</string>
+
+    <string name="tour_leave_title">Leave the app</string>
+    <string name="tour_leave_ring">DOUBLE-TAP at the root drops back to the system launcher.</string>
+    <string name="tour_leave_temple">Double-click the temple at the root to leave the app.</string>
+
+    <string name="tour_done_title">You\'re ready</string>
+    <string name="tour_done_body">Practise any time at Settings → Test Arena. Re-open this tour at Settings → About.</string>
+
+    <string name="tour_phantom_long_press_before">hold and wait</string>
+    <string name="tour_phantom_long_press_after">menu opens (or screen wakes)</string>
+    <string name="tour_phantom_triple_before">tap three times</string>
+    <string name="tour_phantom_triple_after">Profile: Navigation → Media</string>
+    <string name="tour_phantom_leave_after">system launcher</string>
+    <string name="tour_phantom_inside">inside…</string>
+    <string name="tour_phantom_detail_content">(detail content)</string>
+    <string name="tour_phantom_all_set">All set</string>
+
+    <!-- ════════════════════════════════════════════════════════════════════════
+         First-run wizard.
+         ════════════════════════════════════════════════════════════════════════ -->
+    <string name="wizard_step_count">Step %1$d of %2$d</string>
+
+    <string name="wizard_welcome_title">Welcome to Halo Ring</string>
+    <string name="wizard_welcome_body">Setup takes about a minute. We\'ll enable wireless ADB, accessibility, battery exemption, then pair your ring.</string>
+    <string name="wizard_welcome_cta">START</string>
+
+    <string name="wizard_adb_title">Enable wireless ADB</string>
+    <string name="wizard_adb_body">We need a brief 6-digit pairing so the app can push the injection agent. After this you never see this step again.</string>
+    <string name="wizard_adb_cta_start">START PAIRING</string>
+    <string name="wizard_adb_cta_open_settings">OPEN DEVELOPER OPTIONS</string>
+
+    <string name="wizard_a11y_title">Accessibility (optional)</string>
+    <string name="wizard_a11y_body">Lets the back / home / recents controls work without ADB. Skippable; the agent does the same things.</string>
+    <string name="wizard_a11y_cta_enable">OPEN ACCESSIBILITY SETTINGS</string>
+    <string name="wizard_a11y_enabled">✓ Enabled</string>
+
+    <string name="wizard_battery_title">Battery exemption</string>
+    <string name="wizard_battery_body">Stops Android Doze from killing the background service after a few hours of inactivity.</string>
+    <string name="wizard_battery_cta">REQUEST EXEMPTION</string>
+    <string name="wizard_battery_exempted">✓ Exempt</string>
+
+    <string name="wizard_pair_title">Pair the ring</string>
+    <string name="wizard_pair_body">Take the ring off any charger. The app will scan for nearby Halo / R08 rings. Confirm the MAC + LED double-flash.</string>
+    <string name="wizard_pair_cta">SCAN FOR RING</string>
+
+    <string name="wizard_complete_cta">FINISH</string>
+
+    <!-- First-run wizard: short variants used by the on-glasses 480×480 layout. -->
+    <string name="wizard_welcome_begin_cta">BEGIN</string>
+    <string name="wizard_adb_intro_title">Install agent</string>
+    <string name="wizard_adb_intro_body">We\'ll try root auto-setup first. If your device isn\'t rooted you\'ll be asked for a 6-digit pairing code.</string>
+    <string name="wizard_adb_open_settings_cta">OPEN SETTINGS</string>
+    <string name="wizard_adb_start_pairing_cta">START PAIRING</string>
+    <string name="wizard_adb_running_title">Pairing…</string>
+    <string name="wizard_adb_paired_title">Paired</string>
+    <string name="wizard_adb_continue_cta">CONTINUE</string>
+    <string name="wizard_adb_failed_title">Pairing failed</string>
+    <string name="wizard_adb_try_again_cta">TRY AGAIN</string>
+    <string name="wizard_a11y_on_title">Accessibility on</string>
+    <string name="wizard_a11y_on_body">Auto-switch by foreground app is active.</string>
+    <string name="wizard_a11y_off_title">Accessibility</string>
+    <string name="wizard_a11y_off_body">Optional. Powers auto-switch by foreground app.</string>
+    <string name="wizard_battery_on_title">Battery free</string>
+    <string name="wizard_battery_on_body">Doze won\'t kill the BLE link.</string>
+    <string name="wizard_battery_off_title">Battery</string>
+    <string name="wizard_battery_off_body">Allow background so Doze can\'t kill the BLE link.</string>
+    <string name="wizard_battery_allow_cta">ALLOW</string>
+    <string name="wizard_pair_short_title">Pair ring</string>
+    <string name="wizard_pair_short_body">Wear the ring (not the cradle). Two blinks = paired.</string>
+    <string name="wizard_pair_scan_cta">SCAN</string>
+    <string name="wizard_pair_done_cta">DONE</string>
+
+    <!-- ════════════════════════════════════════════════════════════════════════
+         ADB pairing overlay.
+         ════════════════════════════════════════════════════════════════════════ -->
+    <string name="adb_pair_title">Pairing code</string>
+    <string name="adb_pair_body">Type the 6-digit code from the dialog above. If you have a keyboard, use the field; otherwise use the number grid below (ring: swipe to navigate, tap to commit).</string>
+    <string name="adb_pair_submit">PAIR</string>
+    <string name="adb_pair_cancel">CANCEL</string>
+
+    <!-- ════════════════════════════════════════════════════════════════════════
+         HUD.
+         ════════════════════════════════════════════════════════════════════════ -->
+    <string name="hud_reconnected">● Reconnected</string>
+    <string name="hud_disconnected">Ring disconnected</string>
+    <string name="hud_disconnected_hint">Long-press × 2 to reconnect</string>
+    <string name="hud_profile_cycle">cycle</string>
+
+    <!-- ════════════════════════════════════════════════════════════════════════
+         Gesture names.
+         ════════════════════════════════════════════════════════════════════════ -->
+    <string name="gesture_tap">Tap</string>
+    <string name="gesture_double_tap">Double tap</string>
+    <string name="gesture_triple_tap">Triple tap</string>
+    <string name="gesture_quadruple_tap">4× tap</string>
+    <string name="gesture_swipe_up">Swipe up</string>
+    <string name="gesture_swipe_down">Swipe down</string>
+    <string name="gesture_long_press">Long press</string>
+    <string name="gesture_double_tap_swipe_up">Double-tap + swipe up</string>
+    <string name="gesture_double_tap_swipe_down">Double-tap + swipe down</string>
+    <string name="gesture_long_press_swipe_up">Long-press + swipe up</string>
+    <string name="gesture_long_press_swipe_down">Long-press + swipe down</string>
+    <string name="gesture_double_long_press">Long-press × 2</string>
+
+    <!-- ════════════════════════════════════════════════════════════════════════
+         Action names.
+         ════════════════════════════════════════════════════════════════════════ -->
+    <string name="action_nav_prev">Nav prev</string>
+    <string name="action_nav_next">Nav next</string>
+    <string name="action_nav_left">Nav left</string>
+    <string name="action_nav_right">Nav right</string>
+    <string name="action_confirm">Confirm</string>
+    <string name="action_back">Back</string>
+    <string name="action_home">Home</string>
+    <string name="action_recents">Recents</string>
+    <string name="action_menu">Menu</string>
+    <string name="action_notifications">Notifications</string>
+    <string name="action_quick_settings">Quick settings</string>
+    <string name="action_screenshot">Screenshot</string>
+    <string name="action_volume_up">Vol +</string>
+    <string name="action_volume_down">Vol −</string>
+    <string name="action_mute">Mute</string>
+    <string name="action_brightness_up">Brightness +</string>
+    <string name="action_brightness_down">Brightness −</string>
+    <string name="action_media_play_pause">Play / pause</string>
+    <string name="action_media_prev">Previous</string>
+    <string name="action_media_next">Next</string>
+    <string name="action_open_camera">Camera</string>
+    <string name="action_take_photo">Photo</string>
+    <string name="action_visual_ai">Visual AI</string>
+    <string name="action_open_translate">Translate</string>
+    <string name="action_open_chat">Chat</string>
+    <string name="action_open_music">Music</string>
+    <string name="action_open_settings">Settings</string>
+    <string name="action_open_gallery">Gallery</string>
+    <string name="action_launch_app">Open %1$s</string>
+    <string name="action_screen_sleep">Sleep screen</string>
+    <string name="action_screen_wake">Wake screen</string>
+    <string name="action_peek_hud">Peek</string>
+    <string name="action_profile_cycle">Cycle profile</string>
+    <string name="action_force_reconnect">Reconnect</string>
+    <string name="action_volume_modal">Volume modal</string>
+    <string name="action_brightness_modal">Brightness modal</string>
+    <string name="action_recents_modal">Recents modal</string>
+    <string name="action_ai_dictate_modal">AI dictate</string>
+    <string name="action_shell">Shell</string>
+    <string name="action_none">(no action)</string>
+    <string name="action_modal_exit">(modal exit)</string>
 </resources>

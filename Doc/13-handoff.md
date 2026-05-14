@@ -3,7 +3,25 @@
 > **For the next agent picking up this project.** This document is the canonical "where we are,
 > what's left, and where to look" — keep it current as you work. If a TODO here is wrong, fix it.
 
-Last updated: 2026-05-13 (after **audit-pass-k**: release-manifest leak closed
+Last updated: 2026-05-13 (after **audit-pass-s**: full EN/ZH i18n across every UI surface
+(~280 string keys, `res/values-zh/strings.xml`, `res/xml/locales_config.xml`, `Settings →
+Language → 跟随系统 / English / 中文`); `MainActivity` ported `ComponentActivity → AppCompatActivity`
++ `Theme.HaloRing` re-parented onto `Theme.AppCompat.DayNight.NoActionBar` so per-app locale
+via `AppCompatDelegate.setApplicationLocales` works on Android 12 / 13+; vendor-guideline UI
+audit against Rokid Sprite Launcher + RayNeo Mercury SDK docs — **A1/A2** rayneo flavor
+manifest overlay added (`app/src/rayneo/AndroidManifest.xml` with `com.rayneo.mercury.app`
+meta-data + `screenOrientation="landscape"` — without the meta-data the app would NOT appear
+in the RayNeo launcher), **A3** RayNeo TouchDispatcher wired end-to-end (real Mercury types,
+no reflection; `HaloRingTouchCallback : CommonTouchCallback`; `MainActivity.dispatchTouchEvent`
+forwards into the bridge), **B4** `HudOverlay.setBinocular(...)` re-anchors `TopCenter`/`Center`
+into the right-eye region on binocular displays (side-by-side 1280×480 — center-horizontal
+would otherwise land at the nose), **B5** focus-move `ToneGenerator(STREAM_NOTIFICATION)` beep
+mirroring Sprite Launcher's per-nav click. **v0.2.2**, both flavor APKs build clean; rokid
+installed + smoke-tested on OnePlus 9 Pro (no crashes, ZH locale applied). The only
+audit-pass-s item that still needs hardware is verifying Mercury delivers temple events
+through `Activity.dispatchTouchEvent` vs a window-level listener — if the latter, switch
+rayneo `MainActivity` to subclass `BaseTouchActivity` (one-line change, tracked in
+Doc/11 §B2.1). Previously the audit was at: **audit-pass-k**: release-manifest leak closed
 (`PairingTestReceiver` moved to `src/debug/AndroidManifest.xml`); real WearStateProviders for
 both flavors — Rokid reads `vendor.rkd.glasses.is_take_on` sysprop, RayNeo reflectively calls
 `com.ffalcon.mercury.android.sdk.api.MobileState.isWearing()`; `ConnIntervalEstimator` extracted

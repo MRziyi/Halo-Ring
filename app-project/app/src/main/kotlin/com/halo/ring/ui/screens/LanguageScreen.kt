@@ -12,7 +12,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.halo.ring.R
 import com.halo.ring.ui.FocusableRow
 import com.halo.ring.ui.HaloColors
 import com.halo.ring.ui.HaloType
@@ -36,11 +38,10 @@ fun LanguageScreen(
 ) {
     Column(modifier = Modifier.fillMaxSize().background(HaloColors.Bg)) {
         Column(modifier = Modifier.padding(horizontal = ScreenPadding, vertical = 12.dp)) {
-            Text("Language", style = HaloType.Title)
+            Text(stringResource(R.string.language_title), style = HaloType.Title)
             Spacer(Modifier.height(4.dp))
             Text(
-                "Default follows your device's system language. Override below if you'd like " +
-                    "a specific language regardless of device settings.",
+                stringResource(R.string.language_description),
                 style = HaloType.Caption,
             )
         }
@@ -61,17 +62,16 @@ private fun LanguageRow(
     onClick: () -> Unit,
 ) {
     FocusableRow(focused = selected, onClick = onClick) {
-        Column {
-            // Bilingual label: English on top, 中文 below. Same row layout regardless of which
-            // language is currently active — predictable + readable in any locale.
-            Text(lang.labelEn, style = HaloType.Body)
-            if (lang.labelEn != lang.labelZh) {
-                Text(
-                    lang.labelZh,
-                    style = HaloType.Caption.copy(color = HaloColors.Mute),
-                )
+        // Resolved via stringResource so the language label itself is localised — e.g. when the
+        // current locale is zh, "Follow system" reads as "跟随系统".
+        val label = stringResource(
+            when (lang) {
+                AppLanguage.SYSTEM -> R.string.language_follow_system
+                AppLanguage.EN     -> R.string.language_english
+                AppLanguage.ZH     -> R.string.language_chinese
             }
-        }
+        )
+        Text(label, style = HaloType.Body)
         Text(
             if (selected) "●" else "○",
             style = HaloType.Body.copy(

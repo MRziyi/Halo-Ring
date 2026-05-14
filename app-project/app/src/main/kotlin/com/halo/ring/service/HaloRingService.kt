@@ -192,6 +192,12 @@ class HaloRingService : Service() {
                 if (feedbackPrefs.gestureHintHud && action !is GlassAction.None) {
                     hud?.show(HudEvent.GestureRecognised(gesture, action))
                 }
+                // Audit-2026-05-13q: publish every recognised gesture into a SharedFlow so the
+                // interactive `GuidedTour` and the Test Arena (Settings) can listen for the
+                // user's input and react ("✓ you did SWIPE_UP"). tryEmit is non-blocking; if
+                // the 8-slot buffer is somehow saturated, we drop the gesture for coaching but
+                // it's still dispatched through the normal action path — no functional impact.
+                graph.recognisedGestureFlow.tryEmit(gesture)
             }
             // No HUD on screen-off wake — the display turning on is feedback enough, and the HUD
             // wouldn't be visible anyway until composition wakes back up.
@@ -211,7 +217,13 @@ class HaloRingService : Service() {
                 lifecycleOwner = hudHost!!,
                 viewModelStoreOwner = hudHost!!,
                 savedStateRegistryOwner = hudHost!!,
-            )
+            ).also {
+                // Tell the overlay whether this device is side-by-side binocular (RayNeo X3 Pro)
+                // so it can re-anchor `TopCenter` into the right-eye region instead of landing
+                // between the eyes. The flag is sourced from the flavor-specific DisplayAdapter
+                // (rokid: false, rayneo: true). Audit-2026-05-13s.
+                it.setBinocular(graph.displayAdapter.isBinocular)
+            }
         } catch (t: Throwable) {
             // Without SYSTEM_ALERT_WINDOW the overlay can't be created — degrade gracefully.
             Log.w(TAG, "HudOverlay unavailable: ${t.message}")
@@ -399,6 +411,9 @@ class HaloRingService : Service() {
                     com.halo.ring.ui.screens.HudPosition.BOTTOM_RIGHT -> HudOverlay.HudPosition.BottomRight
                 })
                 hud?.setDefaultDuration(p.hudDurationMs.toLong())
+                // Audit-2026-05-13s: focus-move click sound. Mirrors Rokid Sprite Launcher's
+                // per-focus-move beep. Same pref drives mode-switch sound + UI focus sound.
+                com.halo.ring.ui.InAppFocusController.clickSoundEnabled = p.clickSoundOnModeSwitch
             }
         }
         cleanup += { prefsJob.cancel() }

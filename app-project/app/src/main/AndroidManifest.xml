@@ -51,6 +51,7 @@
         android:theme="@style/Theme.HaloRing"
         android:allowBackup="false"
         android:supportsRtl="true"
+        android:localeConfig="@xml/locales_config"
         tools:ignore="MissingTvBanner"><!-- not deploying to Android TV; the LEANBACK_LAUNCHER intent is there to look right in Rokid Sprite Launcher's big-icon grid -->
 
         <activity

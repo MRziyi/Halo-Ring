@@ -11,8 +11,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.halo.ring.R
 import com.halo.ring.ui.FocusableRow
 import com.halo.ring.ui.HaloColors
 import com.halo.ring.ui.HaloType
@@ -51,43 +53,43 @@ fun AdvancedScreen(
 ) {
     Column(modifier = Modifier.fillMaxSize().padding(top = 4.dp)) {
         Text(
-            text = "Advanced",
+            text = stringResource(R.string.advanced_title),
             style = HaloType.Title,
             modifier = Modifier.padding(horizontal = ScreenPadding, vertical = 12.dp),
         )
 
         ToggleRow(
-            title = "Debug HUD",
-            description = "Show RSSI, BLE interval, RTT, drop count, active backend.",
+            title = stringResource(R.string.advanced_debug_hud),
+            description = stringResource(R.string.advanced_debug_hud_desc),
             on = prefs.debugHudEnabled,
             onToggle = onToggleDebugHud,
         )
         ToggleRow(
-            title = "Latency measurement",
-            description = "Log per-stage breakdown for the next 20 gestures to CSV (Doc/06 §4).",
+            title = stringResource(R.string.advanced_latency_measure),
+            description = stringResource(R.string.advanced_latency_desc),
             on = prefs.latencyMeasurementEnabled,
             onToggle = onToggleLatency,
         )
         ToggleRow(
-            title = "Spatial mode (phase 3)",
-            description = "Air gestures from the IMU. Burns battery — only enable if you need it.",
+            title = stringResource(R.string.advanced_spatial_mode),
+            description = stringResource(R.string.advanced_spatial_desc),
             on = prefs.spatialModeEnabled,
             onToggle = onToggleSpatial,
         )
 
         Spacer(Modifier.height(16.dp))
-        SectionHeader("Actions")
+        SectionHeader(stringResource(R.string.advanced_actions_header))
 
-        ActionRow("Open Accessibility settings", "Enable R08 Remote in the OS Settings list.") {
+        ActionRow(stringResource(R.string.advanced_a11y_title), stringResource(R.string.advanced_a11y_desc)) {
             onActionTriggered(AdvancedAction.DEEP_LINK_ACCESSIBILITY)
         }
-        ActionRow("Battery exemption", "Allow R08 Remote to run in Doze.") {
+        ActionRow(stringResource(R.string.advanced_battery_title), stringResource(R.string.advanced_battery_desc)) {
             onActionTriggered(AdvancedAction.DEEP_LINK_BATTERY_EXEMPTION)
         }
-        ActionRow("Re-run ADB bootstrap", "Push the agent dex + grant WRITE_SECURE_SETTINGS again.") {
+        ActionRow(stringResource(R.string.advanced_adb_title), stringResource(R.string.advanced_adb_desc)) {
             onActionTriggered(AdvancedAction.REOPEN_ADB_WIZARD)
         }
-        ActionRow("Export latency log (CSV)", "Available after you've used Latency measurement.") {
+        ActionRow(stringResource(R.string.advanced_export_title), stringResource(R.string.advanced_export_desc)) {
             onActionTriggered(AdvancedAction.EXPORT_LATENCY_LOG)
         }
     }
@@ -110,7 +112,7 @@ private fun ToggleRow(title: String, description: String, on: Boolean, onToggle:
             Text(description, style = HaloType.Caption.copy(fontSize = 11.sp))
         }
         Text(
-            text = if (on) "ON" else "OFF",
+            text = stringResource(if (on) R.string.common_on else R.string.common_off),
             style = HaloType.RowVal.copy(color = if (on) HaloColors.Accent else HaloColors.Mute),
         )
     }

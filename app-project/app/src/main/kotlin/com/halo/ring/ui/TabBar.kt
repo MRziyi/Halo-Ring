@@ -12,20 +12,26 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.halo.ring.R
 
-/** The three top-level tabs of the app. */
-enum class AppTab(val label: String) {
-    VITALS("VITALS"),
-    SETTINGS("SETTINGS"),
-    STATUS("STATUS"),
+/** The three top-level tabs of the app. Labels are looked up via stringResource at render
+ *  time so they live in the current locale (Doc/08 §2 i18n; audit-2026-05-13s). */
+enum class AppTab(val labelRes: Int) {
+    VITALS(R.string.tab_vitals),
+    SETTINGS(R.string.tab_settings),
+    STATUS(R.string.tab_status),
 }
 
 /**
@@ -48,15 +54,28 @@ fun TabBar(
         onDispose { /* leave flag as-is; next focus event will clear it */ }
     }
 
+    // One FocusRequester per tab so we can programmatically move Compose focus to the new
+    // active tab when the user cycles via NavPrev/NavNext from the ring (which calls
+    // tabController.prev()/next() in HaloRingApp → state.tab changes). Without this, Compose
+    // focus stayed on whichever tab Box originally had focus, so the haloFocus highlight + the
+    // selected-tab underline could drift apart. Audit-2026-05-13s.
+    val requesters = remember { AppTab.values().map { FocusRequester() } }
+    LaunchedEffect(selected, anyTabFocused) {
+        if (anyTabFocused) {
+            try { requesters[selected.ordinal].requestFocus() } catch (_: Exception) {}
+        }
+    }
+
     Column(modifier = modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            AppTab.values().forEach { tab ->
+            AppTab.values().forEachIndexed { i, tab ->
                 Box(
                     modifier = Modifier
                         .weight(1f)
+                        .focusRequester(requesters[i])
                         .onFocusChanged {
                             // Any tab focused ⇒ we're "on the strip".
                             if (it.isFocused) anyTabFocused = true
@@ -74,7 +93,7 @@ fun TabBar(
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
-                        text = tab.label,
+                        text = stringResource(tab.labelRes),
                         style = if (tab == selected) HaloType.TabActive else HaloType.Tab,
                     )
                 }

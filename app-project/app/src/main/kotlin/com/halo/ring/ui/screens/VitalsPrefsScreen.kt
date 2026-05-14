@@ -11,8 +11,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.halo.ring.R
 import com.halo.ring.ui.FocusableRow
 import com.halo.ring.ui.HaloColors
 import com.halo.ring.ui.HaloType
@@ -36,20 +38,20 @@ fun VitalsPrefsScreen(
 ) {
     Column(modifier = Modifier.fillMaxSize().padding(top = 4.dp)) {
         Text(
-            text = "Vitals",
+            text = stringResource(R.string.vitals_prefs_title),
             style = HaloType.Title,
             modifier = Modifier.padding(horizontal = ScreenPadding, vertical = 12.dp),
         )
 
         ToggleRow(
-            title = "Show heart-rate on HUD",
-            description = "Render the latest HR in the corner of the glasses' display.",
+            title = stringResource(R.string.vitals_prefs_show_hr_title),
+            description = stringResource(R.string.vitals_prefs_show_hr_desc),
             on = prefs.showHrOnHud,
             onToggle = { onUpdated(prefs.copy(showHrOnHud = !prefs.showHrOnHud)) },
         )
         ToggleRow(
-            title = "Activity overlay",
-            description = "Show steps / calories alongside HR. Costs no extra ring power.",
+            title = stringResource(R.string.vitals_prefs_activity_title),
+            description = stringResource(R.string.vitals_prefs_activity_desc),
             on = prefs.activityOverlay,
             onToggle = { onUpdated(prefs.copy(activityOverlay = !prefs.activityOverlay)) },
         )
@@ -61,9 +63,9 @@ fun VitalsPrefsScreen(
             ))
         }) {
             Column(Modifier.padding(end = 8.dp)) {
-                Text("Auto-snapshot interval", style = HaloType.Body)
+                Text(stringResource(R.string.vitals_prefs_auto_snapshot_title), style = HaloType.Body)
                 Text(
-                    "Periodic HR/SpO₂/stress sample. PPG LED only on during the read.",
+                    stringResource(R.string.vitals_prefs_auto_snapshot_desc),
                     style = HaloType.Caption.copy(fontSize = 11.sp),
                 )
             }
@@ -75,21 +77,21 @@ fun VitalsPrefsScreen(
         Divider()
 
         ToggleRow(
-            title = "CSV export",
-            description = "Append every reading to an internal CSV (export from Settings → Advanced).",
+            title = stringResource(R.string.vitals_prefs_csv_title),
+            description = stringResource(R.string.vitals_prefs_csv_desc),
             on = prefs.csvExportEnabled,
             onToggle = { onUpdated(prefs.copy(csvExportEnabled = !prefs.csvExportEnabled)) },
         )
         ToggleRow(
-            title = "Pause when off-finger",
-            description = "Skip auto-snapshots while the ring isn't worn. Saves ring battery.",
+            title = stringResource(R.string.vitals_prefs_pause_offfinger_title),
+            description = stringResource(R.string.vitals_prefs_pause_offfinger_desc),
             on = prefs.wearDetectionEnabled,
             onToggle = { onUpdated(prefs.copy(wearDetectionEnabled = !prefs.wearDetectionEnabled)) },
         )
 
         Spacer(Modifier.height(12.dp))
         Text(
-            "Continuous HR is intentionally not supported — the PPG LED would halve ring battery.",
+            stringResource(R.string.vitals_prefs_footer),
             style = HaloType.Caption,
             modifier = Modifier.padding(horizontal = ScreenPadding),
         )
@@ -104,7 +106,7 @@ private fun ToggleRow(title: String, description: String, on: Boolean, onToggle:
             Text(description, style = HaloType.Caption.copy(fontSize = 11.sp))
         }
         Text(
-            text = if (on) "ON" else "OFF",
+            text = stringResource(if (on) R.string.common_on else R.string.common_off),
             style = HaloType.RowVal.copy(color = if (on) HaloColors.Accent else HaloColors.Mute),
         )
     }
@@ -122,9 +124,10 @@ private fun cycleNextInterval(currentMin: Int): Int {
     else AUTO_SNAPSHOT_INTERVALS[(i + 1) % AUTO_SNAPSHOT_INTERVALS.size]
 }
 
+@Composable
 private fun formatInterval(minutes: Int): String = when {
-    minutes == 0     -> "Manual only"
-    minutes < 60     -> "${minutes} min"
-    minutes % 60 == 0 -> "${minutes / 60} h"
-    else             -> "${minutes / 60} h ${minutes % 60} min"
+    minutes == 0     -> stringResource(R.string.vitals_prefs_interval_manual)
+    minutes < 60     -> stringResource(R.string.vitals_prefs_interval_min, minutes)
+    minutes % 60 == 0 -> stringResource(R.string.vitals_prefs_interval_hour, minutes / 60)
+    else             -> stringResource(R.string.vitals_prefs_interval_hour_min, minutes / 60, minutes % 60)
 }

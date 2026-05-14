@@ -18,10 +18,13 @@ import com.halo.ring.core.device.DisplayAdapter
 import com.halo.ring.core.device.FeatureIntents
 import com.halo.ring.core.device.GlassActionMapper
 import com.halo.ring.core.device.WearStateProvider
+import com.halo.ring.core.gesture.Gesture
 import com.halo.ring.core.gesture.SystemGestures
 import com.halo.ring.core.inject.ExecutorBackend
 import com.halo.ring.core.perf.LatencyLogger
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 
 /**
  * Hand-rolled DI graph (avoid Hilt/Dagger overhead for a small app). Built once in
@@ -71,7 +74,34 @@ class AppGraph private constructor(
      *  The foreground service records into this when [advancedPrefsFlow.latencyMeasurement] is on;
      *  the Advanced screen's "Export latency log" action pulls [LatencyLogger.toCsv]. */
     val latencyLogger: LatencyLogger,
+    /**
+     * Live stream of recognised gestures, published by the foreground service's
+     * `InteractionRouter.onGestureRecognized` callback. Consumers (the interactive
+     * `GuidedTour` + the `TestArenaScreen`) collect from it to detect what the user just did
+     * — replaces the static "tap NEXT to advance" pattern with real-input coaching.
+     *
+     * Implemented as a `SharedFlow` with a small buffer so a slow consumer can't backpressure
+     * the gesture pipeline. Replay is 0 — we don't want a stale gesture to fire a tour step
+     * the instant the user opens it.
+     */
+    val recognisedGestureFlow: MutableSharedFlow<Gesture>,
 ) {
+    /**
+     * Best-effort detection of which input source the wearer is using right now. Drives the
+     * interactive tour + Test Arena's coaching content (ring-specific gesture names vs temple
+     * touchpad terminology).
+     *
+     * - RING: ring is connected via BLE. Primary input.
+     * - TEMPLE: no ring but we're on a flavor with a temple touchpad (RayNeo X3 Pro).
+     * - NONE: neither — running on a generic Android device (dev rig / phone), no live input.
+     *   Tour falls back to informational slides.
+     */
+    fun currentInputSource(): InputSource = when {
+        ringInfoFlow.value.connected            -> InputSource.RING
+        deviceProfile == DeviceProfile.RAYNEO_X3PRO -> InputSource.TEMPLE
+        else                                    -> InputSource.NONE
+    }
+
     companion object {
         fun create(context: Context): AppGraph {
             val detected = detectDeviceProfile()
@@ -106,6 +136,7 @@ class AppGraph private constructor(
                 vitalsPrefsFlow = MutableStateFlow(com.halo.ring.ui.screens.VitalsPrefs()),
                 vitalsSnapshotFlow = MutableStateFlow(com.halo.ring.ui.screens.VitalsSnapshot()),
                 latencyLogger = LatencyLogger(capacity = 200),
+                recognisedGestureFlow = MutableSharedFlow(extraBufferCapacity = 8),
             )
         }
 
@@ -125,6 +156,12 @@ class AppGraph private constructor(
         }
     }
 }
+
+/**
+ * Which input source the wearer is actively using. Drives interactive-tour / Test-Arena
+ * coaching content (ring-vocabulary vs temple-vocabulary).
+ */
+enum class InputSource { RING, TEMPLE, NONE }
 
 /** Each flavor's `DeviceFlavorBindings.kt` exposes this exact shape. */
 data class Bindings(

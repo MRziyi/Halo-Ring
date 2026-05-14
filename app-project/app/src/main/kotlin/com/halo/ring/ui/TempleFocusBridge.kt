@@ -48,23 +48,40 @@ interface TempleFocusBridge {
     fun detach(activity: Activity)
 
     /**
-     * Translate a Mercury `TempleAction` (passed via reflection so :main doesn't depend on Mercury
-     * AAR) into a [GlassAction] and dispatch via [InAppFocusController]. Returns true if the action
-     * was routed in-app (caller suppresses default temple-touchpad system handling), false if it
+     * Forward a raw [android.view.MotionEvent] from the Activity's `dispatchTouchEvent` into the
+     * bridge so it can be decoded. The rayneo flavor feeds events into Mercury SDK's
+     * `TouchDispatcher`, which then calls back via its `CommonTouchCallback` and from there into
+     * [feedTempleAction]. The rokid flavor returns false (no decoding needed — temple is mapped
+     * to DPAD keys at the system level).
+     *
+     * Return value: `true` if the event was consumed by the bridge and should NOT propagate to
+     * the rest of the View tree, `false` to let the event continue normally. The MainActivity
+     * always lets the event through even when we consume it — Mercury's contract is "we see the
+     * event AND the View tree sees it"; suppression is decided by [feedTempleAction]'s return.
+     */
+    fun forwardMotionEvent(ev: android.view.MotionEvent): Boolean = false
+
+    /**
+     * Translate a Mercury `TempleAction` (identified by its class simpleName) into a
+     * [GlassAction] and dispatch via [InAppFocusController]. Returns true if the action was
+     * routed in-app (caller suppresses default temple-touchpad system handling), false if it
      * should fall through to whatever Mercury / the system would do by default.
      *
-     * Templ action class name + simpleName mapping:
+     * Templ action class name → action mapping:
      *
-     *  - `SlideForward`   → `GlassAction.NavNext`
-     *  - `SlideBackward`  → `GlassAction.NavPrev`
-     *  - `SlideUpwards`   → `GlassAction.NavPrev` (vertical slide — same direction as SWIPE_UP)
+     *  - `SlideForward`   → `GlassAction.NavNext`   ← intent = "next item"
+     *  - `SlideBackward`  → `GlassAction.NavPrev`   ← intent = "prev item"
+     *  - `SlideUpwards`   → `GlassAction.NavPrev`   (vertical slide — same direction as SWIPE_UP)
      *  - `SlideDownwards` → `GlassAction.NavNext`
      *  - `Click`          → `GlassAction.Confirm`
      *  - `DoubleClick`    → `GlassAction.Back`
-     *  - `LongClick`      → no-op (let Mercury handle long-press menus)
+     *  - `LongClick`      → no-op (let Mercury surface its QuickControl center)
      *  - `TripleClick`    → `GlassAction.ProfileCycle` (mirrors ring system-gesture)
      *
-     * (Doc/03 §2.2 — match to ring system-gesture defaults so users have one model.)
+     * **DO NOT rename SlideForward/SlideBackward to "Left/Right".** RayNeo's "Natural Mode"
+     * system setting flips Slide direction physically; our mapping is keyed on *intent*
+     * (next/prev), not direction, so it stays correct under both modes. (Audit-2026-05-13s,
+     * cross-ref MercurySDK API ref §5.8.)
      */
     fun feedTempleAction(simpleName: String): Boolean {
         val action = com.halo.ring.core.device.mapTempleActionToGlassAction(simpleName) ?: return false

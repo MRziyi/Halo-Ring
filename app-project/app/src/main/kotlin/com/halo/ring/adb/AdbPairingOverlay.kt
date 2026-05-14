@@ -42,9 +42,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.halo.ring.R
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
@@ -219,12 +221,10 @@ private fun PairingPanel(
             // text field + status text + NumPad all stack up.
             .verticalScroll(androidx.compose.foundation.rememberScrollState()),
     ) {
-        Text("Pairing code", style = HaloType.Title)
+        Text(stringResource(R.string.adb_pair_title), style = HaloType.Title)
         Spacer(Modifier.height(6.dp))
         Text(
-            "Type the 6-digit code from the dialog above. " +
-                "If you have a keyboard, use the field; otherwise use the number grid below " +
-                "(ring: swipe to navigate, tap to commit).",
+            stringResource(R.string.adb_pair_body),
             style = HaloType.Caption,
         )
         Spacer(Modifier.height(10.dp))
@@ -252,12 +252,12 @@ private fun PairingPanel(
         }
         Spacer(Modifier.height(12.dp))
         Row(modifier = Modifier.fillMaxWidth()) {
-            TextButton(onClick = onCancel, enabled = !isRunning) { Text("CANCEL") }
+            TextButton(onClick = onCancel, enabled = !isRunning) { Text(stringResource(R.string.adb_pair_cancel)) }
             Spacer(Modifier.width(8.dp))
             TextButton(
                 onClick = { onSubmit(code) },
                 enabled = code.length == 6 && !isRunning,
-            ) { Text("PAIR") }
+            ) { Text(stringResource(R.string.adb_pair_submit)) }
         }
     }
 }

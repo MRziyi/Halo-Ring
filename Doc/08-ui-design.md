@@ -234,12 +234,12 @@ the Mercury AAR. Verification deferred to [11 §B8](11-verification-checklists.m
 
 | Concern | Approach |
 |---|---|
-| **HUD overlay** | A `WindowManager` `TYPE_APPLICATION_OVERLAY` view hosted by `HaloRingService` so it appears above any app, not just ours. Compose composable internally. Auto-hide via `delay()` in a coroutine. |
+| **HUD overlay** | A `WindowManager` `TYPE_APPLICATION_OVERLAY` view hosted by `HaloRingService` so it appears above any app, not just ours. Compose composable internally. Auto-hide via `delay()` in a coroutine. On **binocular side-by-side displays (RayNeo X3 Pro, 1280×480 logical)** `CENTER_HORIZONTAL` would land at x≈640 — between the eyes, visible only at the nose. We re-anchor `TopCenter`/`Center` to the right-eye region via `Gravity.END` + an x-inset of ~160 px when `DisplayAdapter.isBinocular = true`. Wiring: `HudOverlay.setBinocular(...)` called from `HaloRingService` reading `graph.displayAdapter.isBinocular`. (Audit-pass 2026-05-13s.) |
 | **System bar / anti-light-leakage** | We respect the system flag (`Settings.System.someBrightnessMode`); never override. Apps like Rokid's Translate use it; our HUD should too |
 | **Tabs** | A `TabRow`-equivalent custom composable (Material `TabRow` has unwanted padding). 3 fixed tabs; selected state simply changes the underline + bold. |
 | **Focus indicator** | A single shared `Modifier.r08Focus()` extension that applies 2 px left border + 7% green tint. One implementation; every focusable item uses it |
 | **No animations** | Just appear / disappear. Animation has cost (CPU + lit pixels) and AR users don't expect mobile-app fluidity |
-| **Sound** | `ToneGenerator(STREAM_NOTIFICATION).startTone(TONE_PROP_BEEP, 30)` for mode-switch click. Same for HUD-shown events |
+| **Sound** | `ToneGenerator(STREAM_NOTIFICATION).startTone(TONE_PROP_BEEP, 30)` on every accepted nav move (`NavPrev/NavNext/NavLeft/NavRight`), tab-cycle, and Confirm-into-content. Mirrors Rokid Sprite Launcher's per-focus-move beep (`sprite-launcher.md` §"Activity Hierarchy"). Gated by `FeedbackPrefs.clickSoundOnModeSwitch` (UI label: "UI click sound" / "界面点击音"). Allocated lazily in `InAppFocusController`, released in `detach()`. (Audit-pass 2026-05-13s.) |
 | **Ring LED feedback** | Via `R08BleClient.blinkLed()` (writes `0x10` or pattern via repeated commands). See [05](05-interaction-design.md) §4.3 for the patterns |
 | **No images / icons bundled** | Use unicode glyphs (●, ›, ⤓, ⌖) and CSS-style line drawing in Compose. Saves APK size + keeps consistent line weight |
 

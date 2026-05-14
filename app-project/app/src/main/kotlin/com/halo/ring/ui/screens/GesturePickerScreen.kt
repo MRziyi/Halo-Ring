@@ -13,13 +13,15 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.halo.ring.R
 import com.halo.ring.ui.FocusableRow
 import com.halo.ring.ui.HaloColors
 import com.halo.ring.ui.HaloType
 import com.halo.ring.ui.ScreenPadding
 import com.halo.ring.ui.SystemGestureSlot
-import com.halo.ring.ui.hud.friendly
+import com.halo.ring.ui.hud.gestureFriendlyText
 import com.halo.ring.core.gesture.Gesture
 import com.halo.ring.core.gesture.SystemGestures
 
@@ -58,7 +60,7 @@ fun GesturePickerScreen(
             val conflictSlot = currentGestures.conflict(g, exclude = coreSlot)
             FocusableRow(onClick = { onGestureSelected(g) }) {
                 Text(
-                    text = (if (selected) "● " else "") + g.friendly(),
+                    text = (if (selected) "● " else "") + gestureFriendlyText(g),
                     style = HaloType.Body.copy(
                         color = if (selected) HaloColors.Accent else HaloColors.Fg,
                     ),
@@ -67,12 +69,12 @@ fun GesturePickerScreen(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("⚠ ", style = HaloType.Caption.copy(color = HaloColors.Warn))
                         Text(
-                            text = "in use by ${conflictSlot.uiTitle()}",
+                            text = stringResource(R.string.gesture_picker_in_use_by, stringResource(conflictSlot.uiTitleRes())),
                             style = HaloType.Caption.copy(color = HaloColors.Warn),
                         )
                     }
                 } else if (selected) {
-                    Text("(current)", style = HaloType.Caption.copy(color = HaloColors.Mute))
+                    Text(stringResource(R.string.profiles_active_badge), style = HaloType.Caption.copy(color = HaloColors.Mute))
                 }
             }
             Box(Modifier.fillMaxWidth().height(1.dp).background(HaloColors.Line))
@@ -81,7 +83,7 @@ fun GesturePickerScreen(
         // Disable / clear binding row
         FocusableRow(onClick = { onGestureSelected(null) }) {
             Text(
-                "(disable this slot)",
+                stringResource(R.string.gesture_picker_disable_slot),
                 style = HaloType.Body.copy(color = HaloColors.Mute),
             )
         }
@@ -97,10 +99,10 @@ private fun SystemGestureSlot.toCore(): SystemGestures.Slot = when (this) {
     SystemGestureSlot.FORCE_RECONNECT -> SystemGestures.Slot.FORCE_RECONNECT
 }
 
-private fun SystemGestures.Slot.uiTitle(): String = when (this) {
-    SystemGestures.Slot.WAKE            -> "Wake"
-    SystemGestures.Slot.SLEEP           -> "Sleep"
-    SystemGestures.Slot.PROFILE_CYCLE   -> "Cycle profile"
-    SystemGestures.Slot.PEEK_HUD        -> "Peek HUD"
-    SystemGestures.Slot.FORCE_RECONNECT -> "Force reconnect"
+private fun SystemGestures.Slot.uiTitleRes(): Int = when (this) {
+    SystemGestures.Slot.WAKE            -> R.string.system_gestures_slot_wake
+    SystemGestures.Slot.SLEEP           -> R.string.system_gestures_slot_sleep
+    SystemGestures.Slot.PROFILE_CYCLE   -> R.string.system_gestures_slot_cycle
+    SystemGestures.Slot.PEEK_HUD        -> R.string.system_gestures_slot_peek
+    SystemGestures.Slot.FORCE_RECONNECT -> R.string.system_gestures_slot_reconnect
 }

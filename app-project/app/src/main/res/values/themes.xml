@@ -1,7 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Halo Ring app theme — pure black canvas, no Material chrome, edge-to-edge. -->
-    <style name="Theme.HaloRing" parent="android:Theme.Material.NoActionBar">
+    <!-- Halo Ring app theme — pure black canvas, no Material chrome, edge-to-edge.
+         Audit-2026-05-13s: parent changed from `android:Theme.Material.NoActionBar` to
+         `Theme.AppCompat.DayNight.NoActionBar` because MainActivity is now AppCompatActivity
+         (needed for per-app locale switching). AppCompat throws at runtime if its Activity
+         isn't on an AppCompat-descended theme. The DayNight variant is fine for us — we
+         hard-disable the day/night switch at the Compose layer by always using `HaloColors.Bg`
+         (#000000) and `HaloRingTheme`'s `darkColorScheme`, so DayNight's auto-toggle has no
+         visible effect. -->
+    <style name="Theme.HaloRing" parent="Theme.AppCompat.DayNight.NoActionBar">
         <item name="android:windowBackground">@color/halo_black</item>
         <item name="android:colorBackground">@color/halo_black</item>
         <item name="android:statusBarColor">@android:color/transparent</item>

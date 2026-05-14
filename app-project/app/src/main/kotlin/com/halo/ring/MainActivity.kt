@@ -10,9 +10,9 @@ import android.os.PowerManager
 import android.provider.Settings
 import android.util.Log
 import android.view.KeyEvent
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -44,7 +44,13 @@ import java.util.concurrent.atomic.AtomicBoolean
  * The app's main Activity. Hosts the Compose [HaloRingApp] root. Also exposes a public foreground flag
  * so the foreground service knows when to short-circuit GlassActions through [InAppFocusController].
  */
-class MainActivity : ComponentActivity() {
+// Audit-2026-05-13s: switched ComponentActivity → AppCompatActivity. AppCompat-based per-app
+// locale (`AppCompatDelegate.setApplicationLocales`) needs the Activity to be AppCompat-aware
+// to trigger recreate() on locale change for pre-Android-13. On Android 13+, the system-level
+// LocaleManager handles config change → Activity recreation when `android:localeConfig` is
+// declared. Either path now works. AppCompatActivity extends ComponentActivity, so activity-
+// compose's setContent() and the existing setup are unaffected.
+class MainActivity : AppCompatActivity() {
 
     private lateinit var firstRunStore: FirstRunPrefsStore
     private lateinit var adb: AdbBootstrap
@@ -186,6 +192,14 @@ class MainActivity : ComponentActivity() {
                         tourRequested = false
                     },
                     onRequestTour = { tourRequested = true },
+                    // Audit-2026-05-13s: when DOUBLE_TAP / Back fires at the app's root (no
+                    // sub-screen to pop), drop the Activity to the back of the stack — which on
+                    // the glasses lands the wearer back on the system launcher / whatever they
+                    // came from. We don't `finish()` because that would kill the foreground
+                    // service's tied Activity context unnecessarily; `moveTaskToBack(true)`
+                    // is the equivalent of pressing Home — process keeps running, gestures stay
+                    // live for screen-wake etc.
+                    onExitToSystem = { moveTaskToBack(true) },
                     // A-4: onMeasureNow / onFindRing / onShutdownRing / onForgetRing removed —
                     // VitalsScreen + RingScreen consume LocalAppGraph directly. No callback
                     // threading, same semantics.
@@ -496,6 +510,23 @@ class MainActivity : ComponentActivity() {
         super.onPause()
         isInForeground.set(false)
         com.halo.ring.ui.TempleFocusBridgeHolder.current.detach(this)
+    }
+
+    /**
+     * Forward every touch event to the temple-focus bridge before letting the View tree see it.
+     * On the rayneo flavor this feeds Mercury SDK's `TouchDispatcher`, which decodes glasses
+     * temple-touchpad gestures into `TempleAction` and routes them through [InAppFocusController].
+     * On rokid (and the off-glass debug builds) the bridge is a no-op and this hook is free.
+     * Audit-2026-05-13s — see [com.halo.ring.ui.TempleFocusBridge].
+     */
+    override fun dispatchTouchEvent(ev: android.view.MotionEvent?): Boolean {
+        if (ev != null) {
+            // Result ignored: the bridge currently always returns false so on-screen widgets
+            // (Compose) also see the raw event, matching Mercury's "we see it AND the View tree
+            // sees it" contract.
+            com.halo.ring.ui.TempleFocusBridgeHolder.current.forwardMotionEvent(ev)
+        }
+        return super.dispatchTouchEvent(ev)
     }
 
     override fun onDestroy() {

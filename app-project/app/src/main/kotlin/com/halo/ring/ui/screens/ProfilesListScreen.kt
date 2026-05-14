@@ -17,12 +17,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.halo.ring.R
 import com.halo.ring.ui.FocusableRow
 import com.halo.ring.ui.HaloColors
 import com.halo.ring.ui.HaloType
 import com.halo.ring.ui.ScreenPadding
+import com.halo.ring.ui.hud.profileFriendlyText
 import com.halo.ring.core.action.KeyMapProfile
 
 /**
@@ -46,10 +49,10 @@ fun ProfilesListScreen(
                             .background(if (profile.id == activeProfileId) HaloColors.Accent else HaloColors.Line),
                     )
                     Spacer(Modifier.width(12.dp))
-                    Text(profile.name, style = HaloType.Body)
+                    Text(profileFriendlyText(profile), style = HaloType.Body)
                 }
                 Text(
-                    text = "${profile.map.size} bindings ›",
+                    text = stringResource(R.string.profiles_bindings_count, profile.map.size),
                     style = HaloType.Body.copy(color = HaloColors.Mute, fontSize = 13.sp),
                 )
             }
@@ -57,7 +60,7 @@ fun ProfilesListScreen(
         }
         Spacer(Modifier.height(12.dp))
         Text(
-            "Profiles auto-switch by foreground app (when Accessibility is enabled). Triple-tap the ring to manually cycle.",
+            stringResource(R.string.profiles_list_footer),
             style = HaloType.Caption,
             modifier = Modifier.padding(horizontal = ScreenPadding),
         )

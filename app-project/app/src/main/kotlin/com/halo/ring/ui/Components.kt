@@ -70,7 +70,7 @@ fun StatusBar(
             }
         }
         if (currentMode != null) {
-            Text(currentMode, style = HaloType.Mono.copy(color = HaloColors.Mute))
+            Text(com.halo.ring.ui.hud.profileFriendlyTextByName(currentMode), style = HaloType.Mono.copy(color = HaloColors.Mute))
         }
     }
 }

@@ -15,7 +15,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.halo.ring.R
 import com.halo.ring.ui.Cta
 import com.halo.ring.ui.ListRow
 import com.halo.ring.ui.LocalAppGraph
@@ -76,35 +78,35 @@ fun VitalsScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             MetricCell(
-                value = state.heartRateBpm?.toString() ?: "—",
-                unit = "bpm",
-                label = "Heart rate",
+                value = state.heartRateBpm?.toString() ?: stringResource(R.string.common_dash),
+                unit = stringResource(R.string.vitals_unit_bpm),
+                label = stringResource(R.string.vitals_heart_rate_label),
                 valueColor = if (state.heartRateBpm != null) HaloColors.Accent else HaloColors.Mute,
                 modifier = Modifier.weight(1f),
             )
             MetricCell(
-                value = state.spo2Pct?.toString() ?: "—",
-                unit = "%",
-                label = "SpO₂",
+                value = state.spo2Pct?.toString() ?: stringResource(R.string.common_dash),
+                unit = stringResource(R.string.vitals_unit_percent),
+                label = stringResource(R.string.vitals_spo2_label),
                 modifier = Modifier.weight(1f),
             )
             MetricCell(
-                value = state.stressIndex?.toString() ?: "—",
-                label = "Stress",
+                value = state.stressIndex?.toString() ?: stringResource(R.string.common_dash),
+                label = stringResource(R.string.vitals_stress_label),
                 modifier = Modifier.weight(1f),
             )
         }
 
         Spacer(Modifier.height(6.dp))
 
+        val mins = state.measuredMinutesAgo
         Text(
             modifier = Modifier.padding(horizontal = ScreenPadding),
             text = when {
-                state.measuring -> "measuring…"
-                state.measuredMinutesAgo == null -> "no recent reading"
-                state.measuredMinutesAgo == 0 -> "measured just now"
-                state.measuredMinutesAgo < 60 -> "measured ${state.measuredMinutesAgo} min ago"
-                else -> "measured ${state.measuredMinutesAgo / 60} h ago"
+                state.measuring -> stringResource(R.string.vitals_measuring).lowercase()
+                mins == null   -> stringResource(R.string.common_never)
+                mins == 0      -> stringResource(R.string.vitals_measured_just_now)
+                else           -> stringResource(R.string.vitals_measured_min_ago, mins)
             },
             style = HaloType.Caption,
         )
@@ -112,7 +114,7 @@ fun VitalsScreen(
         Spacer(Modifier.height(18.dp))
 
         Cta(
-            text = if (state.measuring) "MEASURING…" else "MEASURE NOW",
+            text = stringResource(if (state.measuring) R.string.vitals_measuring else R.string.vitals_measure_now),
             modifier = Modifier.padding(horizontal = ScreenPadding),
             focused = focusedIndex == 0,
             onClick = { graph.bleClient.requestVitalsSnapshot() },
@@ -123,18 +125,18 @@ fun VitalsScreen(
         // Today's passive activity (zero extra cost — ring counts these continuously)
         Column {
             ListRow(
-                key = "Steps today",
+                key = stringResource(R.string.vitals_steps_today),
                 value = "%,d".format(state.stepsToday),
                 focused = focusedIndex == 1,
             )
             ListRow(
-                key = "Calories",
-                value = "${"%.0f".format(state.caloriesToday)} kcal",
+                key = stringResource(R.string.vitals_calories),
+                value = stringResource(R.string.vitals_calories_unit, "%.0f".format(state.caloriesToday)),
                 focused = focusedIndex == 2,
             )
             ListRow(
-                key = "Distance",
-                value = "${"%.1f".format(state.distanceKmToday)} km",
+                key = stringResource(R.string.vitals_distance),
+                value = stringResource(R.string.vitals_distance_unit, "%.1f".format(state.distanceKmToday)),
                 focused = focusedIndex == 3,
             )
         }

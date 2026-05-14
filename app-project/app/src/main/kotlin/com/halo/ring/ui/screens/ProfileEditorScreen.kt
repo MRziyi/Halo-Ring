@@ -11,13 +11,17 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.halo.ring.R
 import com.halo.ring.ui.FocusableRow
 import com.halo.ring.ui.HaloColors
 import com.halo.ring.ui.HaloType
 import com.halo.ring.ui.ScreenPadding
 import com.halo.ring.ui.SettingsCatalog
-import com.halo.ring.ui.hud.friendly
+import com.halo.ring.ui.hud.actionFriendlyText
+import com.halo.ring.ui.hud.gestureFriendlyText
+import com.halo.ring.ui.hud.profileFriendlyText
 import com.halo.ring.core.action.GlassAction
 import com.halo.ring.core.action.KeyMapProfile
 import com.halo.ring.core.gesture.Gesture
@@ -38,17 +42,18 @@ fun ProfileEditorScreen(
 ) {
     Column(modifier = Modifier.fillMaxSize().padding(top = 4.dp)) {
         Text(
-            text = profile.name,
+            text = profileFriendlyText(profile),
             style = HaloType.Title,
             modifier = Modifier.padding(horizontal = ScreenPadding, vertical = 12.dp),
         )
+        val systemValueText = stringResource(R.string.profile_editor_system_value)
         Gesture.values().forEach { gesture ->
             val isSystem = gesture in SYSTEM_SLOTS
             val action = profile.actionFor(gesture)
-            val valueText = if (isSystem) "(system) ›"
-                            else SettingsCatalog.entryFor(action)?.friendly ?: action.friendly()
+            val valueText = if (isSystem) systemValueText
+                            else SettingsCatalog.entryFor(action)?.friendly ?: actionFriendlyText(action)
             FocusableRow(onClick = { if (!isSystem) onGestureTapped(gesture) }) {
-                Text(gesture.friendly(), style = HaloType.Body)
+                Text(gestureFriendlyText(gesture), style = HaloType.Body)
                 Text(
                     text = valueText,
                     style = HaloType.RowVal.copy(
@@ -64,7 +69,7 @@ fun ProfileEditorScreen(
         }
         Spacer(Modifier.height(12.dp))
         Text(
-            "System gestures are intercepted before this profile. Edit them in Settings → System Gestures.",
+            stringResource(R.string.profile_editor_footer),
             style = HaloType.Caption,
             modifier = Modifier.padding(horizontal = ScreenPadding),
         )

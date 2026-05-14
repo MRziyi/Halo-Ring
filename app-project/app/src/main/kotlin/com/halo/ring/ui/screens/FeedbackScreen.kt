@@ -9,12 +9,15 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.annotation.StringRes
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.halo.ring.R
 import com.halo.ring.ui.FocusableRow
 import com.halo.ring.ui.HaloColors
 import com.halo.ring.ui.HaloType
@@ -32,8 +35,10 @@ data class FeedbackPrefs(
     val autoHintAfterPairing: Boolean = true,
 )
 
-enum class HudPosition(val label: String) {
-    TOP_RIGHT("Top-right"), TOP_CENTER("Top-centre"), BOTTOM_RIGHT("Bottom-right"),
+enum class HudPosition(@StringRes val labelRes: Int) {
+    TOP_RIGHT(R.string.feedback_hud_pos_top_right),
+    TOP_CENTER(R.string.feedback_hud_pos_top_center),
+    BOTTOM_RIGHT(R.string.feedback_hud_pos_bottom_right),
 }
 
 /**
@@ -56,8 +61,8 @@ fun FeedbackScreen(
             onClick = { onToggle(FeedbackPrefField.GESTURE_HINT) },
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text("Show recognised gesture (HUD)", style = HaloType.Body)
-                Text("800 ms after each gesture", style = HaloType.Caption.copy(
+                Text(stringResource(R.string.feedback_gesture_hint), style = HaloType.Body)
+                Text(stringResource(R.string.feedback_gesture_hint_subtitle), style = HaloType.Caption.copy(
                     fontSize = 12.sp,
                 ))
             }
@@ -69,7 +74,7 @@ fun FeedbackScreen(
             focused = focusedIndex == 1,
             onClick = { onToggle(FeedbackPrefField.CLICK_SOUND) },
         ) {
-            Text("Click sound on mode switch", style = HaloType.Body)
+            Text(stringResource(R.string.feedback_click_sound), style = HaloType.Body)
             OnOff(prefs.clickSoundOnModeSwitch)
         }
         Divider()
@@ -78,7 +83,7 @@ fun FeedbackScreen(
             focused = focusedIndex == 2,
             onClick = { onToggle(FeedbackPrefField.RING_LED) },
         ) {
-            Text("Ring LED feedback", style = HaloType.Body)
+            Text(stringResource(R.string.feedback_ring_led), style = HaloType.Body)
             OnOff(prefs.ringLedFeedback)
         }
         Divider()
@@ -87,8 +92,8 @@ fun FeedbackScreen(
             focused = focusedIndex == 3,
             onClick = onCyclePosition,
         ) {
-            Text("HUD position", style = HaloType.Body)
-            Text(prefs.hudPosition.label, style = HaloType.RowVal)
+            Text(stringResource(R.string.feedback_hud_position), style = HaloType.Body)
+            Text(stringResource(prefs.hudPosition.labelRes), style = HaloType.RowVal)
         }
         Divider()
 
@@ -96,7 +101,7 @@ fun FeedbackScreen(
             focused = focusedIndex == 4,
             onClick = onCycleDuration,
         ) {
-            Text("HUD duration", style = HaloType.Body)
+            Text(stringResource(R.string.feedback_hud_duration), style = HaloType.Body)
             Text(formatDuration(prefs.hudDurationMs), style = HaloType.RowVal)
         }
         Divider()
@@ -106,8 +111,8 @@ fun FeedbackScreen(
             onClick = { onToggle(FeedbackPrefField.AUTO_HINT_AFTER_PAIRING) },
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text("Auto-enable hints for 5 min after pairing", style = HaloType.Body)
-                Text("teaches new wearers the gesture set", style = HaloType.Caption.copy(
+                Text(stringResource(R.string.feedback_auto_hint), style = HaloType.Body)
+                Text(stringResource(R.string.feedback_auto_hint_subtitle), style = HaloType.Caption.copy(
                     fontSize = 12.sp,
                 ))
             }
@@ -117,7 +122,7 @@ fun FeedbackScreen(
 
         Spacer(Modifier.height(12.dp))
         Text(
-            "Hints fire only while the screen is on.",
+            stringResource(R.string.feedback_footer),
             style = HaloType.Caption,
             modifier = Modifier.padding(horizontal = ScreenPadding),
         )
@@ -131,7 +136,7 @@ enum class FeedbackPrefField {
 @Composable
 private fun OnOff(on: Boolean) {
     Text(
-        text = if (on) "ON" else "OFF",
+        text = stringResource(if (on) R.string.common_on else R.string.common_off),
         style = HaloType.RowVal.copy(
             color = if (on) HaloColors.Accent else HaloColors.Mute,
         ),
@@ -143,7 +148,8 @@ private fun Divider() {
     Box(Modifier.fillMaxWidth().height(1.dp).background(HaloColors.Line))
 }
 
+@Composable
 private fun formatDuration(ms: Int): String = when {
-    ms >= 1000 -> "${ms / 1000} s"
-    else -> "${ms} ms"
+    ms >= 1000 -> stringResource(R.string.feedback_duration_seconds, ms / 1000)
+    else -> stringResource(R.string.feedback_duration_ms, ms)
 }

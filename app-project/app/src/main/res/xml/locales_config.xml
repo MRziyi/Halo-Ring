@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Per-app language configuration (Android 13+ android:localeConfig). Declares the locales the
+  app supports so the system's per-app language picker (Settings → System → Languages → App
+  language) lists Halo Ring with the right options. Also lets AppCompat 1.6+'s
+  setApplicationLocales API trigger a system-managed locale switch instead of having to
+  manually recreate the Activity ourselves.
+
+  Audit-2026-05-13s: added after the user reported Settings → Language took no visible effect.
+  Without this file the system doesn't know we have zh translations, so setApplicationLocales
+  was effectively a no-op for zh.
+-->
+<locale-config xmlns:android="http://schemas.android.com/apk/res/android">
+    <locale android:name="en"/>
+    <locale android:name="zh-CN"/>
+    <locale android:name="zh"/>
+</locale-config>

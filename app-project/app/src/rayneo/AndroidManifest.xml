@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- Flavor-specific overlay applied to the rayneo build only.
+         The merger combines this with src/main/AndroidManifest.xml. -->
+    <application>
+
+        <!-- Required for RayNeo X3 Pro launcher discovery: without this meta-data the app
+             will NOT appear in the glasses home grid. Source: MercurySDK API ref §2.1
+             (refs/sdks/rayneo/MercuryAndroidSample_v0.2.6/docs/MercurySDK_API_Reference_CN.md). -->
+        <meta-data
+            android:name="com.rayneo.mercury.app"
+            android:value="true" />
+
+        <!-- RayNeo launcher activities must be locked to landscape. The Rokid build doesn't
+             need this (the panel is 480×480 square) so we keep the lock flavor-specific. -->
+        <activity
+            android:name=".MainActivity"
+            android:screenOrientation="landscape"
+            tools:replace="android:screenOrientation" />
+
+    </application>
+</manifest>

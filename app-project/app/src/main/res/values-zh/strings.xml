@@ -1,15 +1,459 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- 中文系统下显示的名称与文案。简体 + 繁体共用此 values-zh；如果以后要分繁简，
-         再拆 values-zh-rCN / values-zh-rTW。 -->
+    <!-- ════════════════════════════════════════════════════════════════════════
+         中文翻译。简体 + 繁体共用此 values-zh；如要分繁简再拆 values-zh-rCN / values-zh-rTW。
+         键名顺序对齐 values/strings.xml。
+         ════════════════════════════════════════════════════════════════════════ -->
+
+    <!-- 品牌 -->
     <string name="app_name">环意</string>
     <string name="app_name_bilingual">环意 · Halo Ring</string>
     <string name="app_tagline">环之所至，意之所达</string>
     <string name="app_byline">作者 紫意 · Zack</string>
-
     <string name="a11y_service_label">环意（前台 &amp; 返回/主页辅助）</string>
-
     <string name="notification_channel_name">环意</string>
     <string name="notification_title">环意</string>
     <string name="notification_text">戒指已就绪</string>
+
+    <!-- 顶部 Tab -->
+    <string name="tab_vitals">健康</string>
+    <string name="tab_settings">设置</string>
+    <string name="tab_status">状态</string>
+
+    <!-- 设置入口 -->
+    <string name="settings_section_profiles">配置文件 &amp; 手势</string>
+    <string name="settings_section_system_gestures">系统手势</string>
+    <string name="settings_section_ring">戒指</string>
+    <string name="settings_section_power">功耗 &amp; 连接</string>
+    <string name="settings_section_feedback">反馈</string>
+    <string name="settings_section_vitals_prefs">健康设置</string>
+    <string name="settings_section_language">语言</string>
+    <string name="settings_section_test_arena">练习场</string>
+    <string name="settings_section_advanced">高级</string>
+    <string name="settings_section_about">关于</string>
+
+    <!-- 通用 -->
+    <string name="common_on">开</string>
+    <string name="common_off">关</string>
+    <string name="common_cancel">取消</string>
+    <string name="common_back">返回</string>
+    <string name="common_done">完成</string>
+    <string name="common_skip">跳过</string>
+    <string name="common_next">下一步</string>
+    <string name="common_continue">继续</string>
+    <string name="common_just_now">刚才</string>
+    <string name="common_never">从未</string>
+    <string name="common_unknown">未知</string>
+    <string name="common_dash">—</string>
+
+    <!-- 状态栏 -->
+    <string name="statusbar_ring_placeholder">R08_…</string>
+
+    <!-- 健康 Tab -->
+    <string name="vitals_heart_rate_label">心率</string>
+    <string name="vitals_spo2_label">血氧</string>
+    <string name="vitals_stress_label">压力</string>
+    <string name="vitals_measure_now">立即测量</string>
+    <string name="vitals_measuring">测量中…</string>
+    <string name="vitals_unit_bpm">次/分</string>
+    <string name="vitals_unit_percent">%</string>
+    <string name="vitals_measured_just_now">刚刚测量</string>
+    <string name="vitals_measured_min_ago">%1$d 分钟前测量</string>
+    <string name="vitals_steps_today">今日步数</string>
+    <string name="vitals_calories">卡路里</string>
+    <string name="vitals_calories_unit">%1$s 千卡</string>
+    <string name="vitals_distance">距离</string>
+    <string name="vitals_distance_unit">%1$s 公里</string>
+    <string name="vitals_last_sync">上次同步</string>
+    <string name="vitals_export_log">导出日志</string>
+
+    <!-- 状态 Tab -->
+    <string name="status_ring">戒指</string>
+    <string name="status_ring_connected">● 已连接</string>
+    <string name="status_ring_disconnected">● 已断开</string>
+    <string name="status_conn_interval">连接间隔</string>
+    <string name="status_conn_interval_active">活跃</string>
+    <string name="status_conn_interval_idle">空闲</string>
+    <string name="status_conn_interval_screen_off">屏幕关</string>
+    <string name="status_profile">配置文件</string>
+    <string name="status_profile_auto_suffix">（自动）</string>
+    <string name="status_last_gesture">上次手势</string>
+    <string name="status_background_draw">后台功耗</string>
+    <string name="status_background_draw_value">+ %1$s mA</string>
+    <string name="status_background_footer">前台服务 · 无 wakelock · agent：%1$s</string>
+    <string name="status_ble_quality">BLE 质量（最近一小时）</string>
+    <string name="status_ble_drops">%1$d 次掉线</string>
+
+    <!-- 语言 -->
+    <string name="language_title">语言</string>
+    <string name="language_description">默认跟随设备系统语言。如果想固定使用某种语言不受系统设置影响，下面选择。</string>
+    <string name="language_follow_system">跟随系统</string>
+    <string name="language_english">English</string>
+    <string name="language_chinese">中文</string>
+
+    <!-- 配置文件 -->
+    <string name="profiles_title">配置文件</string>
+    <string name="profiles_subtitle">三击循环。前台 app 自动切换 — 见编辑。</string>
+    <string name="profiles_active_badge">当前</string>
+    <string name="profiles_new">+ 新建配置</string>
+    <string name="profiles_footer">%1$d 个配置 · %2$d 秒手动锁定</string>
+    <string name="profile_default_navigation">导航</string>
+    <string name="profile_default_media">媒体</string>
+    <string name="profile_default_reader">阅读</string>
+    <string name="profile_default_fast">极速</string>
+    <string name="profile_editor_title">手势映射</string>
+    <string name="profile_editor_edit_cta">编辑</string>
+    <string name="profile_editor_system_value">（系统）›</string>
+    <string name="profile_editor_footer">系统手势会在进入此配置前被拦截。可在 设置 → 系统手势 中编辑。</string>
+    <string name="profiles_list_footer">前台 app 切换时自动切换配置（需启用辅助功能）。也可三击戒指手动循环。</string>
+    <string name="profiles_bindings_count">%1$d 个绑定 ›</string>
+    <string name="action_picker_current">（当前）</string>
+    <string name="action_picker_footer">系统动作较为高级 — 它们会绕过正常路由。请谨慎使用。</string>
+
+    <!-- 系统手势 -->
+    <string name="system_gestures_title">系统手势</string>
+    <string name="system_gestures_subtitle">始终生效，覆盖当前配置。</string>
+    <string name="system_gestures_slot_wake">唤醒屏幕</string>
+    <string name="system_gestures_slot_sleep">息屏</string>
+    <string name="system_gestures_slot_cycle">切换配置</string>
+    <string name="system_gestures_slot_peek">查看 HUD</string>
+    <string name="system_gestures_slot_reconnect">强制重连</string>
+    <string name="system_gestures_footer">唤醒走的是息屏快速通路</string>
+    <string name="system_gestures_disabled">（已禁用）</string>
+
+    <string name="gesture_picker_title">选择手势</string>
+    <string name="gesture_picker_disable_slot">（禁用此槽位）</string>
+    <string name="gesture_picker_in_use_by">已被 %1$s 使用</string>
+
+    <!-- 戒指 -->
+    <string name="ring_title">戒指</string>
+    <string name="ring_mac">MAC</string>
+    <string name="ring_firmware">固件</string>
+    <string name="ring_signal">信号</string>
+    <string name="ring_battery">电量</string>
+    <string name="ring_find_cta">寻找戒指 · 闪烁 10 秒</string>
+    <string name="ring_shutdown_cta">关闭戒指</string>
+    <string name="ring_forget_cta">忘记并重新配对</string>
+    <string name="ring_advertised_name">广播名称</string>
+    <string name="ring_signal_unit_dbm">%1$d dBm</string>
+    <string name="ring_default_name">戒指</string>
+    <string name="ring_status_connected">已连接</string>
+    <string name="ring_status_disconnected">已断开</string>
+    <string name="ring_battery_pct">%1$d %%</string>
+    <string name="ring_find_short">寻找戒指</string>
+    <string name="ring_shutdown_short">关机</string>
+    <string name="ring_forget_short">忘记</string>
+    <string name="ring_screen_footer">关机会让戒指断电 — 之后需要短暂放回充电座唤醒它。\n忘记会清空 MAC 白名单，以便配对其它戒指。</string>
+
+    <!-- 功耗 &amp; 连接 -->
+    <string name="power_title">功耗 &amp; 连接</string>
+    <string name="power_multi_tap_window">连击窗口</string>
+    <string name="power_combo_window">组合窗口</string>
+    <string name="power_long_press_followup">长按后续窗口</string>
+    <string name="power_ble_interval_active">BLE 间隔（活跃）</string>
+    <string name="power_ble_interval_idle">BLE 间隔（空闲）</string>
+    <string name="power_ble_interval_screen_off">BLE 间隔（息屏）</string>
+    <string name="power_disconnect_not_worn">未佩戴时断开</string>
+    <string name="power_disconnect_after">%1$d 分钟后</string>
+    <string name="power_keepalive">佩戴时心跳</string>
+    <string name="power_optimistic_single_tap">乐观单击</string>
+    <string name="power_await_combos">等待 tap-swipe 组合</string>
+    <string name="power_await_lp_combos">等待长按组合</string>
+    <string name="power_window_unit_ms">%1$d 毫秒</string>
+    <string name="power_band_high">15–30 毫秒</string>
+    <string name="power_band_balanced">75–100 毫秒</string>
+    <string name="power_band_slow">200–500 毫秒</string>
+    <string name="power_section_timing">识别窗口</string>
+    <string name="power_section_ble">BLE 间隔策略</string>
+    <string name="power_section_latency">延迟开关</string>
+    <string name="power_section_disconnect">断开策略</string>
+    <string name="power_section_timing_label">时间窗口</string>
+    <string name="power_section_latency_label">延迟开关</string>
+    <string name="power_section_connection_label">连接（自动）</string>
+    <string name="power_active_profile_caption">编辑当前配置：%1$s</string>
+    <string name="power_multi_tap_desc">两次触摸之间最大间隔，仍算同一连击。</string>
+    <string name="power_combo_desc">双击之后等多久接收随后的滑动。</string>
+    <string name="power_long_press_followup_desc">长按之后等待滑动或第二次长按。</string>
+    <string name="power_optimistic_desc">首次触摸即触发 TAP（延迟 ~0 毫秒；双击仍可工作，但 TAP 也会触发）。</string>
+    <string name="power_await_combos_desc">双击后等组合窗口，以便触发 DOUBLE_TAP_SWIPE_*。</string>
+    <string name="power_await_combos_title">等待双击组合</string>
+    <string name="power_await_lp_combos_desc">长按后等待 follow-up 窗口，以便触发 LONG_PRESS_SWIPE_* + DOUBLE_LONG_PRESS。</string>
+    <string name="power_connection_auto_body">每次手势后约 10 秒，BLE 间隔为 HIGH（15–30 毫秒），其余时间为 BALANCED（75–100 毫秒）。摘下眼镜时触控 IC 关闭；离腕超过 5 分钟，戒指完全断开。</string>
+
+    <!-- 反馈 -->
+    <string name="feedback_title">反馈</string>
+    <string name="feedback_subtitle">app 如何向你确认识别到的手势。</string>
+    <string name="feedback_gesture_hint">显示识别到的手势（HUD）</string>
+    <string name="feedback_gesture_hint_subtitle">每次手势后 800 毫秒</string>
+    <string name="feedback_click_sound">界面点击音</string>
+    <string name="feedback_ring_led">戒指 LED 反馈</string>
+    <string name="feedback_hud_position">HUD 位置</string>
+    <string name="feedback_hud_duration">HUD 时长</string>
+    <string name="feedback_hud_duration_value">%1$d 秒</string>
+    <string name="feedback_auto_hint">配对后 5 分钟内自动开启提示</string>
+    <string name="feedback_hud_pos_top_right">右上</string>
+    <string name="feedback_hud_pos_top_center">顶部居中</string>
+    <string name="feedback_hud_pos_bottom_right">右下</string>
+    <string name="feedback_auto_hint_subtitle">帮助新用户熟悉手势</string>
+    <string name="feedback_footer">提示仅在屏幕亮起时显示。</string>
+    <string name="feedback_duration_seconds">%1$d 秒</string>
+    <string name="feedback_duration_ms">%1$d 毫秒</string>
+
+    <!-- 健康设置 -->
+    <string name="vitals_prefs_title">健康设置</string>
+    <string name="vitals_prefs_subtitle">仅按需测量。PPG 耗电较大。</string>
+    <string name="vitals_prefs_show_hr_hud">HUD 显示心率</string>
+    <string name="vitals_prefs_activity_overlay">活动浮层</string>
+    <string name="vitals_prefs_auto_snapshot">自动测量间隔</string>
+    <string name="vitals_prefs_log_csv">记录到 CSV</string>
+    <string name="vitals_prefs_wear_detection">佩戴检测</string>
+    <string name="vitals_prefs_export_log">导出 7 天日志</string>
+    <string name="vitals_prefs_auto_snapshot_never">从不</string>
+    <string name="vitals_prefs_wear_ring_glasses">戒指 &amp; 眼镜</string>
+    <string name="vitals_prefs_wear_ring_only">仅戒指</string>
+    <string name="vitals_prefs_wear_glasses_only">仅眼镜</string>
+    <string name="vitals_prefs_show_hr_title">在 HUD 显示心率</string>
+    <string name="vitals_prefs_show_hr_desc">把最新心率渲染在眼镜显示的角落。</string>
+    <string name="vitals_prefs_activity_title">活动浮层</string>
+    <string name="vitals_prefs_activity_desc">在心率旁边显示步数 / 卡路里。不额外耗戒指电量。</string>
+    <string name="vitals_prefs_auto_snapshot_title">自动测量间隔</string>
+    <string name="vitals_prefs_auto_snapshot_desc">定期采集心率 / 血氧 / 压力。仅测量瞬间点亮 PPG LED。</string>
+    <string name="vitals_prefs_csv_title">CSV 导出</string>
+    <string name="vitals_prefs_csv_desc">把每次读数追加到内部 CSV（在 设置 → 高级 中导出）。</string>
+    <string name="vitals_prefs_pause_offfinger_title">未佩戴时暂停</string>
+    <string name="vitals_prefs_pause_offfinger_desc">未佩戴戒指时跳过自动测量。节省戒指电量。</string>
+    <string name="vitals_prefs_footer">不支持持续心率 — PPG LED 会让戒指续航减半。</string>
+    <string name="vitals_prefs_interval_manual">仅手动</string>
+    <string name="vitals_prefs_interval_min">%1$d 分钟</string>
+    <string name="vitals_prefs_interval_hour">%1$d 小时</string>
+    <string name="vitals_prefs_interval_hour_min">%1$d 小时 %2$d 分钟</string>
+
+    <!-- 高级 -->
+    <string name="advanced_title">高级</string>
+    <string name="advanced_subtitle">诊断 + 重跑。大多数用户用不到。</string>
+    <string name="advanced_debug_hud">调试 HUD</string>
+    <string name="advanced_latency_measure">延迟测量</string>
+    <string name="advanced_spatial_mode">空间模式（第三阶段）</string>
+    <string name="advanced_action_a11y">辅助功能设置（深链）</string>
+    <string name="advanced_action_battery">电量豁免（深链）</string>
+    <string name="advanced_action_adb">重新运行 ADB 引导</string>
+    <string name="advanced_action_export_csv">导出延迟 CSV</string>
+    <string name="advanced_actions_header">操作</string>
+    <string name="advanced_debug_hud_desc">显示 RSSI、BLE 间隔、RTT、丢包数、当前后端。</string>
+    <string name="advanced_latency_desc">把后续 20 次手势的分段时延记录到 CSV（Doc/06 §4）。</string>
+    <string name="advanced_spatial_desc">基于 IMU 的空中手势。耗电较大 — 仅需要时启用。</string>
+    <string name="advanced_a11y_title">打开辅助功能设置</string>
+    <string name="advanced_a11y_desc">在系统设置中启用环意。</string>
+    <string name="advanced_battery_title">电量豁免</string>
+    <string name="advanced_battery_desc">允许环意在 Doze 状态下运行。</string>
+    <string name="advanced_adb_title">重新运行 ADB 引导</string>
+    <string name="advanced_adb_desc">重新推送 agent dex + 授予 WRITE_SECURE_SETTINGS。</string>
+    <string name="advanced_export_title">导出延迟日志（CSV）</string>
+    <string name="advanced_export_desc">在使用过 "延迟测量" 后才能导出。</string>
+
+    <!-- 关于 -->
+    <string name="about_app_version">应用版本</string>
+    <string name="about_detected_device">检测到设备</string>
+    <string name="about_protocol_source">BLE 协议来源</string>
+    <string name="about_protocol_source_value">逆向工程 v2 APK</string>
+    <string name="about_phase0_probe">Phase-0 探针</string>
+    <string name="about_show_guide">查看操作指南</string>
+    <string name="about_credits_label">致谢</string>
+    <string name="about_credits_body">• 触摸 + 手势协议逆向自 `com.ring.r08remote` v2\n• 更广的 R02 系列命令来自 `tahnok/colmi_r02_client`\n• RF03 SoC + 固件研究：`atc1441/ATC_RF03_Ring`\n• Rokid 平台文档：`buildwithfenna/rokid-docs`\n• Mercury SDK 示例：`Quad-Labs/RayDesk`</string>
+    <string name="about_source_label">源码 &amp; 联系</string>
+    <string name="about_source_body">Halo Ring · 环意 是 MIT 协议开源软件。\n它现在是免费的，将来也永远是免费的。\n\n仓库：github.com/MRziyi/Halo-Ring\n作者：ziyi-zhang.vercel.app\n\n如果有人向你收钱，那是被骗了。官方版本始终在上面的链接；请校对包签名证书。</string>
+    <string name="about_docs_label">文档</string>
+    <string name="about_docs_body">设计文档在源码树的 Doc/ 目录下。逐篇索引见 Doc/README.md。</string>
+    <string name="about_device_rokid">Rokid Glasses</string>
+    <string name="about_device_rayneo">RayNeo X3 Pro</string>
+    <string name="about_device_generic">通用 Android（开发用）</string>
+
+    <!-- 练习场 -->
+    <string name="test_arena_title">练习场</string>
+    <string name="test_arena_subtitle">用戒指做任何手势，下方对应行会亮起。</string>
+    <string name="test_arena_inactive_hint">练习时不会真的派发动作 — 返回后恢复。</string>
+
+    <!-- 引导教程 -->
+    <string name="tour_step_counter">%1$d / %2$d</string>
+    <string name="tour_got_it">完成！</string>
+    <string name="tour_wrong_gesture">那是 %1$s — 请做上方提示的手势</string>
+    <string name="tour_no_ring_hint">（未连接戒指 — 点下一步继续观看。）</string>
+
+    <string name="tour_welcome_title">欢迎</string>
+    <string name="tour_welcome_ring">快速了解 app 操作方式。点"下一步"开始。</string>
+    <string name="tour_welcome_temple">快速了解。点"下一步"开始。</string>
+
+    <string name="tour_move_down_title">光标下移</string>
+    <string name="tour_move_down_ring">戒指上"下滑" → 光标移到下一行。</string>
+    <string name="tour_move_down_temple">镜腿触控板上"向前滑"。</string>
+
+    <string name="tour_move_up_title">光标上移</string>
+    <string name="tour_move_up_ring">戒指上"上滑" → 光标移到上一行。</string>
+    <string name="tour_move_up_temple">镜腿触控板上"向后滑"。</string>
+
+    <string name="tour_enter_row_title">进入聚焦行</string>
+    <string name="tour_enter_row_ring">戒指上"单击" → 打开当前选中的项。</string>
+    <string name="tour_enter_row_temple">镜腿触控板"单击"。</string>
+
+    <string name="tour_back_title">返回</string>
+    <string name="tour_back_ring">"双击"返回上一屏。</string>
+    <string name="tour_back_temple">镜腿"双击"。</string>
+
+    <string name="tour_tab_focus_title">聚焦顶部 Tab 条</string>
+    <string name="tour_tab_focus_ring">光标在最上面那行时，再"上滑"一次，焦点跳到顶部 Tab 条。</string>
+    <string name="tour_tab_focus_temple">列表第一行时再"向后滑"一次，焦点跳到顶部 Tab 条。</string>
+
+    <string name="tour_tab_cycle_title">循环 Tab</string>
+    <string name="tour_tab_cycle_ring">Tab 条聚焦时，"上滑/下滑"循环切换 健康 ⇄ 设置 ⇄ 状态。</string>
+    <string name="tour_tab_cycle_temple">镜腿"向前/向后滑"循环切换。</string>
+
+    <string name="tour_enter_tab_title">进入所选 Tab</string>
+    <string name="tour_enter_tab_ring">"单击"把焦点从 Tab 条放回该 Tab 的第一行内容。</string>
+    <string name="tour_enter_tab_temple">"单击"镜腿进入该 Tab。</string>
+
+    <string name="tour_long_press_title">长按 — 菜单 / 唤醒</string>
+    <string name="tour_long_press_ring">长按戒指。打开菜单；屏幕关时则唤醒眼镜。</string>
+    <string name="tour_long_press_temple">"长按"镜腿触控板。</string>
+
+    <string name="tour_triple_title">三击 — 切换配置</string>
+    <string name="tour_triple_ring">连续三击循环配置（导航 → 媒体 → 阅读 → 极速）。</string>
+    <string name="tour_triple_temple">镜腿"三击"。</string>
+
+    <string name="tour_leave_title">退出 app</string>
+    <string name="tour_leave_ring">在根目录"双击"会回到系统主界面。</string>
+    <string name="tour_leave_temple">根目录时镜腿"双击"退出 app。</string>
+
+    <string name="tour_done_title">准备好了</string>
+    <string name="tour_done_body">随时可在 设置 → 练习场 练手势。设置 → 关于 里能重开本教程。</string>
+
+    <string name="tour_phantom_long_press_before">按住等一会</string>
+    <string name="tour_phantom_long_press_after">菜单打开（或屏幕唤醒）</string>
+    <string name="tour_phantom_triple_before">连击三次</string>
+    <string name="tour_phantom_triple_after">配置：导航 → 媒体</string>
+    <string name="tour_phantom_leave_after">系统主界面</string>
+    <string name="tour_phantom_inside">内部…</string>
+    <string name="tour_phantom_detail_content">（详情内容）</string>
+    <string name="tour_phantom_all_set">全部就绪</string>
+
+    <!-- 首次启动向导 -->
+    <string name="wizard_step_count">第 %1$d / %2$d 步</string>
+
+    <string name="wizard_welcome_title">欢迎使用环意</string>
+    <string name="wizard_welcome_body">配置约一分钟。我们会开启无线 ADB、辅助功能、电量豁免，然后配对你的戒指。</string>
+    <string name="wizard_welcome_cta">开始</string>
+
+    <string name="wizard_adb_title">开启无线 ADB</string>
+    <string name="wizard_adb_body">需要短暂的 6 位配对，让 app 推送注入 agent。之后再也不用做这一步了。</string>
+    <string name="wizard_adb_cta_start">开始配对</string>
+    <string name="wizard_adb_cta_open_settings">打开开发者选项</string>
+
+    <string name="wizard_a11y_title">辅助功能（可选）</string>
+    <string name="wizard_a11y_body">让返回 / 主页 / 最近应用控件即使没有 ADB 也能工作。可跳过；agent 可以做同样的事。</string>
+    <string name="wizard_a11y_cta_enable">打开辅助功能设置</string>
+    <string name="wizard_a11y_enabled">✓ 已启用</string>
+
+    <string name="wizard_battery_title">电量豁免</string>
+    <string name="wizard_battery_body">阻止 Android Doze 在几小时无操作后杀掉后台服务。</string>
+    <string name="wizard_battery_cta">申请豁免</string>
+    <string name="wizard_battery_exempted">✓ 已豁免</string>
+
+    <string name="wizard_pair_title">配对戒指</string>
+    <string name="wizard_pair_body">把戒指从充电座上拿下来。app 会扫描附近的 Halo / R08 戒指。确认 MAC + LED 双闪。</string>
+    <string name="wizard_pair_cta">扫描戒指</string>
+
+    <string name="wizard_complete_cta">完成</string>
+
+    <!-- 首次启动向导：眼镜 480×480 布局的短版本。 -->
+    <string name="wizard_welcome_begin_cta">开始</string>
+    <string name="wizard_adb_intro_title">安装 agent</string>
+    <string name="wizard_adb_intro_body">先尝试 root 自动配置；如未 root，将提示输入 6 位配对码。</string>
+    <string name="wizard_adb_open_settings_cta">打开设置</string>
+    <string name="wizard_adb_start_pairing_cta">开始配对</string>
+    <string name="wizard_adb_running_title">配对中…</string>
+    <string name="wizard_adb_paired_title">已配对</string>
+    <string name="wizard_adb_continue_cta">继续</string>
+    <string name="wizard_adb_failed_title">配对失败</string>
+    <string name="wizard_adb_try_again_cta">重试</string>
+    <string name="wizard_a11y_on_title">辅助功能已开</string>
+    <string name="wizard_a11y_on_body">按前台 app 自动切换已生效。</string>
+    <string name="wizard_a11y_off_title">辅助功能</string>
+    <string name="wizard_a11y_off_body">可选。启用按前台 app 自动切换。</string>
+    <string name="wizard_battery_on_title">已豁免电量</string>
+    <string name="wizard_battery_on_body">Doze 不会再杀掉 BLE 连接。</string>
+    <string name="wizard_battery_off_title">电量</string>
+    <string name="wizard_battery_off_body">允许后台，防止 Doze 杀掉 BLE 连接。</string>
+    <string name="wizard_battery_allow_cta">允许</string>
+    <string name="wizard_pair_short_title">配对戒指</string>
+    <string name="wizard_pair_short_body">佩戴戒指（非充电座）。双闪 = 已配对。</string>
+    <string name="wizard_pair_scan_cta">扫描</string>
+    <string name="wizard_pair_done_cta">完成</string>
+
+    <!-- ADB 配对浮层 -->
+    <string name="adb_pair_title">配对码</string>
+    <string name="adb_pair_body">输入上方对话框里的 6 位码。有键盘的话直接打字；没有就用下面的数字网格（戒指：滑动选位，单击确定）。</string>
+    <string name="adb_pair_submit">配对</string>
+    <string name="adb_pair_cancel">取消</string>
+
+    <!-- HUD -->
+    <string name="hud_reconnected">● 已重连</string>
+    <string name="hud_disconnected">戒指已断开</string>
+    <string name="hud_disconnected_hint">长按 × 2 重新连接</string>
+    <string name="hud_profile_cycle">循环</string>
+
+    <!-- 手势名 -->
+    <string name="gesture_tap">单击</string>
+    <string name="gesture_double_tap">双击</string>
+    <string name="gesture_triple_tap">三击</string>
+    <string name="gesture_quadruple_tap">四连击</string>
+    <string name="gesture_swipe_up">上滑</string>
+    <string name="gesture_swipe_down">下滑</string>
+    <string name="gesture_long_press">长按</string>
+    <string name="gesture_double_tap_swipe_up">双击 + 上滑</string>
+    <string name="gesture_double_tap_swipe_down">双击 + 下滑</string>
+    <string name="gesture_long_press_swipe_up">长按 + 上滑</string>
+    <string name="gesture_long_press_swipe_down">长按 + 下滑</string>
+    <string name="gesture_double_long_press">长按 × 2</string>
+
+    <!-- 动作名 -->
+    <string name="action_nav_prev">上一项</string>
+    <string name="action_nav_next">下一项</string>
+    <string name="action_nav_left">向左</string>
+    <string name="action_nav_right">向右</string>
+    <string name="action_confirm">确认</string>
+    <string name="action_back">返回</string>
+    <string name="action_home">主页</string>
+    <string name="action_recents">最近</string>
+    <string name="action_menu">菜单</string>
+    <string name="action_notifications">通知栏</string>
+    <string name="action_quick_settings">快捷设置</string>
+    <string name="action_screenshot">截屏</string>
+    <string name="action_volume_up">音量 +</string>
+    <string name="action_volume_down">音量 −</string>
+    <string name="action_mute">静音</string>
+    <string name="action_brightness_up">亮度 +</string>
+    <string name="action_brightness_down">亮度 −</string>
+    <string name="action_media_play_pause">播放 / 暂停</string>
+    <string name="action_media_prev">上一首</string>
+    <string name="action_media_next">下一首</string>
+    <string name="action_open_camera">相机</string>
+    <string name="action_take_photo">拍照</string>
+    <string name="action_visual_ai">视觉 AI</string>
+    <string name="action_open_translate">翻译</string>
+    <string name="action_open_chat">对话</string>
+    <string name="action_open_music">音乐</string>
+    <string name="action_open_settings">设置</string>
+    <string name="action_open_gallery">相册</string>
+    <string name="action_launch_app">打开 %1$s</string>
+    <string name="action_screen_sleep">息屏</string>
+    <string name="action_screen_wake">唤醒</string>
+    <string name="action_peek_hud">查看</string>
+    <string name="action_profile_cycle">循环配置</string>
+    <string name="action_force_reconnect">重连</string>
+    <string name="action_volume_modal">音量模式</string>
+    <string name="action_brightness_modal">亮度模式</string>
+    <string name="action_recents_modal">最近模式</string>
+    <string name="action_ai_dictate_modal">AI 听写</string>
+    <string name="action_shell">Shell</string>
+    <string name="action_none">（无动作）</string>
+    <string name="action_modal_exit">（模式退出）</string>
 </resources>

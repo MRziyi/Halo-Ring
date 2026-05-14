@@ -70,6 +70,12 @@ class HudOverlay(
     /** User-selected HUD anchor (Doc/08-ui-design.md §6). Default TopRight: off-axis on both
      *  Rokid (mono right-eye, ~480 px) and RayNeo (binocular 1280×480 — right peripheral). */
     private var hudPosition: HudPosition = HudPosition.TopRight
+    /** True if the underlying display is side-by-side binocular (RayNeo X3 Pro: 1280×480 logical,
+     *  left half → left eye, right half → right eye). Affects gravity math for `TopCenter`,
+     *  which on a side-by-side canvas would otherwise land *between* the eyes (x ≈ 640) — visible
+     *  only at the inner edge of each eye. When set, we re-anchor `TopCenter` into the right-eye
+     *  region instead. Wired from `DisplayAdapter.isBinocular` via [setBinocular]. */
+    @Volatile private var isBinocular: Boolean = false
     /** Position of the currently-installed view (or null if no view installed). Used to detect
      *  when [show] needs to migrate the existing view to a different gravity — previously the
      *  install-time position was sticky, so e.g. Disconnected (Center) would silently stay
@@ -99,6 +105,18 @@ class HudOverlay(
      *  keep their own cadence regardless. */
     fun setDefaultDuration(durationMs: Long) {
         defaultDurationMs = durationMs.coerceIn(500L, 10_000L)
+    }
+
+    /** Set the binocular flag (matched to `DisplayAdapter.isBinocular`). Re-layouts a currently
+     *  installed view if the new value affects its gravity. */
+    fun setBinocular(binocular: Boolean) {
+        runOnMain {
+            if (isBinocular == binocular) return@runOnMain
+            isBinocular = binocular
+            view?.let {
+                try { wm.updateViewLayout(it, buildLayoutParams(hudPosition)) } catch (_: Exception) {}
+            }
+        }
     }
 
     /**
@@ -202,11 +220,28 @@ class HudOverlay(
         val flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                     WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
                     WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
-        val gravity = when (pos) {
-            HudPosition.TopRight    -> Gravity.TOP    or Gravity.END
-            HudPosition.TopCenter   -> Gravity.TOP    or Gravity.CENTER_HORIZONTAL
-            HudPosition.BottomRight -> Gravity.BOTTOM or Gravity.END
-            HudPosition.Center      -> Gravity.CENTER
+        // On a side-by-side binocular canvas (RayNeo X3 Pro: 1280×480 logical, left half → left
+        // eye, right half → right eye), CENTER_HORIZONTAL lands at x≈640 which is the *inner*
+        // edge of both eyes — visible at the user's nose, not centred in their gaze. Re-anchor
+        // those positions to land in the right-eye region instead. (We pick right eye to mirror
+        // Rokid's mono-right-eye convention; users with strong left-eye dominance can switch
+        // physical glasses orientation.)
+        val gravity = when {
+            pos == HudPosition.TopRight                  -> Gravity.TOP    or Gravity.END
+            pos == HudPosition.TopCenter && isBinocular  -> Gravity.TOP    or Gravity.END
+            pos == HudPosition.TopCenter                 -> Gravity.TOP    or Gravity.CENTER_HORIZONTAL
+            pos == HudPosition.BottomRight               -> Gravity.BOTTOM or Gravity.END
+            pos == HudPosition.Center && isBinocular     -> Gravity.CENTER_VERTICAL or Gravity.END
+            else /* HudPosition.Center */                -> Gravity.CENTER
+        }
+        // On binocular when we re-anchored TopCenter → END, push it in from the right edge by
+        // ~160 px so the HUD pill sits roughly mid-right-eye (right eye occupies x∈[640,1280];
+        // pill width ~200–260 px; END+160 puts the pill's centre near x≈940 = right-eye centre).
+        val xInset = when {
+            pos == HudPosition.Center && !isBinocular   -> 0
+            pos == HudPosition.TopCenter && isBinocular -> 160
+            pos == HudPosition.Center && isBinocular    -> 160
+            else                                        -> 16
         }
         return WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
@@ -214,7 +249,7 @@ class HudOverlay(
             type, flags, PixelFormat.TRANSLUCENT,
         ).apply {
             this.gravity = gravity
-            x = if (pos == HudPosition.Center) 0 else 16
+            x = xInset
             y = 16
         }
     }
@@ -250,7 +285,7 @@ fun HudPill(event: HudEvent) {
             is HudEvent.ProfileSwitched -> ProfileSwitchedContent(event)
             is HudEvent.LowBattery    -> LowBatteryContent(event)
             is HudEvent.Disconnected  -> DisconnectedContent()
-            is HudEvent.Reconnected   -> Text("● Reconnected", style = HaloType.RowVal.copy(
+            is HudEvent.Reconnected   -> Text(androidx.compose.ui.res.stringResource(com.halo.ring.R.string.hud_reconnected), style = HaloType.RowVal.copy(
                 color = HaloColors.Accent, fontSize = 16.sp,
             ))
             is HudEvent.GestureRecognised -> GestureRecognisedContent(event)
@@ -264,12 +299,12 @@ private fun PeekContent(p: HudEvent.Peek) {
         horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         Box(Modifier.size(7.dp).clip(CircleShape).background(
             if (p.connected) HaloColors.Accent else HaloColors.Bad))
-        Text(p.mode, style = HaloType.Body.copy(
+        Text(profileFriendlyTextByName(p.mode), style = HaloType.Body.copy(
             fontSize = 16.sp,
             color = HaloColors.Fg,
         ))
         p.batteryPct?.let {
-            Text("${it}%", style = HaloType.Caption.copy(
+            Text(androidx.compose.ui.res.stringResource(com.halo.ring.R.string.ring_battery_pct, it), style = HaloType.Caption.copy(
                 fontSize = 14.sp,
             ))
         }
@@ -282,10 +317,10 @@ private fun ProfileSwitchedContent(p: HudEvent.ProfileSwitched) {
         horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("↻ →", style = HaloType.Body.copy(color = HaloColors.Accent,
             fontSize = 16.sp))
-        Text(p.newMode, style = HaloType.Body.copy(
+        Text(profileFriendlyTextByName(p.newMode), style = HaloType.Body.copy(
             fontSize = 16.sp,
         ))
-        Text("cycle", style = HaloType.Caption.copy(
+        Text(androidx.compose.ui.res.stringResource(com.halo.ring.R.string.hud_profile_cycle), style = HaloType.Caption.copy(
             fontSize = 14.sp,
         ))
     }
@@ -299,7 +334,7 @@ private fun LowBatteryContent(p: HudEvent.LowBattery) {
         Text(p.ringId, style = HaloType.Body.copy(
             fontSize = 16.sp,
         ))
-        Text("${p.pct}%", style = HaloType.Caption.copy(
+        Text(androidx.compose.ui.res.stringResource(com.halo.ring.R.string.ring_battery_pct, p.pct), style = HaloType.Caption.copy(
             fontSize = 14.sp,
             color = HaloColors.Warn,
         ))
@@ -316,11 +351,11 @@ private fun DisconnectedContent() {
         Row(verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Box(Modifier.size(8.dp).clip(CircleShape).background(HaloColors.Bad))
-            Text("Ring disconnected", style = HaloType.Body.copy(color = HaloColors.Fg, fontSize = 16.sp))
+            Text(androidx.compose.ui.res.stringResource(com.halo.ring.R.string.hud_disconnected), style = HaloType.Body.copy(color = HaloColors.Fg, fontSize = 16.sp))
         }
         Spacer(Modifier.height(2.dp))
         Text(
-            "Long-press × 2 to reconnect",
+            androidx.compose.ui.res.stringResource(com.halo.ring.R.string.hud_disconnected_hint),
             style = HaloType.Caption.copy(fontSize = 14.sp, color = HaloColors.Mute),
         )
     }
@@ -334,13 +369,13 @@ private fun GestureRecognisedContent(g: HudEvent.GestureRecognised) {
         else HaloColors.Fg
     Row(verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(g.gesture.friendly(), style = HaloType.Caption.copy(
+        Text(gestureFriendlyText(g.gesture), style = HaloType.Caption.copy(
             color = HaloColors.Mute,
             fontSize = 16.sp,
         ))
         Text("→", style = HaloType.Caption.copy(color = HaloColors.Mute,
             fontSize = 16.sp))
-        Text(g.resolvedAction.friendly(), style = HaloType.Body.copy(
+        Text(actionFriendlyText(g.resolvedAction), style = HaloType.Body.copy(
             color = actionColor,
             fontSize = 16.sp,
         ))

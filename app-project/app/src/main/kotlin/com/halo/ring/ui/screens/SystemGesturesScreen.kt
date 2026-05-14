@@ -13,22 +13,20 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import com.halo.ring.R
 import com.halo.ring.ui.FocusableRow
 import com.halo.ring.ui.HaloColors
 import com.halo.ring.ui.HaloType
 import com.halo.ring.ui.ScreenPadding
 import com.halo.ring.ui.SystemGestureSlot
-import com.halo.ring.ui.hud.friendly
+import com.halo.ring.ui.hud.gestureFriendlyText
 import com.halo.ring.core.gesture.SystemGestures
 
 /**
  * Settings → System Gestures (mockup §3 F). 5 fixed rows for the always-on overrides:
  * wake / sleep / cycle / peek / reconnect. Tap a row to rebind via [GesturePickerScreen].
- *
- * Conflict detection lives in [SystemGestures.conflict]. The UI renders a small warning chip in the
- * row whose binding clashes — we never block the user from saving, but they see the consequence.
  */
 @Composable
 fun SystemGesturesScreen(
@@ -37,7 +35,7 @@ fun SystemGesturesScreen(
 ) {
     Column(modifier = Modifier.fillMaxSize().padding(top = 4.dp)) {
         Text(
-            text = "System gestures",
+            text = stringResource(R.string.system_gestures_title),
             style = HaloType.Title,
             modifier = Modifier.padding(horizontal = ScreenPadding, vertical = 12.dp),
         )
@@ -47,13 +45,7 @@ fun SystemGesturesScreen(
             val conflictSlot = bound?.let { gestures.conflict(it, exclude = coreSlot) }
 
             FocusableRow(onClick = { onSlotTapped(uiSlot) }) {
-                Column(Modifier.padding(end = 8.dp)) {
-                    Text(uiSlot.title, style = HaloType.Body)
-                    Text(
-                        text = uiSlot.description,
-                        style = HaloType.Caption.copy(fontSize = 11.sp),
-                    )
-                }
+                Text(stringResource(uiSlot.titleRes()), style = HaloType.Body)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (conflictSlot != null) {
                         Text(
@@ -62,7 +54,7 @@ fun SystemGesturesScreen(
                         )
                     }
                     Text(
-                        text = bound?.friendly() ?: "(disabled)",
+                        text = bound?.let { gestureFriendlyText(it) } ?: stringResource(R.string.system_gestures_disabled),
                         style = HaloType.RowVal.copy(
                             color = if (bound == null) HaloColors.Mute else HaloColors.Fg,
                         ),
@@ -73,12 +65,19 @@ fun SystemGesturesScreen(
         }
         Spacer(Modifier.height(12.dp))
         Text(
-            "Wake fires on the screen-off fast path (no synthesis cost). " +
-                "Sleep is intentionally hard-to-misfire — accidental sleep is more annoying than accidental wake.",
+            stringResource(R.string.system_gestures_footer),
             style = HaloType.Caption,
             modifier = Modifier.padding(horizontal = ScreenPadding),
         )
     }
+}
+
+private fun SystemGestureSlot.titleRes(): Int = when (this) {
+    SystemGestureSlot.WAKE            -> R.string.system_gestures_slot_wake
+    SystemGestureSlot.SLEEP           -> R.string.system_gestures_slot_sleep
+    SystemGestureSlot.PROFILE_CYCLE   -> R.string.system_gestures_slot_cycle
+    SystemGestureSlot.PEEK_HUD        -> R.string.system_gestures_slot_peek
+    SystemGestureSlot.FORCE_RECONNECT -> R.string.system_gestures_slot_reconnect
 }
 
 private fun SystemGestureSlot.toCore(): SystemGestures.Slot = when (this) {

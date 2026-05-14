@@ -21,7 +21,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.halo.ring.R
 import com.halo.ring.ui.Cta
 import com.halo.ring.ui.HaloColors
 import com.halo.ring.ui.HaloRingTheme
@@ -114,9 +116,9 @@ private fun WelcomeStep(onNext: () -> Unit) {
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text("Halo Ring", style = HaloType.Title)
+        Text(stringResource(R.string.app_name), style = HaloType.Title)
         Spacer(Modifier.height(28.dp))
-        Cta("BEGIN", focused = true, onClick = onNext)
+        Cta(stringResource(R.string.wizard_welcome_begin_cta), focused = true, onClick = onNext)
     }
 }
 
@@ -138,36 +140,35 @@ private fun AdbStep(
 
     when (sub) {
         AdbSubState.INTRO -> {
-            Text("Install agent", style = HaloType.Title)
+            Text(stringResource(R.string.wizard_adb_intro_title), style = HaloType.Title)
             Spacer(Modifier.height(10.dp))
             Text(
-                "We'll try root auto-setup first. If your device isn't rooted you'll be asked " +
-                    "for a 6-digit pairing code.",
+                stringResource(R.string.wizard_adb_intro_body),
                 style = HaloType.Body,
             )
             Spacer(Modifier.height(24.dp))
-            Cta("OPEN SETTINGS", onClick = onOpenSettings)
+            Cta(stringResource(R.string.wizard_adb_open_settings_cta), onClick = onOpenSettings)
             Spacer(Modifier.height(10.dp))
-            Cta("START PAIRING", focused = true, onClick = onStartPairing)
+            Cta(stringResource(R.string.wizard_adb_start_pairing_cta), focused = true, onClick = onStartPairing)
         }
         AdbSubState.RUNNING -> {
-            Text("Pairing…", style = HaloType.Title)
+            Text(stringResource(R.string.wizard_adb_running_title), style = HaloType.Title)
             Spacer(Modifier.height(12.dp))
             Text(status, style = HaloType.Body)
         }
         AdbSubState.SUCCESS -> {
-            Text("Paired", style = HaloType.Title)
+            Text(stringResource(R.string.wizard_adb_paired_title), style = HaloType.Title)
             Spacer(Modifier.height(12.dp))
             Text(status.removePrefix("✓").trim(), style = HaloType.Body)
             Spacer(Modifier.height(24.dp))
-            Cta("CONTINUE", focused = true, onClick = onNext)
+            Cta(stringResource(R.string.wizard_adb_continue_cta), focused = true, onClick = onNext)
         }
         AdbSubState.FAILED -> {
-            Text("Pairing failed", style = HaloType.Title)
+            Text(stringResource(R.string.wizard_adb_failed_title), style = HaloType.Title)
             Spacer(Modifier.height(12.dp))
             Text(status.removePrefix("✗").trim(), style = HaloType.Body)
             Spacer(Modifier.height(24.dp))
-            Cta("TRY AGAIN", focused = true, onClick = onStartPairing)
+            Cta(stringResource(R.string.wizard_adb_try_again_cta), focused = true, onClick = onStartPairing)
         }
     }
 }
@@ -175,48 +176,48 @@ private fun AdbStep(
 @Composable
 private fun AccessibilityStep(enabled: Boolean, onOpenSettings: () -> Unit, onNext: () -> Unit) {
     if (enabled) {
-        Text("Accessibility on", style = HaloType.Title)
+        Text(stringResource(R.string.wizard_a11y_on_title), style = HaloType.Title)
         Spacer(Modifier.height(10.dp))
-        Text("Auto-switch by foreground app is active.", style = HaloType.Body)
+        Text(stringResource(R.string.wizard_a11y_on_body), style = HaloType.Body)
         Spacer(Modifier.height(24.dp))
-        Cta("CONTINUE", focused = true, onClick = onNext)
+        Cta(stringResource(R.string.wizard_adb_continue_cta), focused = true, onClick = onNext)
     } else {
-        Text("Accessibility", style = HaloType.Title)
+        Text(stringResource(R.string.wizard_a11y_off_title), style = HaloType.Title)
         Spacer(Modifier.height(10.dp))
-        Text("Optional. Powers auto-switch by foreground app.", style = HaloType.Body)
+        Text(stringResource(R.string.wizard_a11y_off_body), style = HaloType.Body)
         Spacer(Modifier.height(24.dp))
-        Cta("OPEN SETTINGS", focused = true, onClick = onOpenSettings)
+        Cta(stringResource(R.string.wizard_adb_open_settings_cta), focused = true, onClick = onOpenSettings)
         Spacer(Modifier.height(10.dp))
-        Cta("SKIP", onClick = onNext)
+        Cta(stringResource(R.string.common_skip), onClick = onNext)
     }
 }
 
 @Composable
 private fun BatteryStep(exempted: Boolean, onRequest: () -> Unit, onNext: () -> Unit) {
     if (exempted) {
-        Text("Battery free", style = HaloType.Title)
+        Text(stringResource(R.string.wizard_battery_on_title), style = HaloType.Title)
         Spacer(Modifier.height(10.dp))
-        Text("Doze won't kill the BLE link.", style = HaloType.Body)
+        Text(stringResource(R.string.wizard_battery_on_body), style = HaloType.Body)
         Spacer(Modifier.height(24.dp))
-        Cta("CONTINUE", focused = true, onClick = onNext)
+        Cta(stringResource(R.string.wizard_adb_continue_cta), focused = true, onClick = onNext)
     } else {
-        Text("Battery", style = HaloType.Title)
+        Text(stringResource(R.string.wizard_battery_off_title), style = HaloType.Title)
         Spacer(Modifier.height(10.dp))
-        Text("Allow background so Doze can't kill the BLE link.", style = HaloType.Body)
+        Text(stringResource(R.string.wizard_battery_off_body), style = HaloType.Body)
         Spacer(Modifier.height(24.dp))
-        Cta("ALLOW", focused = true, onClick = onRequest)
+        Cta(stringResource(R.string.wizard_battery_allow_cta), focused = true, onClick = onRequest)
         Spacer(Modifier.height(10.dp))
-        Cta("SKIP", onClick = onNext)
+        Cta(stringResource(R.string.common_skip), onClick = onNext)
     }
 }
 
 @Composable
 private fun PairRingStep(onStartPairing: () -> Unit, onFinish: () -> Unit) {
-    Text("Pair ring", style = HaloType.Title)
+    Text(stringResource(R.string.wizard_pair_short_title), style = HaloType.Title)
     Spacer(Modifier.height(10.dp))
-    Text("Wear the ring (not the cradle). Two blinks = paired.", style = HaloType.Body)
+    Text(stringResource(R.string.wizard_pair_short_body), style = HaloType.Body)
     Spacer(Modifier.height(24.dp))
-    Cta("SCAN", focused = true, onClick = onStartPairing)
+    Cta(stringResource(R.string.wizard_pair_scan_cta), focused = true, onClick = onStartPairing)
     Spacer(Modifier.height(10.dp))
-    Cta("DONE", onClick = onFinish)
+    Cta(stringResource(R.string.wizard_pair_done_cta), onClick = onFinish)
 }

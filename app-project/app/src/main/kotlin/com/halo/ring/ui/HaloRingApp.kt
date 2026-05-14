@@ -88,6 +88,9 @@ fun HaloRingApp(
     onTourDismissed: () -> Unit = {},
     /** Settings → About → "Show operation guide" — caller flips tourActive=true on this. */
     onRequestTour: () -> Unit = {},
+    /** When the back stack is empty and the user does Back / Home, leave the app and return
+     *  to the system launcher. Wired by [MainActivity] to `moveTaskToBack(true)`. */
+    onExitToSystem: () -> Unit = {},
 ) {
     HaloRingTheme {
         var state by remember { mutableStateOf(initial) }
@@ -102,7 +105,7 @@ fun HaloRingApp(
                     }
                     return false
                 }
-                override fun exit() { /* finish() — handled at Activity level */ }
+                override fun exit() { onExitToSystem() }
             }
             val tabController = object : TabController {
                 override val current get() = state.tab
@@ -173,6 +176,7 @@ fun HaloRingApp(
                                     SettingsSection.ABOUT            -> SubScreen.About
                                     SettingsSection.VITALS_PREFS     -> SubScreen.VitalsPrefs
                                     SettingsSection.LANGUAGE         -> SubScreen.Language
+                                    SettingsSection.TEST_ARENA       -> SubScreen.TestArena
                                 })
                             },
                         )
@@ -313,6 +317,8 @@ fun HaloRingApp(
                         current = currentLanguage,
                         onSelect = { onLanguageSelected(it) },
                     )
+
+                    SubScreen.TestArena -> com.halo.ring.ui.screens.TestArenaScreen()
                 }
             }
         }

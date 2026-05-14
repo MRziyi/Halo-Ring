@@ -11,13 +11,15 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.halo.ring.R
 import com.halo.ring.ui.FocusableRow
 import com.halo.ring.ui.HaloColors
 import com.halo.ring.ui.HaloType
 import com.halo.ring.ui.ScreenPadding
 import com.halo.ring.ui.SettingsCatalog
-import com.halo.ring.ui.hud.friendly
+import com.halo.ring.ui.hud.gestureFriendlyText
 import com.halo.ring.core.action.GlassAction
 import com.halo.ring.core.gesture.Gesture
 
@@ -37,7 +39,7 @@ fun ActionPickerScreen(
 ) {
     Column(modifier = Modifier.fillMaxSize().padding(top = 4.dp)) {
         Text(
-            text = "${gesture.friendly()} →",
+            text = "${gestureFriendlyText(gesture)} →",
             style = HaloType.Title,
             modifier = Modifier.padding(horizontal = ScreenPadding, vertical = 12.dp),
         )
@@ -64,14 +66,14 @@ fun ActionPickerScreen(
                                 else HaloColors.Fg,
                     ),
                 )
-                if (selected) Text("(current)", style = HaloType.Caption.copy(color = HaloColors.Mute))
+                if (selected) Text(stringResource(R.string.action_picker_current), style = HaloType.Caption.copy(color = HaloColors.Mute))
             }
             Box(Modifier.fillMaxWidth().height(1.dp).background(HaloColors.Line))
         }
 
         Spacer(Modifier.height(16.dp))
         Text(
-            "System actions are advanced — they short-circuit the normal routing. Use cautiously.",
+            stringResource(R.string.action_picker_footer),
             style = HaloType.Caption,
             modifier = Modifier.padding(horizontal = ScreenPadding),
         )
