@@ -34,10 +34,11 @@ Thumbs.db
 keystore.properties
 
 
-# ───────── Vendor SDK (proprietary, must be obtained separately) ─────────────
-# RayNeo Mercury SDK — see app-project/app/libs/README.md for how to obtain.
-app-project/app/libs/*.aar
-!app-project/app/libs/README.md
+# ───────── Vendor SDK ────────────────────────────────────────────────────────
+# The RayNeo Mercury SDK AAR (`mercury-release.aar`) is committed directly under
+# `app-project/app/libs/` — it's the openly-distributable RayNeo ARDK, not
+# proprietary. CI builds pick it up unchanged. See `app-project/app/libs/README.md`.
+# (Previous revisions of this file blocked `*.aar` from tracking; audit-2026-05-13m.)
 
 
 # ───────── Build tool caches ─────────────────────────────────────────────────

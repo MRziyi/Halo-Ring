@@ -126,7 +126,9 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 
     // RayNeo Mercury SDK (binocular mirroring + temple gestures + 佩戴检测).
-    // AAR lives in app/libs/. Only included in the rayneo flavor.
+    // AAR is committed at [app/libs/mercury-release.aar] (Mercury is the openly-distributable
+    // RayNeo ARDK — see https://rayneo.gitbook.io/rayneo-devdoc/x-xi-lie/android-kai-fa). Only
+    // included in the rayneo flavor.
     "rayneoImplementation"(files("libs/mercury-release.aar"))
 
     // Optional: Shizuku — uncomment if you want the ShizukuBackend to compile.

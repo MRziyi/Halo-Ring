@@ -152,4 +152,20 @@ data class RingInfo(
     val batteryPct: Int? = null,
     /** True when [com.halo.ring.core.ble.ConnectionState.READY] is observed. */
     val connected: Boolean = false,
+    /**
+     * Most-recent [com.halo.ring.core.power.PowerPolicy.IntervalMode] the BLE client was asked to
+     * request. The actual negotiated interval is what the radio settled on — Android's
+     * `BluetoothGatt` doesn't expose that directly; we estimate it via [estimatedConnIntervalMs].
+     */
+    val intervalMode: com.halo.ring.core.power.PowerPolicy.IntervalMode =
+        com.halo.ring.core.power.PowerPolicy.IntervalMode.BALANCED,
+    /**
+     * Median inter-notify delta over the last ~16 ring events, with sub-5 ms bursts filtered out
+     * (those are multiple notifies queued in a single BLE connection event, not the interval).
+     * Null when the ring hasn't sent enough events to estimate (idle / freshly connected).
+     * Used by the Status screen for Doc/06 §4's "actual negotiated BLE connection interval" field.
+     */
+    val estimatedConnIntervalMs: Int? = null,
+    /** Which [com.halo.ring.core.inject.ExecutorBackend] last successfully dispatched an action. */
+    val activeBackendId: String = "(none)",
 )

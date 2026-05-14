@@ -160,7 +160,20 @@ fun HaloRingApp(
                                 })
                             },
                         )
-                        AppTab.STATUS -> StatusScreen(state.status)
+                        AppTab.STATUS -> StatusScreen(
+                            // Build the status snapshot freshly from the live `ringInfo` flow
+                            // each composition — the stale `state.status` (set at construction)
+                            // would never update otherwise.
+                            state.status.copy(
+                                connected = ringInfo.connected,
+                                rssiDbm = ringInfo.rssiDbm,
+                                connIntervalMs = ringInfo.estimatedConnIntervalMs,
+                                intervalMode = ringInfo.intervalMode,
+                                profileName = profiles.firstOrNull { it.id == activeProfileId }?.name
+                                    ?: state.status.profileName,
+                                activeBackend = ringInfo.activeBackendId,
+                            )
+                        )
                     }
 
                     is SubScreen.Feedback -> FeedbackScreen(

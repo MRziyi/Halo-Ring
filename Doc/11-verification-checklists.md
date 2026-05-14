@@ -125,7 +125,7 @@ python3 r08_probe.py --tutorial
 - [ ] Complete the tutorial (all 12 gestures). Note any gesture where the recogniser had to
       retry.
 - [ ] For frequently-retried gestures, the timing window defaults probably need tuning. Adjust
-      in [`core/.../action/DefaultProfiles.kt`](../app-project/core/src/main/kotlin/com/r08remote/core/action/DefaultProfiles.kt) and confirm.
+      in [`core/.../action/DefaultProfiles.kt`](../app-project/core/src/main/kotlin/com/halo/ring/core/action/DefaultProfiles.kt) and confirm.
 
 ---
 
@@ -136,12 +136,12 @@ python3 r08_probe.py --tutorial
 ```bash
 # Install your APK
 adb install app-rokid-debug.apk
-adb shell am start -n com.r08remote.app.rokid/com.r08remote.app.MainActivity
+adb shell am start -n com.halo.ring.rokid/com.halo.ring.MainActivity
 ```
 
 - [ ] Run `adb shell getprop | grep -i 'version\|model\|product\|build'`. Confirm
       `Build.MODEL == RG-glasses`, brand `Rokid`, fingerprint `Rokid/glasses/...`. Update
-      [`DeviceProfile.detect()`](../app-project/app/src/main/kotlin/com/r08remote/app/di/AppGraph.kt)
+      [`DeviceProfile.detect()`](../app-project/app/src/main/kotlin/com/halo/ring/di/AppGraph.kt)
       if anything differs.
 
 #### B1.1 DPAD key injection in system UI
@@ -189,7 +189,7 @@ adb shell am broadcast -a com.rokid.os.sprite.launcher.cmd --es cmd open_app --e
 #### B1.3 ADB wireless self-bootstrap
 
 ```bash
-adb shell pm grant com.r08remote.app.rokid android.permission.WRITE_SECURE_SETTINGS
+adb shell pm grant com.halo.ring.rokid android.permission.WRITE_SECURE_SETTINGS
 adb shell settings put global development_settings_enabled 1
 # Try to enable wireless debugging from your app and self-connect to 127.0.0.1
 ```
@@ -293,7 +293,7 @@ with our app on those glasses). Verify our app sees the same events the Python p
 #### B3.2 End-to-end gesture → action
 
 ```bash
-adb logcat -s R08RemoteService:V GestureSynthesizer:V InteractionRouter:V ActionRouter:V
+adb logcat -s HaloRingService:V GestureSynthesizer:V InteractionRouter:V ActionRouter:V
 # Then do each of the 12 gestures slowly
 ```
 

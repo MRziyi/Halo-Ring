@@ -449,6 +449,7 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         isInForeground.set(true)
         refreshSetupState()
+        com.halo.ring.ui.TempleFocusBridgeHolder.current.attach(this)
     }
 
     /**
@@ -469,6 +470,7 @@ class MainActivity : ComponentActivity() {
     override fun onPause() {
         super.onPause()
         isInForeground.set(false)
+        com.halo.ring.ui.TempleFocusBridgeHolder.current.detach(this)
     }
 
     override fun onDestroy() {

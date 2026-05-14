@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Debug-only manifest overlay. AGP merges this on top of `src/main/AndroidManifest.xml` for the
+  `debug` build type only — it is NOT included in release builds (which is what we want for the
+  PairingTestReceiver: it accepts arbitrary host/port/code broadcasts and runs ADB pairing, so
+  shipping it exported in a release APK would be a security gap).
+
+  Audit-2026-05-13k: previously the receiver lived in `src/main/AndroidManifest.xml` with
+  `tools:node="merge"` (the default — no-op) under the comment claim that release stripped it.
+  Verified that release manifests still emitted the receiver; moved here so the gate is the
+  source-set boundary, not a comment.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <application>
+        <receiver
+            android:name=".adb.PairingTestReceiver"
+            android:exported="true"
+            tools:ignore="ExportedReceiver">
+            <intent-filter>
+                <action android:name="com.halo.ring.TEST_PAIR" />
+            </intent-filter>
+        </receiver>
+    </application>
+</manifest>

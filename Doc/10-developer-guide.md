@@ -21,7 +21,7 @@ R08-dev/                           ← repo root
       src/main/.../ui/             ← Compose UI: theme, components, tabs, screens (Vitals,
                                      Settings root, Status, Feedback), HUD overlay,
                                      InAppFocusController
-      src/main/.../service/        ← R08RemoteService (stub) — foreground service host
+      src/main/.../service/        ← HaloRingService — foreground service host
       src/main/.../ble/            ← AndroidR08BleClient (stub) — Android BluetoothGatt impl
       src/main/.../inject/         ← AppProcessAgentBackend (stub) + AccessibilityBackend (stub)
       src/main/.../runtime/        ← AndroidScheduler (HandlerThread for the gesture pipeline)
@@ -73,14 +73,14 @@ To build the agent dex (for the AppProcessAgentBackend):
 ./gradlew :agent:jar
 # then turn the jar into a dex for app_process:
 $ANDROID_HOME/build-tools/<version>/d8 agent/build/libs/agent-*.jar \
-    --output agent/build/r08agent.dex
+    --output agent/build/halo-agent.dex
 # bundle the dex as an :app asset (TODO: automate via a gradle task)
-cp agent/build/r08agent.dex app/src/main/assets/r08agent.dex
+cp agent/build/halo-agent.dex app/src/main/assets/halo-agent.dex
 ```
 
 ## 4. Adding a new built-in profile
 
-1. Define it in [`core/.../action/DefaultProfiles.kt`](../app-project/core/src/main/kotlin/com/r08remote/core/action/DefaultProfiles.kt):
+1. Define it in [`core/.../action/DefaultProfiles.kt`](../app-project/core/src/main/kotlin/com/halo/ring/core/action/DefaultProfiles.kt):
    ```kotlin
    val MY_PROFILE = KeyMapProfile(
        id = "my-profile",
@@ -99,24 +99,24 @@ cp agent/build/r08agent.dex app/src/main/assets/r08agent.dex
 
 ## 5. Adding a new GlassAction
 
-1. Add a new sealed-class entry in [`core/.../action/Action.kt`](../app-project/core/src/main/kotlin/com/r08remote/core/action/Action.kt):
+1. Add a new sealed-class entry in [`core/.../action/Action.kt`](../app-project/core/src/main/kotlin/com/halo/ring/core/action/Action.kt):
    ```kotlin
    data object MyAction : GlassAction { override val needs = Capability.KEY_EVENT }
    ```
    Pick the right `Capability`.
 2. Map it in each platform's strategy:
-   - [`app/src/rokid/.../RokidStrategies.kt`](../app-project/app/src/rokid/kotlin/com/r08remote/app/device/rokid/RokidStrategies.kt) `primitives()` `when` block
-   - [`app/src/rayneo/.../RayNeoStrategies.kt`](../app-project/app/src/rayneo/kotlin/com/r08remote/app/device/rayneo/RayNeoStrategies.kt) likewise
+   - [`app/src/rokid/.../RokidStrategies.kt`](../app-project/app/src/rokid/kotlin/com/halo/ring/device/rokid/RokidStrategies.kt) `primitives()` `when` block
+   - [`app/src/rayneo/.../RayNeoStrategies.kt`](../app-project/app/src/rayneo/kotlin/com/halo/ring/device/rayneo/RayNeoStrategies.kt) likewise
 3. If it's a "feature-open" action that uses an Intent, add to the `FeatureIntents` interface in
-   [`core/.../device/DeviceStrategy.kt`](../app-project/core/src/main/kotlin/com/r08remote/core/device/DeviceStrategy.kt) and implement in both flavors.
+   [`core/.../device/DeviceStrategy.kt`](../app-project/core/src/main/kotlin/com/halo/ring/core/device/DeviceStrategy.kt) and implement in both flavors.
 4. (Optional) bind it in one of the default profiles.
 
 ## 6. Adding a new gesture
 
-1. Extend the `Gesture` enum in [`core/.../gesture/Gestures.kt`](../app-project/core/src/main/kotlin/com/r08remote/core/gesture/Gestures.kt).
-2. Implement the synthesis path in [`GestureSynthesizer.kt`](../app-project/core/src/main/kotlin/com/r08remote/core/gesture/GestureSynthesizer.kt). If it's
+1. Extend the `Gesture` enum in [`core/.../gesture/Gestures.kt`](../app-project/core/src/main/kotlin/com/halo/ring/core/gesture/Gestures.kt).
+2. Implement the synthesis path in [`GestureSynthesizer.kt`](../app-project/core/src/main/kotlin/com/halo/ring/core/gesture/GestureSynthesizer.kt). If it's
    a new combo, add a follow-up timer + state field; mirror the existing combo logic.
-3. Add tests in [`GestureSynthesizerTest.kt`](../app-project/core/src/test/kotlin/com/r08remote/core/gesture/GestureSynthesizerTest.kt) — at minimum:
+3. Add tests in [`GestureSynthesizerTest.kt`](../app-project/core/src/test/kotlin/com/halo/ring/core/gesture/GestureSynthesizerTest.kt) — at minimum:
    - "does it fire when the conditions are met"
    - "does it not fire when an interfering sequence happens"
    - "does it interact correctly with optimistic-tap / await-combos"
@@ -138,13 +138,13 @@ Suppose Glasses-C ships and we want to support it. The work:
    - `GlassesCWearStateProvider`
    - `GlassesCFeatureIntents`
 4. Wire them in `app/src/glassesC/.../DeviceFlavorBindings.kt`.
-5. Extend [`DeviceProfile`](../app-project/core/src/main/kotlin/com/r08remote/core/DeviceProfile.kt) and
-   [`AppGraph.detectDeviceProfile()`](../app-project/app/src/main/kotlin/com/r08remote/app/di/AppGraph.kt) with the new profile.
+5. Extend [`DeviceProfile`](../app-project/core/src/main/kotlin/com/halo/ring/core/DeviceProfile.kt) and
+   [`AppGraph.detectDeviceProfile()`](../app-project/app/src/main/kotlin/com/halo/ring/di/AppGraph.kt) with the new profile.
 6. Verify per [11-verification-checklists.md](11-verification-checklists.md) §B.
 
 ## 8. Adding a new executor backend
 
-Implement [`ExecutorBackend`](../app-project/core/src/main/kotlin/com/r08remote/core/inject/ExecutorBackend.kt). Example for adding e.g. an HID-bluetooth-keyboard backend
+Implement [`ExecutorBackend`](../app-project/core/src/main/kotlin/com/halo/ring/core/inject/ExecutorBackend.kt). Example for adding e.g. an HID-bluetooth-keyboard backend
 (for the future phone-as-bridge architecture):
 
 ```kotlin
@@ -183,25 +183,25 @@ The `:agent` module produces a small dex that runs as a shell-uid process. Build
 
 ```bash
 ./gradlew :agent:jar
-d8 --output agent/build/r08agent.dex agent/build/libs/agent-*.jar
-cp agent/build/r08agent.dex app/src/main/assets/
+d8 --output agent/build/halo-agent.dex agent/build/libs/agent-*.jar
+cp agent/build/halo-agent.dex app/src/main/assets/
 ```
 
 App-side bootstrap (in the first-run wizard or after a `pm grant`):
 
 ```bash
 # Push the dex to a location the shell can run from
-adb push r08agent.dex /data/local/tmp/
+adb push halo-agent.dex /data/local/tmp/
 
 # Start it via app_process. CLASSPATH on the line is the convention.
-adb shell "CLASSPATH=/data/local/tmp/r08agent.dex nohup \
-    app_process /system/bin --nice-name=r08agent com.r08remote.agent.Main >/dev/null 2>&1 &"
+adb shell "CLASSPATH=/data/local/tmp/halo-agent.dex nohup \
+    app_process /system/bin --nice-name=halo.agent com.halo.ring.agent.Main >/dev/null 2>&1 &"
 
 # Verify
-adb shell ps -A | grep r08agent
+adb shell ps -A | grep halo.agent
 ```
 
-The agent opens an abstract LocalSocket `r08agent` and serves the line protocol:
+The agent opens an abstract LocalSocket `halo.agent` and serves the line protocol:
 
 ```
 KEY <kc>                              → press-and-release single keycode
@@ -223,7 +223,7 @@ which is hidden API but accessible to shell-uid processes via `app_process` (whi
 app-startup hidden-API gate). Detail and reference: scrcpy's server code, Shizuku.
 
 `AppProcessAgentBackend` (in `:app`) connects to the socket once at startup and pipelines
-commands. It also watches a heartbeat file (`/data/local/tmp/r08agent.heartbeat`) and re-spawns
+commands. It also watches a heartbeat file (`/data/local/tmp/halo.agent.heartbeat`) and re-spawns
 the agent if it goes stale.
 
 ## 11. The phase-0 probe

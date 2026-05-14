@@ -1,18 +1,17 @@
-# app/libs/ — vendor SDK drop point
+# app/libs/ — vendor SDK drop
 
-The **rayneo** flavor depends on the RayNeo Mercury SDK AAR, which we cannot redistribute. It's
-gitignored from this repo (see [`.gitignore`](../../../.gitignore)). To build the rayneo flavor
-locally:
+The **rayneo** flavor depends on the RayNeo Mercury SDK AAR for binocular rendering, temple-touchpad
+gestures, and 佩戴检测 (wear detection). Mercury is RayNeo's openly-distributable Android ARDK
+(reference: https://rayneo.gitbook.io/rayneo-devdoc/x-xi-lie/android-kai-fa), so the AAR is
+**committed directly to this repo**:
 
-1. Download `mercury-release.aar` from the RayNeo developer portal at
-   [rayneo.gitbook.io](https://rayneo.gitbook.io/).
-2. Drop it here as `mercury-release.aar`.
-3. Re-run the rayneo build:
-   ```bash
-   ./gradlew :app:assembleRayneoDebug
-   ```
+- [`mercury-release.aar`](mercury-release.aar) — pinned version drop.
 
-The Mercury SDK is used for: binocular mirroring (`BaseMirrorActivity`), temple touch-bar
-gestures, and 佩戴检测 (wear detection) on the RayNeo X3 Pro. The rokid flavor does not need it.
+The build references it from [`app/build.gradle.kts`](../build.gradle.kts) under
+`rayneoImplementation(files("libs/mercury-release.aar"))`. CI builds pick it up unchanged.
 
-If the AAR is missing the build fails with a clear error pointing at this file.
+To upgrade: replace this file with a newer release-AAR from RayNeo's developer portal, re-run
+`./gradlew :app:assembleRayneoDebug`, and commit the new binary. Bump the SDK version in
+[`Doc/03-target-platforms.md`](../../../Doc/03-target-platforms.md) §2.3 if the surface changed.
+
+The **rokid** flavor does not need it.

@@ -99,7 +99,7 @@ The agent. Per-device Intent maps.
 (health-check + auto-recover), the §3 power state machine (worn/screen/battery → TOUCH_ENABLE
 + BLE interval + feature gating).
 
-**Files**: `app/.../service/R08RemoteService.kt` (TODO), `BootReceiver.kt`,
+**Files**: `app/.../service/HaloRingService.kt`, `BootReceiver.kt`,
 `app/.../runtime/` (planned: `WearLifecycle.kt`, `PowerStateMachine.kt`).
 
 **Reference**: [06](06-performance-and-power.md) §3.

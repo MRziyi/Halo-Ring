@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="Doc/brand/v10a-aperture-arcs.svg" alt="Halo Ring 环意 brand mark — three swept mint-green arcs forming an aperture" width="180" height="180" />
+
 # Halo Ring · 环意
 
 **Where the ring goes, the world moves.** · 「环之所至，意之所达」
@@ -22,14 +24,27 @@ The headline performance claim, validated on a OnePlus 9 Pro / Android 14: the r
 turns a ring touch into an Android `InputManager.injectInputEvent` call in **median ~5 ms** —
 about 30 × faster than the `adb shell input keyevent` path that the original reference app uses.
 
+### Get a pre-built APK (no toolchain needed)
+
+The [Build APKs](../../actions/workflows/build-apks.yml) workflow runs on every push to `main`,
+every PR, and every `v*` git tag — uploading all four APKs (`rokid-debug` / `rokid-release` /
+`rayneo-debug` / `rayneo-release`) as a 14-day artifact under that run's **Artifacts** section.
+
+- **Tagged release** → also gets a [GitHub Release](../../releases) with the same four APKs attached.
+- **Bleeding edge** → grab the artifact from the latest [main run](../../actions/workflows/build-apks.yml).
+- **Manual build** → trigger `workflow_dispatch` from the Actions tab.
+
+Both flavors build clean from a fresh checkout — no SDK download or local Mercury AAR drop
+required (the AAR is now committed at `app-project/app/libs/mercury-release.aar`).
+
 ### Quick start (no glasses, no ring required)
 
 You can exercise everything except the BLE link itself on a regular Android 12+ phone:
 
 ```bash
 cd app-project
-./gradlew :core:test                # 172 unit tests across 15 suites
-./gradlew :app:assembleRokidDebug   # ~14 MB APK
+./gradlew :core:test                # 206 unit tests across 18 suites, all green
+./gradlew :app:assembleRokidDebug   # ~13 MB debug APK
 adb install -r app/build/outputs/apk/rokid/debug/app-rokid-debug.apk
 ```
 
@@ -71,25 +86,27 @@ Requirements: **JDK 17**, **Android SDK** with `platform-34` and `build-tools 34
 **Android 12+ device** or emulator for sideload testing.
 
 ```bash
-# Rokid flavor (≈ 14 MB debug APK)
+# Rokid flavor (≈ 13 MB debug APK, ≈ 3.4 MB after R8)
 ./gradlew :app:assembleRokidDebug
 adb install -r app/build/outputs/apk/rokid/debug/app-rokid-debug.apk
 
-# RayNeo flavor: requires the Mercury SDK AAR — see
-# app-project/app/libs/README.md for download instructions
+# RayNeo flavor (Mercury SDK AAR committed under app-project/app/libs/ — no manual drop needed)
 ./gradlew :app:assembleRayneoDebug
 
 # Unit tests (no Android SDK needed)
 ./gradlew :core:test
 ```
 
-CI runs `:core:test` on every push / PR: [`.github/workflows/core-tests.yml`](.github/workflows/core-tests.yml).
+CI: [`.github/workflows/core-tests.yml`](.github/workflows/core-tests.yml) runs the `:core` test
+suite on every push / PR; [`.github/workflows/build-apks.yml`](.github/workflows/build-apks.yml)
+builds all four flavor / build-type APKs and publishes them as artifacts (and as a Release on
+`v*` tags).
 
 ### Status
 
 | Layer | Status |
 |---|---|
-| `:core` (BLE protocol, gesture state machine, power policy, modal layer, ADB packet) | ✅ implemented + 172 unit tests across 15 suites |
+| `:core` (BLE protocol, gesture state machine, power policy, modal layer, ADB packet, conn-interval estimator, temple-action mapping) | ✅ implemented + **206 unit tests across 18 suites** |
 | `:app` (UI, foreground service, agent backend, accessibility backend, ADB bootstrap skeleton) | ✅ implemented |
 | `:agent` (LocalSocket + reflection-based input injection) | ✅ implemented + RTT verified on Android 14 |
 | Adaptive launcher icon, splash, bilingual strings, monochrome notification | ✅ implemented |
@@ -139,14 +156,27 @@ used purely descriptively as the hardware target.
 `InputManager.injectInputEvent` 的中位往返延迟 **~5 ms**——比参考 app 走 `adb shell input keyevent`
 快约 30 倍。
 
+### 直接拿到编译好的 APK（无需任何工具链）
+
+[Build APKs](../../actions/workflows/build-apks.yml) workflow 在每次 push 到 `main`、每个 PR、
+每个 `v*` git tag 触发——把四个 APK（`rokid-debug` / `rokid-release` / `rayneo-debug` /
+`rayneo-release`）作为 14 天有效的 artifact 挂到该次运行的 **Artifacts** 区。
+
+- **打 tag 发版** → 同时在 [GitHub Releases](../../releases) 创建一条发布，附带这四个 APK。
+- **最新开发版** → 直接到 [main 最近的 run](../../actions/workflows/build-apks.yml) 拿 artifact。
+- **手动触发** → Actions 页用 `workflow_dispatch`。
+
+两个 flavor 从干净 checkout 都能直接编通——不需要 SDK 下载、不需要手工 drop Mercury AAR
+（AAR 现在已直接提交在 `app-project/app/libs/mercury-release.aar`）。
+
 ### 快速上手（无戒指无眼镜也能跑）
 
 只要一台 Android 12+ 的普通手机即可验证除 BLE 通信外的整个流水线：
 
 ```bash
 cd app-project
-./gradlew :core:test                # 172 个单元测试，15 个 suite
-./gradlew :app:assembleRokidDebug   # ~14 MB debug APK
+./gradlew :core:test                # 206 个单元测试，18 个 suite，全绿
+./gradlew :app:assembleRokidDebug   # ~13 MB debug APK
 adb install -r app/build/outputs/apk/rokid/debug/app-rokid-debug.apk
 ```
 
@@ -187,25 +217,27 @@ Compose UI、`rokid` / `rayneo` 两个 flavor。`:agent` 是一个微型 dex，�
 设备或模拟器。
 
 ```bash
-# Rokid flavor (≈ 14 MB debug APK)
+# Rokid flavor (≈ 13 MB debug APK, R8 后 ≈ 3.4 MB)
 ./gradlew :app:assembleRokidDebug
 adb install -r app/build/outputs/apk/rokid/debug/app-rokid-debug.apk
 
-# RayNeo flavor: 需 Mercury SDK AAR——下载方式见
-# app-project/app/libs/README.md
+# RayNeo flavor (Mercury SDK AAR 已直接在 app-project/app/libs/ 仓库内, 无需手动下载)
 ./gradlew :app:assembleRayneoDebug
 
 # 单元测试 (无 Android SDK 也能跑)
 ./gradlew :core:test
 ```
 
-CI 每次 push / PR 跑 `:core:test`：[`.github/workflows/core-tests.yml`](.github/workflows/core-tests.yml)。
+CI：[`.github/workflows/core-tests.yml`](.github/workflows/core-tests.yml) 每次 push / PR 跑
+`:core` 测试套件；[`.github/workflows/build-apks.yml`](.github/workflows/build-apks.yml) 在同样
+触发时把四种 flavor × 构建类型的 APK 编出来，作为 artifact 发布（`v*` tag 时还会创建一条
+Release）。
 
 ### 当前状态
 
 | 模块 | 状态 |
 |---|---|
-| `:core` (BLE 协议、手势状态机、功耗策略、模态层、ADB 包格式) | ✅ 实现完成 + 172 测试 |
+| `:core` (BLE 协议、手势状态机、功耗策略、模态层、ADB 包格式、conn-interval 估算、temple-action 映射) | ✅ 实现完成 + **206 测试 / 18 suite** |
 | `:app` (UI、前台服务、agent backend、a11y backend、ADB bootstrap 骨架) | ✅ 实现完成 |
 | `:agent` (LocalSocket + 反射注入) | ✅ 实现完成 + Android 14 验证 RTT |
 | 自适应图标 / 启动屏 / 双语字符串 / 单色通知图标 | ✅ 实现完成 |

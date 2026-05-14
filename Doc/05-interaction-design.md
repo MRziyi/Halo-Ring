@@ -44,7 +44,7 @@ The synthesiser produces these:
 
 ## 3. The state machine
 
-Source of truth: [`core/.../gesture/GestureSynthesizer.kt`](../app-project/core/src/main/kotlin/com/r08remote/core/gesture/GestureSynthesizer.kt).
+Source of truth: [`core/.../gesture/GestureSynthesizer.kt`](../app-project/core/src/main/kotlin/com/halo/ring/core/gesture/GestureSynthesizer.kt).
 
 ### 3.1 Three concurrent timing windows
 
@@ -98,7 +98,7 @@ The R08 firmware auto-sleeps after ~60 s of no touches. Re-waking it requires a 
 ring's own behaviour, not us). The first TOUCH events after the ring re-connects to us are this
 wake double-tap, **not user intent**.
 
-The synthesiser exposes `armWakeSwallow()`. The lifecycle layer (`R08RemoteService`) calls it on
+The synthesiser exposes `armWakeSwallow()`. The lifecycle layer (`HaloRingService`) calls it on
 the BLE reconnect callback. After arming, the next `wakeSwallowCount` (default 1) TOUCH events
 are dropped. `LONG_PRESS` is **never** swallowed — which is why we can use it as the screen-wake
 gesture even right after the ring re-wakes from auto-sleep.
@@ -127,7 +127,7 @@ inter-tap distribution and pick a safe threshold.
 ### 3.7 Test coverage
 
 The state machine is exercised by ~25 JVM tests in
-[`core/src/test/.../GestureSynthesizerTest.kt`](../app-project/core/src/test/kotlin/com/r08remote/core/gesture/GestureSynthesizerTest.kt).
+[`core/src/test/.../GestureSynthesizerTest.kt`](../app-project/core/src/test/kotlin/com/halo/ring/core/gesture/GestureSynthesizerTest.kt).
 Every documented behaviour is asserted; if you change the state machine, the tests will catch
 behavioural regressions. To run: `cd app-project && ./gradlew :core:test`.
 
@@ -230,7 +230,7 @@ works (see §5).
 
 ### 4.2 ModeManager: switching between profiles
 
-[`ModeManager`](../app-project/core/src/main/kotlin/com/r08remote/core/action/ModeManager.kt) owns
+[`ModeManager`](../app-project/core/src/main/kotlin/com/halo/ring/core/action/ModeManager.kt) owns
 the profile list + the active one. Three switching mechanisms:
 
 | Mechanism | How | Effect |

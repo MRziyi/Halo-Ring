@@ -1,6 +1,7 @@
 package com.halo.ring.device.rokid
 
 import android.content.Context
+import android.util.Log
 import android.view.KeyEvent
 import com.halo.ring.core.action.Capability
 import com.halo.ring.core.action.GlassAction
@@ -10,6 +11,8 @@ import com.halo.ring.core.device.FeatureIntents
 import com.halo.ring.core.device.GlassActionMapper
 import com.halo.ring.core.device.InjectionPrimitive
 import com.halo.ring.core.device.WearStateProvider
+import com.halo.ring.device.ProximityWearSource
+import com.halo.ring.device.ScreenWearProxy
 
 /**
  * Rokid Glasses (YodaOS-Sprite, Android 12, single right-eye display ≈ 480px wide).
@@ -45,7 +48,15 @@ class RokidActionMapper(private val intents: FeatureIntents) : GlassActionMapper
         GlassAction.Recents    -> listOf(InjectionPrimitive.A11yGlobal(A11yGlobalAction.RECENTS))
         GlassAction.Notifications -> listOf(InjectionPrimitive.A11yGlobal(A11yGlobalAction.NOTIFICATIONS))
         GlassAction.QuickSettings -> listOf(InjectionPrimitive.A11yGlobal(A11yGlobalAction.QUICK_SETTINGS))
-        GlassAction.Screenshot -> listOf(InjectionPrimitive.Shell("input keyevent 120"))  // KEYCODE_SYSRQ as alt path; a11y also exposes TAKE_SCREENSHOT (API 30+) — add to A11yGlobalAction later
+        // Audit-2026-05-13k: KEYCODE_SYSRQ (120) is NOT a screenshot key on Android — it was a Linux
+        // print-screen vestige. Real path: AccessibilityService.GLOBAL_ACTION_TAKE_SCREENSHOT (API 30+,
+        // handled by AccessibilityBackend.toGlobalAction). Rokid Glasses run Android 12 / API 32, so
+        // this is universally available. Shell fallback `screencap` writes to a file but doesn't
+        // surface a UI confirmation; treat as last resort.
+        GlassAction.Screenshot -> listOf(
+            InjectionPrimitive.A11yGlobal(A11yGlobalAction.TAKE_SCREENSHOT),
+            InjectionPrimitive.Shell("screencap -p /sdcard/halo-screenshot.png"),
+        )
         GlassAction.Menu       -> listOf(key(KeyEvent.KEYCODE_MENU))
 
         // ── volume / brightness / media ──
@@ -111,9 +122,89 @@ class RokidFeatureIntents : FeatureIntents {
     )
 }
 
+/**
+ * Rokid wear-state. Three signals ordered by confidence:
+ *
+ *  1. **System property `vendor.rkd.glasses.is_take_on`** (highest confidence) — direct read of
+ *     the same value Rokid's own `com.rokid.hardware.DeviceUtils.isGlassTakeOn()` returns.
+ *     Source: `research/rokid-docs/yodaos/docs/apps/sys-config.md`. Polled at 30 s by
+ *     [RokidSysPropWearPoller].
+ *  2. **TYPE_PROXIMITY sensor** ("psensor" forehead, standard `SensorManager`). Supplementary.
+ *  3. **Screen on/off heuristic** ([ScreenWearProxy]) — fallback. 30-min screen-off ⇒ not worn.
+ *
+ * Higher-confidence signals call [ScreenWearProxy.overrideWorn] which supersedes the heuristic.
+ */
 class RokidWearStateProvider(private val ctx: Context) : WearStateProvider {
-    // TODO: use ACTION_SCREEN_ON/OFF + Rokid's `RokidDoorReceiver` broadcast (if exposed) +
-    //       proximity sensor. Until then assume worn whenever the screen is on.
-    override fun isWorn(): Boolean = true
-    override fun observe(onChange: (Boolean) -> Unit): () -> Unit { onChange(true); return {} }
+    private val proxy = ScreenWearProxy(ctx)
+    private val proximity = ProximityWearSource(ctx, proxy)
+    private val sysProp = RokidSysPropWearPoller(proxy)
+
+    init {
+        proximity.start()
+        sysProp.start()
+    }
+
+    override fun isWorn(): Boolean = proxy.isWorn()
+    override fun observe(onChange: (Boolean) -> Unit): () -> Unit = proxy.observe(onChange)
 }
+
+/**
+ * Polls `SystemProperties.get("vendor.rkd.glasses.is_take_on")` every 30 s. The property is
+ * vendor-readable (no root needed); same value Rokid's own privileged services use to drive
+ * `glassTakeOnChange(...)` callbacks.
+ *
+ * Reads "1" → worn, "0" → not worn, anything else (empty / class missing on non-Rokid build) →
+ * inert. [SystemProperties] is a hidden-API class but app-readable via reflection.
+ */
+private class RokidSysPropWearPoller(private val proxy: ScreenWearProxy) {
+    private val handler = android.os.Handler(android.os.Looper.getMainLooper())
+    private var sysPropGet: java.lang.reflect.Method? = null
+    @Volatile private var lastReported: Boolean? = null
+
+    fun start() {
+        try {
+            val cls = Class.forName("android.os.SystemProperties")
+            sysPropGet = cls.getMethod("get", String::class.java)
+            // Probe once at startup to confirm the property exists; if absent, don't burn cycles polling.
+            val initial = read()
+            if (initial == null) {
+                Log.i(TAG, "Rokid wear property unavailable on this device — fallback to ScreenWearProxy.")
+                return
+            }
+            Log.i(TAG, "Rokid wear property reads '$initial' — polling every ${POLL_INTERVAL_MS / 1000}s.")
+            proxy.overrideWorn(initial == "1")
+            lastReported = initial == "1"
+            scheduleNext()
+        } catch (e: ReflectiveOperationException) {
+            Log.w(TAG, "SystemProperties reflection failed: ${e.message}")
+        }
+    }
+
+    private fun read(): String? {
+        val m = sysPropGet ?: return null
+        val v = try { m.invoke(null, PROP_NAME) as? String } catch (_: ReflectiveOperationException) { null }
+        return if (v.isNullOrEmpty()) null else v
+    }
+
+    private fun scheduleNext() {
+        handler.postDelayed({
+            val v = read()
+            if (v != null) {
+                val worn = v == "1"
+                if (worn != lastReported) {
+                    lastReported = worn
+                    proxy.overrideWorn(worn)
+                }
+            }
+            scheduleNext()
+        }, POLL_INTERVAL_MS)
+    }
+
+    companion object {
+        private const val TAG = "RokidSysPropWearPoller"
+        private const val PROP_NAME = "vendor.rkd.glasses.is_take_on"
+        /** 30 s — wear changes are slow human events; polling faster wastes CPU. */
+        private const val POLL_INTERVAL_MS = 30_000L
+    }
+}
+

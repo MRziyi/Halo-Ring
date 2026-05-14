@@ -1,6 +1,7 @@
 package com.halo.ring.device.rayneo
 
 import android.content.Context
+import android.util.Log
 import android.view.KeyEvent
 import com.halo.ring.core.action.Capability
 import com.halo.ring.core.action.GlassAction
@@ -10,6 +11,8 @@ import com.halo.ring.core.device.FeatureIntents
 import com.halo.ring.core.device.GlassActionMapper
 import com.halo.ring.core.device.InjectionPrimitive
 import com.halo.ring.core.device.WearStateProvider
+import com.halo.ring.device.ProximityWearSource
+import com.halo.ring.device.ScreenWearProxy
 
 /**
  * RayNeo X3 Pro (RayNeo AIOS 2.0, Android 12+, dual-eye 1280×480 MicroLED).
@@ -103,31 +106,137 @@ class RayNeoActionMapper(private val intents: FeatureIntents) : GlassActionMappe
 }
 
 /**
- * Placeholder. RayNeo X3 Pro's launcher / camera / AI Intent strings aren't publicly documented
- * (no public system decompilation like rokid-docs). Fill these in by:
+ * X3 Pro Intent map. The launcher-specific Activities for RayNeo's first-party apps (Camera, AI,
+ * Translate) aren't publicly documented — see Doc/11 §B6 for the on-device discovery recipe.
+ * What we CAN do today is use standard Android Intents that work on any AOSP 12 device. For
+ * features without a standard Intent (visual AI / on-glasses chat / translate), the best we can
+ * do is `monkey -p <pkg>` once we know the package name; until then they remain empty so the
+ * `ActionRouter` falls through to the next backend instead of silently launching the wrong app.
  *
- *   adb shell pm list packages | grep -iv 'android\|google\|qualcomm'
- *   adb shell dumpsys activity top    # while navigating the system UI
+ * Standard-Android Intents below verified against AOSP 12 sources:
+ *  - `android.media.action.STILL_IMAGE_CAMERA`            → opens the system camera (any one)
+ *  - `android.media.action.IMAGE_CAPTURE`                 → camera in capture mode
+ *  - `android.settings.SETTINGS`                          → system Settings
+ *  - `android.intent.action.VIEW` + MIME image-star         → gallery (delegated to user choice)
+ *  - `android.intent.action.MUSIC_PLAYER` / `android.media.action.MEDIA_PLAY_FROM_SEARCH` → music
  *
- * See §17.5 / §18.7. As-is, falls back to `monkey` (which uses LAUNCHER intent-filter resolution).
+ * RayNeo's first-party apps register under category `com.rayneo.mercury.app` (verified from the
+ * RayDesk reference repo's `AndroidManifest.xml`). `launchApp` therefore tries that category
+ * before falling back to the standard LAUNCHER one.
  */
 class RayNeoFeatureIntents : FeatureIntents {
-    override fun openCamera()    = emptyList<InjectionPrimitive>()
-    override fun takePhoto()     = listOf(InjectionPrimitive.Key(KeyEvent.KEYCODE_CAMERA))
+    override fun openCamera() = listOf(
+        InjectionPrimitive.Shell("am start -a android.media.action.STILL_IMAGE_CAMERA")
+    )
+    override fun takePhoto() = listOf(
+        InjectionPrimitive.Shell("am start -a android.media.action.IMAGE_CAPTURE"),
+        InjectionPrimitive.Key(KeyEvent.KEYCODE_CAMERA),
+    )
+    // Until we know the X3 Pro Visual-AI package, surface as no-op so the action isn't silently
+    // mis-routed. On-device discovery in Doc/11 §B6.
     override fun askVisualAI()   = emptyList<InjectionPrimitive>()
     override fun openTranslate() = emptyList<InjectionPrimitive>()
     override fun openChat()      = emptyList<InjectionPrimitive>()
-    override fun openMusic()     = emptyList<InjectionPrimitive>()
-    override fun openSettings()  = listOf(InjectionPrimitive.Shell("am start -a android.settings.SETTINGS"))
-    override fun openGallery()   = emptyList<InjectionPrimitive>()
+    override fun openMusic() = listOf(
+        // MEDIA_PLAY_FROM_SEARCH with empty query opens whichever music app is registered as default.
+        InjectionPrimitive.Shell("am start -a android.media.action.MEDIA_PLAY_FROM_SEARCH --es query ''"),
+    )
+    override fun openSettings() = listOf(
+        InjectionPrimitive.Shell("am start -a android.settings.SETTINGS"),
+    )
+    override fun openGallery() = listOf(
+        InjectionPrimitive.Shell("am start -a android.intent.action.VIEW -t image/*"),
+    )
     override fun launchApp(pkg: String) = listOf(
-        InjectionPrimitive.Shell("monkey -p $pkg -c android.intent.category.LAUNCHER 1")
+        // Try RayNeo's AppLab-specific category first (their Mercury-SDK apps register here),
+        // then standard Android LAUNCHER. `monkey` picks the first match in either case.
+        InjectionPrimitive.Shell("monkey -p $pkg -c com.rayneo.mercury.app 1 || monkey -p $pkg -c android.intent.category.LAUNCHER 1"),
     )
 }
 
+/**
+ * RayNeo wear-state. Three signals ordered by confidence:
+ *
+ *  1. **Mercury SDK `MobileState.isWearing()`** (since AAR v0.2.6 per
+ *     https://rayneo.gitbook.io/rayneo-devdoc/x-xi-lie/android-kai-fa/neng-li-jie-shao/pei-dai-jian-ce).
+ *     Synchronous `Boolean` read backed by a ContentProvider IPC. We poll it via [MercuryWearPoller]
+ *     at low frequency (~30 s) since the API doesn't expose a Flow / listener.
+ *  2. **TYPE_PROXIMITY sensor** — supplementary; near/far → worn/not.
+ *  3. **Screen on/off heuristic** ([ScreenWearProxy]) — fallback.
+ *
+ * Higher-confidence signals call [ScreenWearProxy.overrideWorn] which supersedes the heuristic.
+ */
 class RayNeoWearStateProvider(private val ctx: Context) : WearStateProvider {
-    // TODO: subscribe to the RayNeo ARSDK 佩戴检测 module if the AAR is available; otherwise
-    //       fall back to ACTION_SCREEN_ON/OFF as a proxy.
-    override fun isWorn(): Boolean = true
-    override fun observe(onChange: (Boolean) -> Unit): () -> Unit { onChange(true); return {} }
+    private val proxy = ScreenWearProxy(ctx)
+    private val proximity = ProximityWearSource(ctx, proxy)
+    private val mercury = MercuryWearPoller(proxy)
+
+    init {
+        proximity.start()
+        mercury.start()
+    }
+
+    override fun isWorn(): Boolean = proxy.isWorn()
+    override fun observe(onChange: (Boolean) -> Unit): () -> Unit = proxy.observe(onChange)
+}
+
+/**
+ * Polls `com.ffalcon.mercury.android.sdk.api.MobileState.isWearing(): Boolean` on a background
+ * thread every [POLL_INTERVAL_MS] and pushes changes into [ScreenWearProxy].
+ *
+ * Loaded via reflection so this rayneo flavor still builds + runs even if the bundled AAR is
+ * older than v0.2.6 (class absent → poller stays inert, ScreenWearProxy alone drives the signal).
+ *
+ * The poll cost is negligible: one ContentProvider call every 30 s = a few μs of work, and
+ * wear-state transitions are slow human events (minutes-scale), so 30 s grain is more than
+ * enough. If a Flow-based API ships in a future AAR, swap to that and remove the poller.
+ */
+private class MercuryWearPoller(private val proxy: ScreenWearProxy) {
+    private val handler = android.os.Handler(android.os.Looper.getMainLooper())
+    private var isWearingMethod: java.lang.reflect.Method? = null
+    private var instance: Any? = null
+    @Volatile private var lastReported: Boolean? = null
+
+    fun start() {
+        try {
+            val cls = Class.forName(MOBILE_STATE_CLASS)
+            instance = cls.getField("INSTANCE").get(null)
+            isWearingMethod = cls.getMethod("isWearing")
+            Log.i(TAG, "Mercury MobileState.isWearing reflective handle resolved — wear-detection live.")
+            scheduleNext()
+        } catch (e: ClassNotFoundException) {
+            Log.i(TAG, "Mercury MobileState not present (AAR < v0.2.6) — falling back to ScreenWearProxy only.")
+        } catch (e: ReflectiveOperationException) {
+            Log.w(TAG, "Mercury MobileState reflection failed: ${e.message}")
+        }
+    }
+
+    private fun scheduleNext() {
+        handler.postDelayed({ pollOnce() }, POLL_INTERVAL_MS)
+    }
+
+    private fun pollOnce() {
+        // Run on a worker thread — ContentProvider.call is sync IPC and we don't want to stall
+        // the main looper if the provider is slow.
+        Thread({
+            val worn = try {
+                isWearingMethod?.invoke(instance) as? Boolean
+            } catch (e: ReflectiveOperationException) {
+                Log.w(TAG, "MobileState.isWearing() reflection threw: ${e.message}")
+                null
+            }
+            if (worn != null && worn != lastReported) {
+                lastReported = worn
+                proxy.overrideWorn(worn)
+            }
+            handler.post { scheduleNext() }
+        }, "halo-mercury-wear-poll").start()
+    }
+
+    companion object {
+        private const val TAG = "MercuryWearPoller"
+        private const val MOBILE_STATE_CLASS = "com.ffalcon.mercury.android.sdk.api.MobileState"
+        /** 30 s — wear-state changes are slow human events; polling faster wastes CPU + ContentProvider IPC. */
+        private const val POLL_INTERVAL_MS = 30_000L
+    }
 }

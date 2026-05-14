@@ -66,7 +66,7 @@ Already done (no hardware required):
     screens (Vitals / Settings root / Status), Feedback sub-screen, TabBar, HUD overlay with 6
     variants (including the new gesture-hint), InAppFocusController for the in-app fast path
   - Per-flavor strategy implementations (Rokid + RayNeo)
-  - Stubbed but well-documented: `:agent`, `R08RemoteService`, `AndroidR08BleClient`,
+  - Fully implemented runtime: `:agent`, `HaloRingService`, `AndroidR08BleClient`,
     `AppProcessAgentBackend`, `AccessibilityBackend`
 - Phase-0 verification probe with `--tutorial` mode at [`../phase0/r08_probe.py`](../phase0/r08_probe.py)
 - End-user manual ([09-user-manual.md](09-user-manual.md))
@@ -75,10 +75,10 @@ Already done (no hardware required):
   ([12-research-and-references.md](12-research-and-references.md))
 
 Outstanding work — see [13-handoff.md §2](13-handoff.md):
-- **Critical path (priority A)**: `AndroidR08BleClient`, `:agent` body,
-  `AppProcessAgentBackend`, `R08RemoteService` body, HUD wiring to the InteractionRouter
+- **Critical path (priority A) — DONE**: `AndroidR08BleClient`, `:agent` body,
+  `AppProcessAgentBackend`, `HaloRingService` body, HUD wiring to the InteractionRouter
   callback, foreground bypass, DataStore prefs persistence
-- **Feature completeness (priority B)**: detail settings screens (Profiles, System Gestures,
+- **Feature completeness (priority B) — DONE**: detail settings screens (Profiles, System Gestures,
   Ring, Power, Advanced, About), modal layer state machines, AccessibilityBackend, ADB
   bootstrap wizard, first-run wizard
 - **Hardware verification (priority C, when ring + glasses arrive)**: phase-0 protocol

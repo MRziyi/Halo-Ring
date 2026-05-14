@@ -82,17 +82,9 @@
             </intent-filter>
         </receiver>
 
-        <!-- Debug-only: kicks off the A-2 pairing flow from `adb shell am broadcast`.
-             Should NOT ship in release; tools:node="remove" suppresses it via the release
-             manifest merger. -->
-        <receiver
-            android:name=".adb.PairingTestReceiver"
-            android:exported="true"
-            tools:node="merge">
-            <intent-filter>
-                <action android:name="com.halo.ring.TEST_PAIR" />
-            </intent-filter>
-        </receiver>
+        <!-- Debug-only `PairingTestReceiver` is declared ONLY in `app/src/debug/AndroidManifest.xml`
+             — never merged into release builds. (Previously this lived here with `tools:node="merge"`,
+             which is a no-op + accidentally exported the receiver in release APKs. Audit-2026-05-13k.) -->
 
         <!-- AccessibilityService is OPTIONAL: enables foreground-package auto-switch + Back/Home
              fallback. The app works without it (ADB agent does everything), but enabling it lets us

@@ -11,8 +11,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -65,17 +67,38 @@ class HudOverlay(
     private var currentEvent by mutableStateOf<HudEvent?>(null)
     private val hideRunnable = Runnable { currentEvent = null; removeView() }
 
+    /** User-selected HUD anchor (Doc/08-ui-design.md §6). Default TopRight: off-axis on both
+     *  Rokid (mono right-eye, ~480 px) and RayNeo (binocular 1280×480 — right peripheral). */
     private var hudPosition: HudPosition = HudPosition.TopRight
+    /** Position of the currently-installed view (or null if no view installed). Used to detect
+     *  when [show] needs to migrate the existing view to a different gravity — previously the
+     *  install-time position was sticky, so e.g. Disconnected (Center) would silently stay
+     *  wherever the prior HUD was installed. Audit-2026-05-13l. */
+    private var installedPosition: HudPosition? = null
+    /** Per-event base duration in ms (overridable by [HudEvent] subtypes via [resolveDuration]).
+     *  Wired from [com.halo.ring.ui.screens.FeedbackPrefs.hudDurationMs] by the service. */
+    @Volatile private var defaultDurationMs: Long = 2_000L
 
     enum class HudPosition { TopRight, TopCenter, BottomRight, Center }
 
     fun setPosition(pos: HudPosition) {
         runOnMain {
+            if (hudPosition == pos) return@runOnMain
             hudPosition = pos
             view?.let {
-                try { wm.updateViewLayout(it, buildLayoutParams(pos)) } catch (_: Exception) {}
+                try {
+                    wm.updateViewLayout(it, buildLayoutParams(pos))
+                    installedPosition = pos
+                } catch (_: Exception) {}
             }
         }
+    }
+
+    /** Set the base duration for non-special events (Peek / ProfileSwitched / LowBattery). The
+     *  short-fixed events (GestureRecognised = 800 ms, Reconnected = 1 s, Disconnected = 4 s + reminder)
+     *  keep their own cadence regardless. */
+    fun setDefaultDuration(durationMs: Long) {
+        defaultDurationMs = durationMs.coerceIn(500L, 10_000L)
     }
 
     /**
@@ -89,20 +112,40 @@ class HudOverlay(
         runOnMain {
             main.removeCallbacks(hideRunnable)
 
-            val targetPos = if (event is HudEvent.Disconnected) HudPosition.Center else hudPosition
+            // Audit-2026-05-13l: all events use the user's hudPosition. Previously Disconnected
+            // was hard-coded to Center, which (1) breaks the AR rule of "never occlude the line
+            // of sight with persistent UI" and (2) was buggy anyway — ensureViewInstalled only
+            // applied the position on first install, so an already-installed TopRight view would
+            // silently keep its position when Disconnected fired.
+            val targetPos = hudPosition
             ensureViewInstalled(targetPos)
+            // If the view is already up at a different position (e.g. the user just changed the
+            // pref), migrate it now.
+            if (installedPosition != null && installedPosition != targetPos) {
+                view?.let {
+                    try {
+                        wm.updateViewLayout(it, buildLayoutParams(targetPos))
+                        installedPosition = targetPos
+                    } catch (_: Exception) {}
+                }
+            }
 
             currentEvent = event
-            val durationMs = when (event) {
-                is HudEvent.GestureRecognised -> 800L
-                is HudEvent.Reconnected       -> 1000L
-                is HudEvent.Disconnected      -> Long.MAX_VALUE        // persistent until hide()
-                else                          -> 2000L
-            }
-            if (durationMs != Long.MAX_VALUE) {
-                main.postDelayed(hideRunnable, durationMs)
-            }
+            val durationMs = resolveDuration(event)
+            // Audit-2026-05-13l: Disconnected was Long.MAX_VALUE = persistent. Bad for AR glasses
+            // (the StatusBar's red ● dot inside the app already serves as the persistent
+            // indicator; the HUD is for transient attention). Now finite — the service schedules
+            // a periodic re-show (~60 s) until reconnect via DisconnectedReminder.
+            main.postDelayed(hideRunnable, durationMs)
         }
+    }
+
+    /** Per-event display duration. Disconnect is intentionally short (4 s) — see [show] kdoc. */
+    private fun resolveDuration(event: HudEvent): Long = when (event) {
+        is HudEvent.GestureRecognised -> 800L           // §10: keep brief, don't chain
+        is HudEvent.Reconnected       -> 1_000L         // §3: transient confirmation
+        is HudEvent.Disconnected      -> 4_000L         // §3 (was: persistent — see kdoc)
+        else                          -> defaultDurationMs
     }
 
     /** Force-hide the HUD (e.g. when Disconnected resolves into Reconnected). */
@@ -135,9 +178,11 @@ class HudOverlay(
         view = composeView
         try {
             wm.addView(composeView, buildLayoutParams(pos))
+            installedPosition = pos
         } catch (e: Exception) {
             // SYSTEM_ALERT_WINDOW not granted yet, or other error — fail gracefully.
             view = null
+            installedPosition = null
         }
     }
 
@@ -146,6 +191,7 @@ class HudOverlay(
             try { wm.removeView(v) } catch (_: Exception) {}
         }
         view = null
+        installedPosition = null
     }
 
     private fun buildLayoutParams(pos: HudPosition): WindowManager.LayoutParams {
@@ -188,13 +234,16 @@ fun HudPill(event: HudEvent) {
         is HudEvent.GestureRecognised    -> HaloColors.Line
         is HudEvent.Peek                 -> HaloColors.Line
     }
-    val centered = event is HudEvent.Disconnected
+    // Disconnected gets slightly larger padding because it carries a two-line message (status +
+    // reconnect hint); the rest are single-line pills. The variable's old name `centered` referred
+    // to its previous centre-of-eye placement, removed in audit-2026-05-13l.
+    val prominent = event is HudEvent.Disconnected
     Box(
         modifier = Modifier
             .clip(RoundedCornerShape(8.dp))
             .background(Color(0xCC000000))
             .border(width = 1.dp, color = borderColor, shape = RoundedCornerShape(8.dp))
-            .padding(horizontal = if (centered) 18.dp else 12.dp, vertical = if (centered) 14.dp else 8.dp),
+            .padding(horizontal = if (prominent) 14.dp else 12.dp, vertical = if (prominent) 10.dp else 8.dp),
     ) {
         when (event) {
             is HudEvent.Peek          -> PeekContent(event)
@@ -259,10 +308,21 @@ private fun LowBatteryContent(p: HudEvent.LowBattery) {
 
 @Composable
 private fun DisconnectedContent() {
-    Row(verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Box(Modifier.size(8.dp).clip(CircleShape).background(HaloColors.Bad))
-        Text("Ring disconnected", style = HaloType.Body.copy(color = HaloColors.Fg))
+    // Compact two-line pill: status + actionable hint. The hint mirrors the default
+    // ForceReconnect system gesture (Doc/05 §5: DOUBLE_LONG_PRESS) so the wearer has a path
+    // out without opening the app. If the user has rebound ForceReconnect, the hint becomes
+    // slightly stale — acceptable trade-off vs. making the HUD reach into runtime state.
+    androidx.compose.foundation.layout.Column {
+        Row(verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Box(Modifier.size(8.dp).clip(CircleShape).background(HaloColors.Bad))
+            Text("Ring disconnected", style = HaloType.Body.copy(color = HaloColors.Fg, fontSize = 16.sp))
+        }
+        Spacer(Modifier.height(2.dp))
+        Text(
+            "Long-press × 2 to reconnect",
+            style = HaloType.Caption.copy(fontSize = 14.sp, color = HaloColors.Mute),
+        )
     }
 }
 

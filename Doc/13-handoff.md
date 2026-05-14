@@ -3,7 +3,17 @@
 > **For the next agent picking up this project.** This document is the canonical "where we are,
 > what's left, and where to look" — keep it current as you work. If a TODO here is wrong, fix it.
 
-Last updated: 2026-05-13 (after the **Halo Ring rebrand h**: full rename of OUR app from internal
+Last updated: 2026-05-13 (after **audit-pass-k**: release-manifest leak closed
+(`PairingTestReceiver` moved to `src/debug/AndroidManifest.xml`); real WearStateProviders for
+both flavors — Rokid reads `vendor.rkd.glasses.is_take_on` sysprop, RayNeo reflectively calls
+`com.ffalcon.mercury.android.sdk.api.MobileState.isWearing()`; `ConnIntervalEstimator` extracted
+to `:core` with 10 tests; `TempleActionMapping` ditto with 9 tests; **206/206 unit tests green
+(was 187)**; RayNeo Intent map filled with standard-AOSP Intents; `TempleFocusBridge` scaffold
+installed (rayneo wires Mercury TouchDispatcher reflectively, scaffold only — hardware verification
+deferred to C8). Status screen now reads live `ringInfo` (estimatedConnIntervalMs / intervalMode /
+activeBackendId) instead of stale state.status. Doc rename drift scrubbed across Doc/01-12.
+Both APKs 13 MB debug / 3.4 MB release (R8). Previously the audit was at:
+**Halo Ring rebrand h**: full rename of OUR app from internal
 codename `R08-Remote` to the public product name **Halo Ring · 环意** by Zack 紫意. Package
 `com.r08remote.app` → `com.halo.ring`; classes `R08RemoteApplication` → `HaloRingApplication`,
 `R08RemoteService` → `HaloRingService`, `R08AccessibilityService` → `HaloRingAccessibilityService`,

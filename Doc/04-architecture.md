@@ -44,13 +44,13 @@ regular phone).
                             for ~1-3ms per gesture. Built once, bundled as a :app asset.
 
 :app       ─────────────►  Android application. Compose. Foreground service.
-   main/                    R08RemoteApplication, MainActivity, AppGraph,
-                            R08RemoteService, BootReceiver,
+   main/                    HaloRingApplication, MainActivity, AppGraph,
+                            HaloRingService, BootReceiver,
                             AndroidR08BleClient (BluetoothGatt impl of the core interface),
                             AndroidScheduler (HandlerThread-backed Scheduler),
-                            R08AccessibilityService,
+                            HaloRingAccessibilityService,
                             ExecutorBackend impls: AppProcessAgentBackend (LocalSocket to :agent),
-                            ShizukuBackend (optional), InotifydScriptBackend, PollScriptBackend,
+                            InotifydScriptBackend (fallback),
                             AccessibilityBackend.
    src/rokid/               RokidDisplayAdapter, RokidActionMapper, RokidFeatureIntents,
                             RokidWearStateProvider; DeviceFlavorBindings wires them.
@@ -102,7 +102,7 @@ What happens when the user does a gesture, end to end:
 ## 4. The four device strategies
 
 The single source of truth for "what's different between glasses" is these four interfaces in
-[`core/.../device/DeviceStrategy.kt`](../app-project/core/src/main/kotlin/com/r08remote/core/device/DeviceStrategy.kt):
+[`core/.../device/DeviceStrategy.kt`](../app-project/core/src/main/kotlin/com/halo/ring/core/device/DeviceStrategy.kt):
 
 ### 4.1 `DisplayAdapter` — how our app's own UI is rendered
 
@@ -197,7 +197,7 @@ APK installed") and lets us run a stubbed GENERIC build on a regular Android pho
 
 ## 5. Executor backends
 
-The `ExecutorBackend` interface — see [`core/.../inject/ExecutorBackend.kt`](../app-project/core/src/main/kotlin/com/r08remote/core/inject/ExecutorBackend.kt):
+The `ExecutorBackend` interface — see [`core/.../inject/ExecutorBackend.kt`](../app-project/core/src/main/kotlin/com/halo/ring/core/inject/ExecutorBackend.kt):
 
 ```kotlin
 interface ExecutorBackend {
@@ -246,7 +246,7 @@ system UI. So it's a *helper*, never a replacement for the agent.
 
 ## 6. The InteractionRouter (the top-level routing pipeline)
 
-[`core/.../gesture/InteractionRouter.kt`](../app-project/core/src/main/kotlin/com/r08remote/core/gesture/InteractionRouter.kt)
+[`core/.../gesture/InteractionRouter.kt`](../app-project/core/src/main/kotlin/com/halo/ring/core/gesture/InteractionRouter.kt)
 implements the 4-layer hierarchy. Layers, in order, top to bottom:
 
 ```
@@ -292,13 +292,13 @@ power waste — see [06](06-performance-and-power.md) §3.)
 
 ## 8. Lifecycle & resident running
 
-- **`R08RemoteService`** — foreground service, type `connectedDevice`. Quiet low-priority
+- **`HaloRingService`** — foreground service, type `connectedDevice`. Quiet low-priority
   notification.
 - **`BootReceiver`** — restarts the service on boot / unlock / package replace.
 - **Battery optimisation exemption** — `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` requested in the
   first-run wizard; without it Android Doze kills our service after some hours.
 - **Agent process** — also persists across our service restarts (started via `nohup`); has a
-  heartbeat file `/data/local/tmp/r08agent.heartbeat`. If the heartbeat is stale, the service
+  heartbeat file `/data/local/tmp/halo.agent.heartbeat`. If the heartbeat is stale, the service
   re-spawns it.
 
 See [06-performance-and-power.md](06-performance-and-power.md) for the low-power state machine
@@ -318,11 +318,11 @@ that gates `TOUCH_ENABLE/DISABLE` and BLE connection interval.
 | Action routing | `core/.../action/ActionRouter.kt` |
 | Executor interface | `core/.../inject/ExecutorBackend.kt` |
 | Device strategy interfaces | `core/.../device/DeviceStrategy.kt` |
-| Android BLE client | `app/src/main/.../ble/AndroidR08BleClient.kt` ← TODO |
+| Android BLE client | `app/src/main/.../ble/AndroidR08BleClient.kt` |
 | Production scheduler | `app/src/main/.../runtime/AndroidScheduler.kt` |
-| Foreground service | `app/src/main/.../service/R08RemoteService.kt` ← TODO |
-| Agent backend | `app/src/main/.../inject/AppProcessAgentBackend.kt` ← TODO |
-| Accessibility backend | `app/src/main/.../inject/AccessibilityBackend.kt` ← TODO |
+| Foreground service | `app/src/main/.../service/HaloRingService.kt` |
+| Agent backend | `app/src/main/.../inject/AppProcessAgentBackend.kt` |
+| Accessibility backend | `app/src/main/.../inject/AccessibilityBackend.kt` |
 | Rokid strategies | `app/src/rokid/.../device/rokid/RokidStrategies.kt` |
 | RayNeo strategies | `app/src/rayneo/.../device/rayneo/RayNeoStrategies.kt` |
-| Agent body | `agent/src/main/.../Main.kt` ← TODO |
+| Agent body | `agent/src/main/.../Main.kt` |

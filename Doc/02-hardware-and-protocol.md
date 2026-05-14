@@ -85,7 +85,7 @@ Confirmed commands (all from decompiling `com.ring.r08remote` + `tahnok/colmi_r0
 > `0x69`/`0x6A` real-time-data start/stop. `0x08` is **reboot** (NOT battery, despite what
 > `R08-Dev.md` originally claimed). See [12-research-and-references.md](12-research-and-references.md).
 
-The Kotlin builder is at [`../app-project/core/.../ble/R08Protocol.kt`](../app-project/core/src/main/kotlin/com/r08remote/core/ble/R08Protocol.kt);
+The Kotlin builder is at [`../app-project/core/.../ble/R08Protocol.kt`](../app-project/core/src/main/kotlin/com/halo/ring/core/ble/R08Protocol.kt);
 the Python builder is at [`../phase0/r08_probe.py`](../phase0/r08_probe.py).
 
 ## 4. Notify frames (ring → central)
@@ -105,7 +105,7 @@ by `data[0]` (and sometimes `data[1]`).
 | `0x69` ('i') | `1` / `3` / `8` | ≥ 4 | Real-time health reading | `data[3]` = value: kind 1 = HR (bpm), 3 = SpO2, 8 = stress. Only valid if value > 0. |
 | `0x51` (81) | — | ≥ 3 | Steps only | `data[1] \| (data[2] << 8)` |
 
-The Kotlin parser is at [`../app-project/core/.../ble/R08Frame.kt`](../app-project/core/src/main/kotlin/com/r08remote/core/ble/R08Frame.kt)
+The Kotlin parser is at [`../app-project/core/.../ble/R08Frame.kt`](../app-project/core/src/main/kotlin/com/halo/ring/core/ble/R08Frame.kt)
 (stateless; pure function `parse(ByteArray): RingEvent`). The Python equivalent is in
 `../phase0/r08_probe.py::decode`.
 

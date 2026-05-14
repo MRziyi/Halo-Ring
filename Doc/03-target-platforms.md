@@ -80,7 +80,7 @@ From `sprite-launcher.md`:
 | **Open Visual AI** | `am broadcast -a com.rokid.visualaidemo.ACTION_START` |
 
 These are wired into our `RokidFeatureIntents` (in
-[`../app-project/app/src/rokid/.../RokidStrategies.kt`](../app-project/app/src/rokid/kotlin/com/r08remote/app/device/rokid/RokidStrategies.kt)).
+[`../app-project/app/src/rokid/.../RokidStrategies.kt`](../app-project/app/src/rokid/kotlin/com/halo/ring/device/rokid/RokidStrategies.kt)).
 
 ### 1.4 Camera key handling
 

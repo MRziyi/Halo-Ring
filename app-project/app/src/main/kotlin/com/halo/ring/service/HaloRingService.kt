@@ -87,6 +87,11 @@ class HaloRingService : Service() {
     private var screenOnState: Boolean = true
     private var idleRelaxTimer: com.halo.ring.core.gesture.Cancellable? = null
     private var modalTimeoutTimer: com.halo.ring.core.gesture.Cancellable? = null
+    /** Periodic re-display of the Disconnected HUD while the ring stays disconnected. The HUD
+     *  itself auto-hides after 4 s; this timer re-fires every [DISCONNECT_REMINDER_MS] so the
+     *  wearer is reminded without a persistent overlay occluding their line of sight (the in-app
+     *  StatusBar's red ● dot is the actual persistent indicator). Cancelled on READY. */
+    private var disconnectReminderTimer: com.halo.ring.core.gesture.Cancellable? = null
     /** A-5: name of the action the router most recently resolved a gesture to. Used by the
      *  latency logger when a gesture is dispatched. Updated synchronously on the scheduler thread
      *  by [InteractionRouter.onGestureRecognized]. */
@@ -221,6 +226,26 @@ class HaloRingService : Service() {
                     // Track activity for the power policy (Doc/06 §3.5).
                     lastActivityMs = nowMs
                     reconcilePower()
+                    // Refresh the BLE conn-interval estimate + active-backend probe for the
+                    // Status screen (Doc/06 §4 debug-HUD fields). Only the AndroidR08BleClient
+                    // impl exposes the estimator; ignore on the JVM fake.
+                    val client = graph.bleClient as? com.halo.ring.ble.AndroidR08BleClient
+                    val ms = client?.estimatedConnIntervalMs()
+                    val mode = client?.currentIntervalMode() ?: PowerPolicy.IntervalMode.BALANCED
+                    val backendId = graph.backends
+                        .sortedByDescending { it.priority }
+                        .firstOrNull { it.isReady() }?.id ?: "(none)"
+                    val prev = graph.ringInfoFlow.value
+                    if (prev.estimatedConnIntervalMs != ms ||
+                        prev.intervalMode != mode ||
+                        prev.activeBackendId != backendId
+                    ) {
+                        graph.ringInfoFlow.value = prev.copy(
+                            estimatedConnIntervalMs = ms,
+                            intervalMode = mode,
+                            activeBackendId = backendId,
+                        )
+                    }
                     if (!interactionRouter.screenOn) {
                         // Screen-off fast path: bypass synthesizer (LONG_PRESS = wake in ~50-80 ms).
                         serviceScope.launch { interactionRouter.onRawWhileScreenOff(event.raw) }
@@ -260,6 +285,7 @@ class HaloRingService : Service() {
             when (state) {
                 ConnectionState.READY -> {
                     graph.ringInfoFlow.value = graph.ringInfoFlow.value.copy(connected = true)
+                    disconnectReminderTimer?.cancel(); disconnectReminderTimer = null
                     hud?.show(HudEvent.Reconnected)
                     synthesizer.armWakeSwallow()
                     // Audit-2026-05-13j (P3): "just-connected" counts as activity for the policy —
@@ -276,6 +302,7 @@ class HaloRingService : Service() {
                 ConnectionState.DISCONNECTED -> {
                     graph.ringInfoFlow.value = graph.ringInfoFlow.value.copy(connected = false)
                     hud?.show(HudEvent.Disconnected())
+                    scheduleDisconnectReminder()
                 }
                 else -> Unit
             }
@@ -359,9 +386,20 @@ class HaloRingService : Service() {
             reconcilePower()
         }
 
-        // ── 8. FeedbackPrefs DataStore → cached snapshot ──────────────────────────────────────
+        // ── 8. FeedbackPrefs DataStore → cached snapshot + push to HUD ─────────────────────────
+        // Audit-2026-05-13l: previously the user's `hudPosition` and `hudDurationMs` preferences
+        // were persisted but never reached HudOverlay — the overlay kept its defaults forever.
+        // Now we push every prefs change through.
         val prefsJob = serviceScope.launch {
-            graph.feedbackPrefs.flow.collectLatest { p -> feedbackPrefs = p }
+            graph.feedbackPrefs.flow.collectLatest { p ->
+                feedbackPrefs = p
+                hud?.setPosition(when (p.hudPosition) {
+                    com.halo.ring.ui.screens.HudPosition.TOP_RIGHT    -> HudOverlay.HudPosition.TopRight
+                    com.halo.ring.ui.screens.HudPosition.TOP_CENTER   -> HudOverlay.HudPosition.TopCenter
+                    com.halo.ring.ui.screens.HudPosition.BOTTOM_RIGHT -> HudOverlay.HudPosition.BottomRight
+                })
+                hud?.setDefaultDuration(p.hudDurationMs.toLong())
+            }
         }
         cleanup += { prefsJob.cancel() }
 
@@ -414,6 +452,7 @@ class HaloRingService : Service() {
             subs.forEach { it.unsubscribe() }
             idleRelaxTimer?.cancel()
             modalTimeoutTimer?.cancel()
+            disconnectReminderTimer?.cancel()
             graph.bleClient.stop()
             // Best-effort close on the highest-priority backend (the agent socket).
             graph.backends.filterIsInstance<AppProcessAgentBackend>().forEach { it.close() }
@@ -464,6 +503,25 @@ class HaloRingService : Service() {
         }
     }
 
+    /**
+     * Periodically re-display the Disconnected HUD until the ring reconnects. The HUD itself
+     * auto-hides after 4 s; this just nudges the wearer once every [DISCONNECT_REMINDER_MS]
+     * so they're not staring at a persistent overlay while still being informed that the link
+     * is down. Cancelled on [ConnectionState.READY] and on service destroy.
+     */
+    private fun scheduleDisconnectReminder() {
+        disconnectReminderTimer?.cancel()
+        disconnectReminderTimer = graph.scheduler.postDelayed(DISCONNECT_REMINDER_MS) {
+            // Re-check connection state at fire time — a fast reconnect may have already happened.
+            if (!graph.ringInfoFlow.value.connected) {
+                hud?.show(HudEvent.Disconnected())
+                scheduleDisconnectReminder()
+            } else {
+                disconnectReminderTimer = null
+            }
+        }
+    }
+
     private fun startInForeground() {
         val nm = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
         nm.createNotificationChannel(
@@ -490,5 +548,10 @@ class HaloRingService : Service() {
         private const val NOTIF_CHANNEL_ID = "halo.ring"
         private const val NOTIF_ID = 1
         private const val LOW_BATTERY_THRESHOLD = 20
+        /** Re-display the Disconnected HUD this often while still disconnected. Doc/06 §3.3
+         *  philosophy: AR HUDs are transient — the StatusBar's red ● dot is the persistent
+         *  indicator; the HUD only nudges. 60 s is frequent enough that the wearer notices,
+         *  rare enough that it doesn't feel naggy. */
+        private const val DISCONNECT_REMINDER_MS = 60_000L
     }
 }

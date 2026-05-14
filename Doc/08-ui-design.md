@@ -1,7 +1,7 @@
 # 08 — UI Design
 
 > **Status**: design complete. Most Compose composables are implemented in
-> [`../app-project/app/src/main/kotlin/com/r08remote/app/ui/`](../app-project/app/src/main/kotlin/com/r08remote/app/ui/);
+> [`../app-project/app/src/main/kotlin/com/halo/ring/ui/`](../app-project/app/src/main/kotlin/com/halo/ring/ui/);
 > wiring to the runtime (BLE / agent / service) is the remaining work — see
 > [13-handoff.md](13-handoff.md) priorities A5 (HUD wiring), B1–B9 (detail settings screens).
 >
@@ -159,8 +159,10 @@ ambient light.
 
 ### HUD overlays
 
-The HUD is **transient** — appears for ~2 s on events, or on QUADRUPLE_TAP. Top-right corner; a
-small dark pill with a subtle backdrop-blur.
+The HUD is **transient** — appears for ~2 s on events, or on QUADRUPLE_TAP. Anchor is the
+wearer's chosen `hudPosition` from Settings → Feedback (default `TopRight`); never centred (no
+occlusion of the line of sight). A small dark pill (`0xCC000000` fill + 1 dp accent/warn/bad
+border), Compose-hosted inside a `WindowManager TYPE_APPLICATION_OVERLAY`.
 
 | Variant | Trigger | Look | Duration |
 |---|---|---|---|
@@ -168,7 +170,13 @@ small dark pill with a subtle backdrop-blur.
 | **Mode switched** | TRIPLE_TAP | accent-bordered: `↻ →  Navigation  cycle` | 2 s |
 | **Gesture recognised** | Any recognised gesture *while gesture-hint mode is on* (see §10) | small pill: `Double tap → Back` | 800 ms |
 | **Low battery** | Ring ≤ 20% | warn-bordered: `●  R08_2A3F  18%` | 2 s |
-| **Disconnected** | Lost BLE link | **center-positioned**, bad-bordered: `●  Ring disconnected` (only situation we use centre) | until reconnect |
+| **Disconnected** | Lost BLE link | bad-bordered, two-line: `●  Ring disconnected` + hint `Long-press × 2 to reconnect` (at the wearer's chosen HUD position — defaults TopRight). Re-displays every 60 s while still disconnected. | 4 s, periodic |
+
+> **AR-guidelines correction (audit-2026-05-13l)**: previously the Disconnected pill rendered
+> centre-of-eye and persisted until reconnect. That violated two RayNeo / Rokid design rules: do
+> not occlude the wearer's line of sight, and prefer transient toasts over persistent overlays.
+> The in-app StatusBar's red ● dot (visible whenever MainActivity is open) is the *persistent*
+> indicator; the HUD now nudges briefly every 60 s with an actionable hint.
 
 ### First-run wizard
 
@@ -226,7 +234,7 @@ the Mercury AAR. Verification deferred to [11 §B8](11-verification-checklists.m
 
 | Concern | Approach |
 |---|---|
-| **HUD overlay** | A `WindowManager` `TYPE_APPLICATION_OVERLAY` view hosted by `R08RemoteService` so it appears above any app, not just ours. Compose composable internally. Auto-hide via `delay()` in a coroutine. |
+| **HUD overlay** | A `WindowManager` `TYPE_APPLICATION_OVERLAY` view hosted by `HaloRingService` so it appears above any app, not just ours. Compose composable internally. Auto-hide via `delay()` in a coroutine. |
 | **System bar / anti-light-leakage** | We respect the system flag (`Settings.System.someBrightnessMode`); never override. Apps like Rokid's Translate use it; our HUD should too |
 | **Tabs** | A `TabRow`-equivalent custom composable (Material `TabRow` has unwanted padding). 3 fixed tabs; selected state simply changes the underline + bold. |
 | **Focus indicator** | A single shared `Modifier.r08Focus()` extension that applies 2 px left border + 7% green tint. One implementation; every focusable item uses it |

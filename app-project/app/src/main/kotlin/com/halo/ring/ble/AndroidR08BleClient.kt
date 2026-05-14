@@ -87,6 +87,21 @@ class AndroidR08BleClient(
     @Volatile private var lastTouchEnabledRequested: Boolean? = null
     @Volatile private var lastIntervalModeRequested: PowerPolicy.IntervalMode? = null
 
+    /** Pure JVM-testable BLE interval estimator (see :core `ConnIntervalEstimatorTest`). */
+    private val intervalEstimator = com.halo.ring.core.perf.ConnIntervalEstimator()
+
+    /**
+     * Public read of the current BLE-interval mode last requested via [setIntervalMode]. Used by
+     * [com.halo.ring.service.HaloRingService] to push the live value into `RingInfo` for the Status
+     * screen. Returns BALANCED until any reconcile fires (which is on every connection-ready event
+     * plus every gesture, so this is null for at most a few hundred ms after start).
+     */
+    fun currentIntervalMode(): PowerPolicy.IntervalMode =
+        lastIntervalModeRequested ?: PowerPolicy.IntervalMode.BALANCED
+
+    /** Median inter-notify delta in ms over the recent window, or null until enough samples. */
+    fun estimatedConnIntervalMs(): Int? = intervalEstimator.estimate()
+
     // ── R08BleClient ───────────────────────────────────────────────────────────────────────────
 
     override fun events() = RingEventSource { onEvent ->
@@ -302,6 +317,9 @@ class AndroidR08BleClient(
                     BluetoothProfile.STATE_DISCONNECTED -> {
                         Log.w(TAG, "GATT disconnected (status=$status), autoConnect will retry")
                         batteryPollHandle?.cancel(); batteryPollHandle = null
+                        // Drop stale notify timestamps so a fresh connection's estimator isn't
+                        // biased by the gap between the old and new connection's samples.
+                        intervalEstimator.reset()
                         // D4: abort any in-flight vitals snapshot — otherwise the flag stays set
                         // and the UI can never re-trigger MEASURE NOW until the app restarts.
                         if (vitalsSnapshotInFlight) {
@@ -402,6 +420,11 @@ class AndroidR08BleClient(
         }
         lastBytes = bytes
         lastBytesAt = nowMs
+
+        // Record this notify's timestamp for the interval estimator. The estimator's internal
+        // lock is held only for the O(1) record path; the UI-thread `estimate()` call holds it
+        // for the median-window scan.
+        intervalEstimator.record(nowMs)
 
         // R08Frame.parse returns RingEvent.Unknown for anything it can't decode, never null —
         // we still forward Unknowns so the debug HUD / logging can render the raw hex.
