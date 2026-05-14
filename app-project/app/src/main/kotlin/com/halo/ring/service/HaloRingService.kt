@@ -88,14 +88,27 @@ class HaloRingService : Service() {
     private var idleRelaxTimer: com.halo.ring.core.gesture.Cancellable? = null
     private var modalTimeoutTimer: com.halo.ring.core.gesture.Cancellable? = null
     /** Periodic re-display of the Disconnected HUD while the ring stays disconnected. The HUD
-     *  itself auto-hides after 4 s; this timer re-fires every [DISCONNECT_REMINDER_MS] so the
-     *  wearer is reminded without a persistent overlay occluding their line of sight (the in-app
-     *  StatusBar's red ● dot is the actual persistent indicator). Cancelled on READY. */
+     *  itself auto-hides after 4 s; this timer re-fires with exponential backoff (P1-8: 60s →
+     *  5min → 15min cap) so the wearer is reminded without a persistent overlay occluding their
+     *  line of sight (the in-app StatusBar's red ● dot is the actual persistent indicator).
+     *  Cancelled on READY. */
     private var disconnectReminderTimer: com.halo.ring.core.gesture.Cancellable? = null
+    /** P1-8: current backoff for [scheduleDisconnectReminder]. Reset to [DISCONNECT_REMINDER_INITIAL_MS]
+     *  on every fresh disconnect; doubles up to [DISCONNECT_REMINDER_MAX_MS] each fire. */
+    private var disconnectReminderDelayMs: Long = 60_000L
     /** A-5: name of the action the router most recently resolved a gesture to. Used by the
      *  latency logger when a gesture is dispatched. Updated synchronously on the scheduler thread
      *  by [InteractionRouter.onGestureRecognized]. */
     @Volatile private var lastResolvedActionName: String = "None"
+
+    /** P1-5: backends sorted by priority once at init (static set after AppGraph construction).
+     *  Re-iterated on every gesture event for the active-backend probe; allocation-free that way. */
+    private lateinit var backendsByPriority: List<com.halo.ring.core.inject.ExecutorBackend>
+    /** P1-5: when ringInfo derived fields (estimatedConnIntervalMs / intervalMode / activeBackendId)
+     *  were last recomputed. The estimator's "running median over the last 16 samples" doesn't
+     *  shift fast enough to need a per-event update; throttling to 1 Hz on the scheduler thread
+     *  cuts ~33×/s sort + estimate work down to 1×/s during HIGH-band activity bursts. */
+    private var lastRingInfoRefreshMs: Long = 0L
 
     override fun onCreate() {
         super.onCreate()
@@ -104,6 +117,8 @@ class HaloRingService : Service() {
         // CRITICAL: bind serviceScope to the scheduler thread so suspending pipeline work doesn't
         // race with the synthesiser. See Doc/06 §2.2.
         serviceScope = CoroutineScope(SupervisorJob() + graph.scheduler.coroutineDispatcher)
+        // P1-5: priorities are fixed after AppGraph construction. Sort once.
+        backendsByPriority = graph.backends.sortedByDescending { it.priority }
 
         // ── 1. assemble the gesture pipeline ───────────────────────────────────────────────────
         val synthesizer = GestureSynthesizer(
@@ -124,7 +139,12 @@ class HaloRingService : Service() {
                 val measure = graph.latencyLogger.enabled
                 val tBle     = if (measure) lastActivityMs           else 0L
                 val tEmitted = if (measure) graph.scheduler.nowMs()  else 0L
-                serviceScope.launch {
+                // P3-14: launch on Unconfined so onGesture's suspend body runs INLINE on the
+                // scheduler thread (no Handler.post hop). The agent backend's `withContext(IO)`
+                // is the only real suspension point — that legitimately switches threads. Without
+                // Unconfined, the bound HandlerDispatcher re-posts every launch to the same
+                // Looper, which is one wasted tick per gesture (~0.5–2 ms p50, more under load).
+                serviceScope.launch(kotlinx.coroutines.Dispatchers.Unconfined) {
                     interactionRouter.onGesture(gesture)
                     if (graph.latencyLogger.enabled) {
                         graph.latencyLogger.record(
@@ -147,11 +167,20 @@ class HaloRingService : Service() {
             actionRouter = graph.router,
             onPeekHud = {
                 val s = ringInfo
+                // P0-4: include HR / activity steps when the user has the matching VitalsPrefs
+                // toggle on AND the ring has reported them recently. Steps decode is gated on
+                // hardware (Doc/07 §3 — pedometer BLE notifs not yet decoded), so the
+                // VitalsSnapshot.activitySteps field is currently always null; the wiring is in
+                // place so flipping the toggle does the right thing the moment the decode lands.
+                val vp = graph.vitalsPrefsFlow.value
+                val vs = graph.vitalsSnapshotFlow.value
                 hud?.show(HudEvent.Peek(
                     ringId = s.advertisedName ?: "Halo",
                     batteryPct = s.batteryPct,
                     mode = graph.modeManager.active().name,
                     connected = s.connected,
+                    heartRateBpm = if (vp.showHrOnHud) vs.heartRateBpm else null,
+                    activitySteps = if (vp.activityOverlay) vs.activitySteps else null,
                 ))
             },
             onEnterModal = { entryAction ->
@@ -233,25 +262,27 @@ class HaloRingService : Service() {
                     // Track activity for the power policy (Doc/06 §3.5).
                     lastActivityMs = nowMs
                     reconcilePower()
-                    // Refresh the BLE conn-interval estimate + active-backend probe for the
-                    // Status screen (Doc/06 §4 debug-HUD fields). Only the AndroidR08BleClient
-                    // impl exposes the estimator; ignore on the JVM fake.
-                    val client = graph.bleClient as? com.halo.ring.ble.AndroidR08BleClient
-                    val ms = client?.estimatedConnIntervalMs()
-                    val mode = client?.currentIntervalMode() ?: PowerPolicy.IntervalMode.BALANCED
-                    val backendId = graph.backends
-                        .sortedByDescending { it.priority }
-                        .firstOrNull { it.isReady() }?.id ?: "(none)"
-                    val prev = graph.ringInfoFlow.value
-                    if (prev.estimatedConnIntervalMs != ms ||
-                        prev.intervalMode != mode ||
-                        prev.activeBackendId != backendId
-                    ) {
-                        graph.ringInfoFlow.value = prev.copy(
-                            estimatedConnIntervalMs = ms,
-                            intervalMode = mode,
-                            activeBackendId = backendId,
-                        )
+                    // P1-5: throttle the Status-screen-only derived fields to 1 Hz. At HIGH band
+                    // (~30 ms intervals) we get ~33 GestureEvents/s during a swipe burst — the
+                    // 16-sample median doesn't move per event, the priority-sorted backend list
+                    // is static, and isReady() does file-stat syscalls. Worth limiting.
+                    if (nowMs - lastRingInfoRefreshMs >= RING_INFO_REFRESH_MS) {
+                        lastRingInfoRefreshMs = nowMs
+                        val client = graph.bleClient as? com.halo.ring.ble.AndroidR08BleClient
+                        val ms = client?.estimatedConnIntervalMs()
+                        val mode = client?.currentIntervalMode() ?: PowerPolicy.IntervalMode.BALANCED
+                        val backendId = backendsByPriority.firstOrNull { it.isReady() }?.id ?: "(none)"
+                        val prev = graph.ringInfoFlow.value
+                        if (prev.estimatedConnIntervalMs != ms ||
+                            prev.intervalMode != mode ||
+                            prev.activeBackendId != backendId
+                        ) {
+                            graph.ringInfoFlow.value = prev.copy(
+                                estimatedConnIntervalMs = ms,
+                                intervalMode = mode,
+                                activeBackendId = backendId,
+                            )
+                        }
                     }
                     if (!interactionRouter.screenOn) {
                         // Screen-off fast path: bypass synthesizer (LONG_PRESS = wake in ~50-80 ms).
@@ -278,6 +309,19 @@ class HaloRingService : Service() {
                         com.halo.ring.core.ble.HealthKind.STRESS     -> prev.copy(stressIndex = event.value, capturedAtMs = nowMs, measuring = false)
                     }
                     graph.vitalsSnapshotFlow.value = updated
+                    // P0-2: append to VitalsLogger when the user has CSV export enabled. enabled is
+                    // a @Volatile read; record() is a no-op when off (matches LatencyLogger pattern).
+                    graph.vitalsLogger.record(
+                        com.halo.ring.core.perf.VitalsLogger.Sample(
+                            kind = when (event.kind) {
+                                com.halo.ring.core.ble.HealthKind.HEART_RATE -> com.halo.ring.core.perf.VitalsLogger.Kind.HEART_RATE
+                                com.halo.ring.core.ble.HealthKind.SPO2       -> com.halo.ring.core.perf.VitalsLogger.Kind.SPO2
+                                com.halo.ring.core.ble.HealthKind.STRESS     -> com.halo.ring.core.perf.VitalsLogger.Kind.STRESS
+                            },
+                            value = event.value,
+                            capturedAtMs = nowMs,
+                        )
+                    )
                 }
                 is RingEvent.Activity,
                 is RingEvent.Steps,
@@ -309,6 +353,10 @@ class HaloRingService : Service() {
                 ConnectionState.DISCONNECTED -> {
                     graph.ringInfoFlow.value = graph.ringInfoFlow.value.copy(connected = false)
                     hud?.show(HudEvent.Disconnected())
+                    // P1-8: fresh disconnect → reset the backoff so the user gets the first
+                    // reminder on the short cadence; if the ring is genuinely gone, subsequent
+                    // fires stretch out.
+                    disconnectReminderDelayMs = DISCONNECT_REMINDER_INITIAL_MS
                     scheduleDisconnectReminder()
                 }
                 else -> Unit
@@ -423,6 +471,22 @@ class HaloRingService : Service() {
         }
         cleanup += { advancedJob.cancel() }
 
+        // ── 8c. VitalsPrefs → toggle CSV logger + drive auto-snapshot scheduler (P0-2/3) ───────
+        // The auto-snapshot job re-launches whenever the user changes the interval. wear-detection
+        // gate consults the freshly-cached `worn` field maintained by the wearProvider observer
+        // above. Job is cancelled in cleanup{} via collectLatest's structured cancellation.
+        val vitalsJob = serviceScope.launch {
+            var snapshotJob: kotlinx.coroutines.Job? = null
+            graph.vitalsPrefsFlow.collectLatest { p ->
+                graph.vitalsLogger.enabled = p.csvExportEnabled
+                snapshotJob?.cancel()
+                snapshotJob = if (p.autoSnapshotIntervalMin > 0) {
+                    serviceScope.launch { runVitalsAutoSnapshot(p) }
+                } else null
+            }
+        }
+        cleanup += { vitalsJob.cancel() }
+
         // ── 9. AccessibilityService foreground-pkg → ModeManager auto-switch (B11) ────────────
         // The a11y service may already be running (from a previous app session) or come online
         // later. The listener is process-wide, so we set it unconditionally — when the service
@@ -466,7 +530,7 @@ class HaloRingService : Service() {
             graph.bleClient.stop()
             // Best-effort close on the highest-priority backend (the agent socket).
             graph.backends.filterIsInstance<AppProcessAgentBackend>().forEach { it.close() }
-            hud?.hide()
+            hud?.destroy()
             hudHost?.destroy()
         } finally {
             serviceScope.cancel()
@@ -514,17 +578,47 @@ class HaloRingService : Service() {
     }
 
     /**
-     * Periodically re-display the Disconnected HUD until the ring reconnects. The HUD itself
-     * auto-hides after 4 s; this just nudges the wearer once every [DISCONNECT_REMINDER_MS]
-     * so they're not staring at a persistent overlay while still being informed that the link
-     * is down. Cancelled on [ConnectionState.READY] and on service destroy.
+     * P0-3: periodic on-demand vitals snapshot. Loops while the prefs row is non-zero, sleeping
+     * between fires. Each fire calls into the BLE client's [requestVitalsSnapshot] which is
+     * idempotent (in-flight guard) and self-recovers on disconnect (audit-pass-f §D4) — so we
+     * don't need to track our own success/failure state here.
+     *
+     * The wear-detection gate consults [worn] (cached on the scheduler thread by the wear-state
+     * observer); when enabled and the wearer has the glasses off, we skip the BLE write. The
+     * sleep still runs so we re-check on the next interval.
+     */
+    private suspend fun runVitalsAutoSnapshot(prefs: com.halo.ring.ui.screens.VitalsPrefs) {
+        val intervalMs = prefs.autoSnapshotIntervalMin * 60_000L
+        if (intervalMs <= 0L) return
+        while (true) {
+            kotlinx.coroutines.delay(intervalMs)
+            // Skip-this-cycle gates. Both safe to re-evaluate on the scheduler dispatcher: `worn`
+            // is volatile-by-virtue-of-single-thread, ringInfo is a flow value read.
+            val gateOk = (!prefs.wearDetectionEnabled || worn) && graph.ringInfoFlow.value.connected
+            if (!gateOk) continue
+            try {
+                graph.bleClient.requestVitalsSnapshot()
+            } catch (t: Throwable) {
+                Log.w(TAG, "auto vitals snapshot threw: ${t.message}")
+            }
+        }
+    }
+
+    /**
+     * Periodically re-display the Disconnected HUD until the ring reconnects. P1-8: exponential
+     * backoff — first nudge at [DISCONNECT_REMINDER_INITIAL_MS] (60 s), then doubles each fire
+     * up to [DISCONNECT_REMINDER_MAX_MS] (15 min). If the ring is genuinely gone (out of range,
+     * dead battery), this stops nagging the wearer instead of pinging every 60 s forever.
+     * Cancelled + reset on [ConnectionState.READY] and on service destroy.
      */
     private fun scheduleDisconnectReminder() {
         disconnectReminderTimer?.cancel()
-        disconnectReminderTimer = graph.scheduler.postDelayed(DISCONNECT_REMINDER_MS) {
+        disconnectReminderTimer = graph.scheduler.postDelayed(disconnectReminderDelayMs) {
             // Re-check connection state at fire time — a fast reconnect may have already happened.
             if (!graph.ringInfoFlow.value.connected) {
                 hud?.show(HudEvent.Disconnected())
+                disconnectReminderDelayMs = (disconnectReminderDelayMs * 2)
+                    .coerceAtMost(DISCONNECT_REMINDER_MAX_MS)
                 scheduleDisconnectReminder()
             } else {
                 disconnectReminderTimer = null
@@ -558,10 +652,17 @@ class HaloRingService : Service() {
         private const val NOTIF_CHANNEL_ID = "halo.ring"
         private const val NOTIF_ID = 1
         private const val LOW_BATTERY_THRESHOLD = 20
-        /** Re-display the Disconnected HUD this often while still disconnected. Doc/06 §3.3
-         *  philosophy: AR HUDs are transient — the StatusBar's red ● dot is the persistent
-         *  indicator; the HUD only nudges. 60 s is frequent enough that the wearer notices,
-         *  rare enough that it doesn't feel naggy. */
-        private const val DISCONNECT_REMINDER_MS = 60_000L
+        /** P1-8: first reminder fires after this gap. Doubles each subsequent fire up to
+         *  [DISCONNECT_REMINDER_MAX_MS]. AR-HUD philosophy (Doc/06 §3.3): the StatusBar's red ●
+         *  dot is the persistent indicator; the HUD nudges briefly. */
+        private const val DISCONNECT_REMINDER_INITIAL_MS = 60_000L
+        /** P1-8: cap on the exponential backoff so a permanently-out-of-range ring stops
+         *  waking the scheduler thread every minute. 15 min matches Android's typical idle
+         *  maintenance-window cadence so it won't add wakes the OS isn't already issuing. */
+        private const val DISCONNECT_REMINDER_MAX_MS = 15 * 60_000L
+        /** P1-5: minimum gap between recomputes of the Status-screen derived fields. The
+         *  16-sample median estimator + backend-priority sort are wasted work at per-gesture
+         *  cadence; 1 Hz is the slowest the Status screen actually shows differences. */
+        private const val RING_INFO_REFRESH_MS = 1_000L
     }
 }

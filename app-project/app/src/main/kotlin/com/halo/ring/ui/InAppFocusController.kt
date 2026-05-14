@@ -61,17 +61,23 @@ object InAppFocusController {
 
     private fun playClick() {
         if (!clickSoundEnabled) return
-        var t = tone.get()
-        if (t == null) {
-            t = try {
-                ToneGenerator(AudioManager.STREAM_NOTIFICATION, 35)
-            } catch (e: RuntimeException) {
-                Log.w("InAppFocusController", "ToneGenerator unavailable: ${e.message}")
-                null
+        // P3-17: post to main. The first ToneGenerator construction binds an audio session and can
+        // take 5–15 ms — when it ran inline on the scheduler thread, the very first focus-move per
+        // session paid that cost on the gesture-dispatch hot path. Posting unblocks the pipeline;
+        // the beep latency (audible) doesn't change because audio is async anyway.
+        mainHandler.post {
+            var t = tone.get()
+            if (t == null) {
+                t = try {
+                    ToneGenerator(AudioManager.STREAM_NOTIFICATION, 35)
+                } catch (e: RuntimeException) {
+                    Log.w("InAppFocusController", "ToneGenerator unavailable: ${e.message}")
+                    null
+                }
+                if (t != null) tone.compareAndSet(null, t)
             }
-            if (t != null) tone.compareAndSet(null, t)
+            try { t?.startTone(ToneGenerator.TONE_PROP_BEEP, 30) } catch (_: RuntimeException) {}
         }
-        try { t?.startTone(ToneGenerator.TONE_PROP_BEEP, 30) } catch (_: RuntimeException) {}
     }
 
     /**

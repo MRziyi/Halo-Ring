@@ -76,6 +76,21 @@ class AndroidR08BleClient(
     @Volatile private var scanTimeoutHandle: com.halo.ring.core.gesture.Cancellable? = null
     @Volatile private var lastBytes: ByteArray? = null
     @Volatile private var lastBytesAt: Long = 0L
+    /**
+     * P1-6: cheap fingerprint of the most recently *accepted* notify (i.e. one that survived
+     * dedup), readable from the binder thread without taking a lock. Used by
+     * [onCharacteristicChanged] to skip the [ByteArray.copyOf] when the incoming buffer is
+     * almost-certainly a same-payload duplicate within the dedup window. False negatives just
+     * mean we do one redundant copy + the existing scheduler-thread dedup catches it; false
+     * positives are impossible by construction (the fingerprint encodes size + selected bytes).
+     *
+     * Encoding: low 8 bits = size, then 4 bytes selected from the payload (positions 0, 1, len-1,
+     * len/2) packed into the upper bits. Collisions on the 4 BLE-protocol frame types we see
+     * (0x21 touch, 0x12 long-press release, 0x03 battery, 0x33 health) are negligible because
+     * those positions encode the cmd byte + payload header which differ across frame types and
+     * counter byte.
+     */
+    @Volatile private var lastNotifyFingerprint: Long = 0L
 
     /**
      * Idempotence trackers — Doc/13 §audit-2026-05-13j: [reconcilePower] runs on every BLE event
@@ -148,6 +163,9 @@ class AndroidR08BleClient(
             writeChar = null
             lastTouchEnabledRequested = null
             lastIntervalModeRequested = null
+            lastBytes = null
+            lastBytesAt = 0L
+            lastNotifyFingerprint = 0L
             transitionTo(ConnectionState.DISCONNECTED)
         }
     }
@@ -385,10 +403,17 @@ class AndroidR08BleClient(
         }
 
         override fun onCharacteristicChanged(g: BluetoothGatt, ch: BluetoothGattCharacteristic) {
-            // Hot path — must be cheap. Bytes are copied because the buffer can be reused.
-            val bytes = ch.value?.copyOf() ?: return
+            // Hot path on the BT binder thread — keep allocation-free in the steady-state dup case.
+            val raw = ch.value ?: return
             val now = scheduler.nowMs()
-            scheduler.post { onNotify(bytes, now) }
+            // P1-6: skip copyOf when the incoming buffer matches the most recent accepted notify
+            // by fingerprint AND we're inside the dedup window. This shortcuts the typical
+            // "same TOUCH frame redelivered every conn-interval until the user releases" case
+            // — at HIGH band that's ~33 redundant copies/s on the binder thread (GC hot region).
+            val fp = fingerprintOf(raw)
+            if (fp == lastNotifyFingerprint && now - lastBytesAt < dedupWindowMs) return
+            val bytes = raw.copyOf()
+            scheduler.post { onNotify(bytes, now, fp) }
         }
     }
 
@@ -409,7 +434,7 @@ class AndroidR08BleClient(
 
     // ── notify handling: dedup → parse → fan out ──────────────────────────────────────────────
 
-    private fun onNotify(bytes: ByteArray, nowMs: Long) {
+    private fun onNotify(bytes: ByteArray, nowMs: Long, fp: Long) {
         val prev = lastBytes
         if (prev != null
             && prev.size == bytes.size
@@ -420,6 +445,9 @@ class AndroidR08BleClient(
         }
         lastBytes = bytes
         lastBytesAt = nowMs
+        // P1-6: publish the fingerprint for the binder thread's pre-copy filter. Visible to the
+        // BT stack's binder thread on the next notify.
+        lastNotifyFingerprint = fp
 
         // Record this notify's timestamp for the interval estimator. The estimator's internal
         // lock is held only for the O(1) record path; the UI-thread `estimate()` call holds it
@@ -430,6 +458,17 @@ class AndroidR08BleClient(
         // we still forward Unknowns so the debug HUD / logging can render the raw hex.
         val event = R08Frame.parse(bytes)
         eventSubs.forEach { it(event, nowMs) }
+    }
+
+    /** P1-6: cheap binder-thread fingerprint — see [lastNotifyFingerprint] kdoc. */
+    private fun fingerprintOf(b: ByteArray): Long {
+        val n = b.size
+        if (n == 0) return 0L
+        val b0 = b[0].toLong() and 0xFFL
+        val b1 = if (n > 1) b[1].toLong() and 0xFFL else 0L
+        val bL = b[n - 1].toLong() and 0xFFL
+        val bM = b[n / 2].toLong() and 0xFFL
+        return (n.toLong() and 0xFF) or (b0 shl 8) or (b1 shl 16) or (bM shl 24) or (bL shl 32)
     }
 
     // ── state helpers ─────────────────────────────────────────────────────────────────────────

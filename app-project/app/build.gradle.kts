@@ -12,8 +12,8 @@ android {
         applicationId = "com.halo.ring"
         minSdk = 26
         targetSdk = 34
-        versionCode = 5
-        versionName = "0.2.3"
+        versionCode = 6
+        versionName = "0.2.4"
         ndk { abiFilters += "arm64-v8a" }
         externalNativeBuild {
             cmake {

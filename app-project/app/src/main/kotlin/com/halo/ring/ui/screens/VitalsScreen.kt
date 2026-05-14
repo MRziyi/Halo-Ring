@@ -51,6 +51,10 @@ data class VitalsSnapshot(
     /** Monotonic clock (SystemClock.uptimeMillis) of the most-recent reading. */
     val capturedAtMs: Long = 0L,
     val measuring: Boolean = false,
+    /** P0-4: latest pedometer step count, populated when the ring's step sub-frame is decoded
+     *  (currently null pending C-vitals — Doc/07 §3). Plumbed to the HUD overlay via
+     *  [com.halo.ring.ui.hud.HudEvent.Peek] when the user has the activity-overlay pref on. */
+    val activitySteps: Int? = null,
 )
 
 /**

@@ -258,6 +258,12 @@
     <string name="advanced_adb_desc">重新推送 agent dex + 授予 WRITE_SECURE_SETTINGS。</string>
     <string name="advanced_export_title">导出延迟日志（CSV）</string>
     <string name="advanced_export_desc">在使用过 "延迟测量" 后才能导出。</string>
+    <string name="advanced_export_vitals_title">导出生理数据日志（CSV）</string>
+    <string name="advanced_export_vitals_desc">在 Vitals 设置中开启 CSV 导出后可用。</string>
+    <string name="advanced_export_latency_empty">延迟日志为空 — 先开启延迟测量并使用戒指。</string>
+    <string name="advanced_export_vitals_empty">生理数据日志为空 — 先在 Vitals 设置开启 CSV，再测一次。</string>
+    <string name="advanced_export_failed">导出失败 — 请查看 logcat。</string>
+    <string name="advanced_export_success">已写入 %1$d 条样本 → Downloads/%2$s</string>
 
     <!-- 关于 -->
     <string name="about_app_version">应用版本</string>
@@ -407,6 +413,7 @@
     <string name="hud_disconnected">戒指已断开</string>
     <string name="hud_disconnected_hint">打开 app → 设置 → 戒指 → 重新连接</string>
     <string name="hud_profile_cycle">循环</string>
+    <string name="hud_steps_value">%d 步</string>
 
     <!-- 手势名 -->
     <string name="gesture_tap">单击</string>

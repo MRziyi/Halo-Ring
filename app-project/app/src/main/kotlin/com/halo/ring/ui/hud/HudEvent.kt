@@ -9,9 +9,23 @@ import com.halo.ring.core.gesture.Gesture
  */
 sealed interface HudEvent {
 
-    /** "Peek" — connection + battery + mode. Triggered on QUADRUPLE_TAP and on connect/disconnect
-     *  state changes; 2 s. */
-    data class Peek(val ringId: String, val batteryPct: Int?, val mode: String, val connected: Boolean) : HudEvent
+    /** "Peek" — connection + battery + mode, plus optional vitals. Triggered on QUADRUPLE_TAP and
+     *  on connect/disconnect state changes; 2 s.
+     *
+     *  Optional vitals fields (P0-4):
+     *    - [heartRateBpm] — populated when [com.halo.ring.ui.screens.VitalsPrefs.showHrOnHud] is on
+     *      and a recent reading exists.
+     *    - [activitySteps] — populated when [com.halo.ring.ui.screens.VitalsPrefs.activityOverlay]
+     *      is on and the ring has reported steps. Currently always null (Doc/07 step decode pending
+     *      hardware) — kept in the data shape so wiring is in place when C-vitals lands. */
+    data class Peek(
+        val ringId: String,
+        val batteryPct: Int?,
+        val mode: String,
+        val connected: Boolean,
+        val heartRateBpm: Int? = null,
+        val activitySteps: Int? = null,
+    ) : HudEvent
 
     /** Profile switched (via TRIPLE_TAP or auto-switch). 2 s, accent-bordered. */
     data class ProfileSwitched(val newMode: String) : HudEvent
@@ -19,7 +33,10 @@ sealed interface HudEvent {
     /** Ring battery dipped below 20%. Warn-coloured. 2 s; repeats every 5 min while low. */
     data class LowBattery(val ringId: String, val pct: Int) : HudEvent
 
-    /** BLE connection lost. **Centre-positioned** and persistent until reconnect. */
+    /** BLE connection lost. Renders at the user's [com.halo.ring.ui.screens.FeedbackPrefs.hudPosition]
+     *  (audit-2026-05-13l: previously hard-coded centre + persistent — bad AR pattern). Auto-hides
+     *  after 4 s; the foreground service re-displays on exponential backoff (P1-8: 60s → 5min →
+     *  15min cap) until [Reconnected] fires. */
     data class Disconnected(val sinceMs: Long = System.currentTimeMillis()) : HudEvent
 
     /** Reconnected; transient "back online" hint. 1 s. */

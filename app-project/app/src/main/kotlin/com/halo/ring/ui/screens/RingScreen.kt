@@ -106,7 +106,7 @@ fun RingScreen(
 
 private fun batteryColor(pct: Int?) = when {
     pct == null -> HaloColors.Fg
-    pct <= 20   -> HaloColors.Warn
     pct <= 5    -> HaloColors.Bad
+    pct <= 20   -> HaloColors.Warn
     else        -> HaloColors.Fg
 }

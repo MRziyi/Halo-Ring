@@ -1,8 +1,26 @@
-# Phase-0 R08 protocol probe
+# Phase-0 — R08 ring protocol verification
 
-Run this with a real R08 ring in hand to verify everything `../R08-Remote-Design.md` §3 says about
-the BLE protocol actually matches your specific unit — **before** we trust any of the Kotlin code
-in `../app-project/` that depends on those bytes.
+Three scripts that turn the reverse-engineered protocol catalogue in
+[`../Doc/02-hardware-and-protocol.md`](../Doc/02-hardware-and-protocol.md) into "verified ✓ on real
+hardware" findings — before we commit any production code to the bytes.
+
+## The three-source picture
+
+Doc/02 §0 explains the confidence tiers. Briefly:
+
+| Source | What it gives us | Confidence on R08 |
+|---|---|---|
+| **小猪遥控戒指** (`com.ring.r08remote` v2 — `../refs/r08remote-decompiled-v2/`) | The R08-specific touch + battery subset. 4 write commands, 5 notify-frame prefixes. **Confirmed to work on R08 hardware** (third-party ecosystem proves it). | 🟢 HIGH on what it documents; **silent on ~95 % of the protocol**. |
+| **QRing** (official Yawell/oudmon app — `../refs/qring-new-version-protocol-2026-05-15.md`) | The broader Colmi-family protocol — ~70 write commands, ~30 `0x73` sync-trigger sub-codes. **Officially authoritative**. | 🟡 MEDIUM — same firmware family as R08, but R08 has firmware-specific paths (touch IC) the broader family doesn't, and some commands may differ on R08. |
+| **`tahnok/colmi_r02_client`** (`../research/colmi_r02_client/`) | Community Python implementation. Mostly agrees with QRing. | 🟡 cross-check only. |
+
+The three scripts here cover the matrix:
+
+| Script | Coverage | Status |
+|---|---|---|
+| `r08_probe.py` | The original 小猪-aligned probe. Confirms the **🟢 R08-confirmed core** — TOUCH_ENABLE/DISABLE/MODE, BATTERY_QUERY, the 4 raw gesture frames, dedup-window measurement. Has an interactive REPL and a guided gesture tutorial. | original |
+| `r08_verify_qring.py` | Adjudicates **🟡 QRing-only commands** (`0x3C` capability bitmap, `0x48` today-totals, `0x01` set-time, `0x50 AA AA` find-device, `0x08 01` reboot) and **🔴 contested opcodes** (`0x06`, `0x10`, `0x0F` — what 小猪 names FIND_DEVICE / BLINK_TWICE / SHUTDOWN, but QRing names mute / bind-ACK / OTA-mode). Includes passive observation phase for QRing's `0x73` sync-trigger sub-codes. | added 2026-05-15 |
+| `r08_health_probe.py` | Tests the **vitals stream timing** (3 s per kind that our `R08Protocol.kt` currently assumes vs the **25 s per kind** QRing documents), the **`errCode = "not worn"` wear-detect** signal QRing checks, and characterises the **`0xA1` accelerometer** layout via labelled motion patterns. | added 2026-05-15 |
 
 ## Quick start
 
@@ -10,104 +28,95 @@ in `../app-project/` that depends on those bytes.
 cd phase0
 python3 -m venv .venv && source .venv/bin/activate     # optional but recommended
 pip install -r requirements.txt
-python3 r08_probe.py                                   # macOS / Linux / Windows
 ```
 
-On macOS the first run will prompt for Bluetooth permission for Terminal/iTerm/your IDE. On
-Windows, just have Bluetooth on (Win10+ works with bleak's WinRT backend).
+Then run the three scripts in order — each one tells you what to do.
 
-## What you should see (acceptance criteria)
+### 1. Core acceptance — `r08_probe.py`
 
-```
-⌕ Scanning for 8.0s …
-  ✓ R08_2A3F  XX:XX:XX:XX:XX:XX  rssi=-57dBm
-⌕ Connecting to …
-  ✓ connected
-  ✓ found service 6e40fff0-…
-  ✓ subscribed to notify char
-
-→ TOUCH_ENABLE      3b 01 00 01 01 00 00 00 00 00 00 00 00 00 00 3e
-  [    812ms]      73 2a 00                                          TouchStatus   enabled
-→ TOUCH_MODE        3b 02 00 09 01 00 00 00 00 00 00 00 00 00 00 47
-→ BATTERY_QUERY     03 00 00 00 00 00 00 00 00 00 00 00 00 00 00 03
-  [   2826ms]      03 5b                                              Battery        91%
-
-⌖ Now make your gestures…
-  [   5341ms]      73 2d 03                                          Gesture        TOUCH
-  [   8112ms]      73 2d 03                                          Gesture        TOUCH
-  [  11244ms]      73 2d 01                                          Gesture        SWIPE_UP
-  [  14001ms]      73 2d 04                                          Gesture        LONG_PRESS
+```bash
+python3 r08_probe.py                    # auto-scan, init, listen for gestures
+python3 r08_probe.py --tutorial         # guided walkthrough of all 12 gestures
+python3 r08_probe.py --record taps.csv  # log every frame to CSV for offline analysis
+python3 r08_probe.py --interactive      # REPL: enable / disable / battery / blink / shutdown / quit
 ```
 
-All eight checks from `R08-Remote-Design.md` §10 should pass:
+See [`../Doc/11-verification-checklists.md`](../Doc/11-verification-checklists.md) §A1–A8 for what
+to tick off (acceptance criteria, dedup window, counter-byte check, etc.).
 
-- [ ] Scan finds an `R08_xxxx` device.
-- [ ] A `73 2a 00` (TouchStatus enabled) frame arrives within ~800ms of `TOUCH_ENABLE`.
-- [ ] Single touch → `73 2d 03` (TOUCH).
-- [ ] Forward swipe → `73 2d 01` (SWIPE_UP).
-- [ ] Backward swipe → `73 2d 02` (SWIPE_DOWN).
-- [ ] Long press → `73 2d 04` (LONG_PRESS).
-- [ ] `BATTERY_QUERY` reply → `03 <level%>`.
-- [ ] Each of the four gestures, done ×10 in a row, produces 10 distinct frames (or shows their
-      timing — see "what to record" below).
+### 2. Conflict + completeness — `r08_verify_qring.py`
 
-If anything fails to match, dig into `bleak`'s debug logs (`BLEAK_LOGGING=1 python3 r08_probe.py`)
-and consider whether the firmware on *your* unit differs. Update the design doc §3 and the Kotlin
-constants in `../app-project/core/.../ble/R08Protocol.kt` to match.
+Three phases, ordered safest first:
 
-## What to record (the §20.1 action items)
+```bash
+python3 r08_verify_qring.py                       # all three phases
+python3 r08_verify_qring.py --skip-c              # safe ones only (no contested 0x06/0x10/0x0F)
+python3 r08_verify_qring.py --record verify.csv   # log every notify
+```
 
-Run with `--record gestures.csv` and do each of these, then look at the CSV:
+- **Phase A (passive)** — 15 s of pure listening. Does the `03` battery frame carry a charging
+  byte? Does the ring emit any `0x73` sub-code beyond the three 小猪 knows? Does `0xA1` show up?
+- **Phase B (additive)** — single-write each of `0x3C` / `0x48` / `0x01` / `0x50 AA AA` / `0x08 01`,
+  then asks you to grade what happened. Safe: each cmd is one 16-byte write.
+- **Phase C (contested)** — sends `0x06`, `0x10`, and (gated behind `YES`) `0x0F`, asking whether
+  the ring behaves the way 小猪 thinks or the way QRing thinks. ⚠ `0x0F` may put the ring into OTA
+  bootloader mode — recovery via the web flasher at
+  https://atc1441.github.io/ATC_RF03_Writer.html. **You can skip it.**
 
-1. **Inter-event interval for repeated taps.**
-   Tap 10 times at your natural double-tap speed. Open the CSV; look at the `t_ms_since_start`
-   deltas between consecutive `73 2d 03` rows. The minimum delta tells us how tight the
-   `R08BleClient` byte-level de-dup window can be (§20.3). Aim for "min real gap >> dedup window
-   >> 0". Likely safe value: ~50ms (you can't physically tap that fast).
+The script prints a final verdict block ready to paste back into Doc/02 §3.
 
-2. **Is there a varying byte in repeated frames?**
-   Look at the `hex` column for back-to-back `73 2d 03` events: are the bytes byte-for-byte
-   identical, or does some byte (a counter, a timestamp) change? If varying → de-dup is trivial
-   (drop exact duplicates only, any window). If identical → keep the tight window.
+### 3. Vitals timing + accelerometer — `r08_health_probe.py`
 
-3. **`0xA1` accelerometer frames — do they appear?**
-   Without doing anything special, just sit still then move your hand around for 30s. Any rows
-   tagged `Accel`? If yes — record a few minutes of recognisable motion (move-still-move-still)
-   and try to correlate the bytes with motion. The aim is to decode the format so we can use the
-   ring as a finger-IMU later (§7 spatial mode).
+```bash
+# Vitals stream timing — does R08 do 3 s (our doc) or 25 s (QRing) per measurement kind?
+python3 r08_health_probe.py --measure hr
+python3 r08_health_probe.py --measure spo2
+python3 r08_health_probe.py --measure stress
 
-4. **Is there a "worn-on-finger" frame?**
-   Put the ring on, leave it on for 30s, take it off, leave it off 30s. Any new frame types in
-   the CSV between "on" and "off"? Most likely candidate: an unknown `73 0x??` sub-frame. If you
-   find one → great, that's our power-saving gate (§20.1 wear detection). If not → fall back to
-   "screen on/off" as the proxy.
+# QRing's "not worn" detection via errCode = 1
+python3 r08_health_probe.py --measure hr --wear-test   # take the ring off mid-stream
 
-5. **Does a keepalive prevent ring auto-sleep?**
-   Tap the ring once. Wait 60 seconds without touching it. Tap again — was the second tap
-   slower / did you have to "wake" it first (green LED blinking)? Then try with this script
-   running and periodically sending `BATTERY_QUERY` every 30s — does the ring stay awake / does
-   the second tap feel as fast as the first? If keepalive works, that's how we kill the
-   "first-gesture-is-slow" penalty (§20.3).
+# Accelerometer characterisation — what's the 0xA1 byte layout?
+python3 r08_health_probe.py --accel still       # noise floor
+python3 r08_health_probe.py --accel rotate-x    # one axis at a time
+python3 r08_health_probe.py --accel rotate-y
+python3 r08_health_probe.py --accel rotate-z
+python3 r08_health_probe.py --accel tap         # does 0xA1 spike alongside 73 2D 03?
+python3 r08_health_probe.py --accel free --record accel-free.csv
+```
 
-## Modes
+The script auto-tabulates per-byte variance during each accel pattern so the active axis is easy
+to spot. **Power warning**: a 25-s vitals stream has the PPG LED on continuously. Don't loop
+`--measure` unattended.
 
-- `--tutorial` — **guided gesture walkthrough**. Walks through every gesture in
-  [`../Doc/09-user-manual.md` §4](../Doc/09-user-manual.md) in order; for each one, prompts you,
-  waits up to 5 seconds, recognises what you actually did, and prints Pass / Fail. Then summarises
-  results. Use this for first-time end-user onboarding AND as a verification that all 12 gestures
-  are reaching the BLE layer cleanly on your specific ring.
-- `--no-init` — connect & subscribe but don't send TOUCH_ENABLE/MODE. Lets you see what the ring
-  pushes by default (e.g. does it stream activity / health on its own?).
-- `--interactive` — after init, drop into a tiny REPL: `enable | disable | mode | battery | blink
-  | shutdown | quit`. Use `blink` to confirm "find my ring" works (`0x06` lights the LED ~10s).
-- `--mac AA:BB:…` — skip scanning, connect by MAC. Faster reconnects during testing.
-- `--record path.csv` — log every frame to CSV for offline analysis.
+## What this stack answers
 
-## What about `colmi_r02_client`?
+Once these scripts have all been run on a real R08, every 🟡 / 🔴 / 🔵 tag in
+[`../Doc/02`](../Doc/02-hardware-and-protocol.md) should resolve to ✓ or ✗. The next audit pass
+then updates [`../app-project/core/.../ble/R08Protocol.kt`](../app-project/core/src/main/kotlin/com/halo/ring/core/ble/R08Protocol.kt)
+to reflect what the firmware actually honours.
 
-`tahnok/colmi_r02_client` (cloned to `../research/colmi_r02_client/`) is the broader R02-family
-Python client. We deliberately don't depend on it — this probe is a single ~250-line file you can
-read in five minutes. If you want to *also* exercise the broader R02 command set (HRV, sleep,
-device info, etc., from `../research/colmi_r02_client/`), `pipx install` it and run e.g.
-`colmi_r02_client get-battery --address $MAC`. Mixing the two clients is fine: the ring is happy
-to talk to anyone (no pairing key), but only one BLE central at a time.
+The biggest open questions (priority order):
+
+1. Does `0x69 <kind> 01` stream for 25 s or 3 s? Wrong duration → either missing data or wasted
+   PPG time (15+× more battery cost than necessary).
+2. Does the ring carry the `errCode = 1` wear-detect QRing checks? If yes, we get a no-cost wear
+   signal that lets the auto-snapshot loop skip itself when off-finger.
+3. What does `0xA1` actually encode? If decodable, phase-3 spatial mode unlocks.
+4. Does `0x0F` shutdown the ring (R08-Remote interpretation) or OTA-brick it (QRing
+   interpretation)? Critical because production code's "Shutdown" button writes 0x0F.
+5. What's the actual find-device pathway? Both 小猪's `0x06` and QRing's `0x50 AA AA` need testing.
+
+Paste the script output back to the project as we go and we'll update `R08Protocol.kt` together.
+
+## Cross-references
+
+| Question | Where to read |
+|---|---|
+| Why these three sources? | [`../Doc/02-hardware-and-protocol.md`](../Doc/02-hardware-and-protocol.md) §0 |
+| What does each phase-0 test resolve? | [`../Doc/11-verification-checklists.md`](../Doc/11-verification-checklists.md) §A |
+| Sensor matrix + module breakdown | [`../Doc/07-sensors-and-modules.md`](../Doc/07-sensors-and-modules.md) |
+| Power/latency budget | [`../Doc/06-performance-and-power.md`](../Doc/06-performance-and-power.md) |
+| QRing extraction report (raw findings) | [`../refs/qring-new-version-protocol-2026-05-15.md`](../refs/qring-new-version-protocol-2026-05-15.md) |
+| 小猪 v2 source tree | [`../refs/r08remote-decompiled-v2/`](../refs/r08remote-decompiled-v2/) |
+| Community Python client | [`../research/colmi_r02_client/`](../research/colmi_r02_client/) |

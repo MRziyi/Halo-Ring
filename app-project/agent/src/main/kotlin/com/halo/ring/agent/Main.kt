@@ -52,7 +52,11 @@ object Main {
 
     private const val SOCKET_NAME = "halo.agent"
     private const val HEARTBEAT_PATH = "/data/local/tmp/halo.agent.heartbeat"
-    private const val HEARTBEAT_INTERVAL_MS = 5_000L
+    // P1-7: cadence chosen so the heartbeat is fresh well within the host's
+    // HEARTBEAT_STALE_MS=30s window even after one missed write (~3 writes per stale window).
+    // Was 5s — that's ~17280 file writes/day on /data/local/tmp + a CPU wake every 5s on the
+    // glasses, both wasted when the host is in deep doze.
+    private const val HEARTBEAT_INTERVAL_MS = 20_000L
 
     // InputManager.injectInputEvent modes (`@hide` constants — copy to avoid the reflection cost).
     private const val INJECT_INPUT_EVENT_MODE_ASYNC = 0

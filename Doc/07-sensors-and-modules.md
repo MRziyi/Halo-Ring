@@ -14,21 +14,37 @@ Categorisation:
 
 ### 1.1 Ring sensors
 
-| Source | Data | Push / pull | Power cost | Role | Notes |
-|---|---|---|---|---|---|
-| Touch ring | 4 raw events (`73 2D 01..04`) | push | Touch IC always-on while enabled = dominant ring drain | **Control (core)** | Synthesises → 12 gestures |
-| Touch status | `73 2A 00` echo | push | — | Gate | Confirms `TOUCH_ENABLE` took effect |
-| Battery | `0x03` response | pull (every 30 min) | trivial | Passive HUD + adaptive | Low battery → relax conn-interval, warn |
-| Activity | `73 12` (steps / cal / dist), `0x51` (steps) | push (passive) | zero extra — firmware counts anyway | Passive stats | Optional HUD overlay; CSV export |
-| HR (real-time) | `0x69 01` | start/stop stream | PPG LED on continuously = **large** drain | On-demand | Vitals snapshot: one measurement, stop. **Never continuous.** |
-| SpO2 | `0x69 03` | same | same | On-demand | Same protocol |
-| Stress | `0x69 08` | same | same | On-demand | Same protocol |
-| HRV history | `0x37` | pull | low | On-demand | Niche; from `tahnok/colmi_r02_client` |
-| Accelerometer raw | `0xA1` frames | push (continuously?) | low (default) / high (raw IMU mode) | **TBD: control (potential)** | Encoding unknown. Phase-0 action item §A2. |
-| LED control | `0x06` / `0x10` | write | trivial | **Output channel** | "Find my ring" + status feedback patterns |
-| Firmware version, MAC, model | `0xXX` queries | pull | — | Housekeeping | HUD About page |
-| Auto-sleep state | inferred from disconnect+reconnect timing | — | — | Gate | Drives `armWakeSwallow()` |
-| **"Worn on finger"** | maybe in `73 0x??` namespace? | push? | — | **TBD: gate (potential)** | Investigate phase-0 §A4 |
+Confidence tags below match [Doc/02 §0](02-hardware-and-protocol.md): 🟢 R08-confirmed (in 小猪 v2
+source) / 🟡 family-known (QRing only, needs phase-0 to confirm on R08) / 🔵 inherited speculation
+/ 🔴 conflicting between sources.
+
+| Source | Data | Push / pull | Power cost | Role | Tier | Notes |
+|---|---|---|---|---|---|---|
+| Touch ring | 4 raw events (`73 2D 01..04`) | push | Touch IC always-on while enabled = dominant ring drain | **Control (core)** | 🟢 | R08-specific firmware path; not in QRing decompile. Synthesises → 12 gestures app-side. |
+| Touch status | `73 2A 00` echo | push | — | Gate | 🟢 | `data[2] == 0` = enabled. Confirms `TOUCH_ENABLE` took effect. |
+| Battery | `0x03` response (`<level>`) | pull (10 min per 小猪 / 30 min per our code) | trivial | Passive HUD + adaptive | 🟢 | 🟡 QRing extends to `03 <level> <charging>` — second byte is charging flag. Phase-0 §A check. |
+| Battery push (low) | `0x73 0x0C` sync trigger | push | trivial | Adaptive | 🟡 | Ring auto-pushes when low. Lets us drop the 10-min poll → poll-on-event. Phase-0 §A. |
+| Activity totals (push hint) | `73 12 …` | push (passive) | zero extra | Passive stats | 🟢 | Steps BE 24-bit, calories BE 24-bit / 1000, distance BE 24-bit / 1000 — verified against 小猪 `DataParser.java:50-53`. |
+| Activity totals (canonical) | `0x48` query → 14-byte BE response | pull | trivial | Passive stats | 🟡 | More authoritative than the `73 12` push (which is just a hint). Adds running-step + sport-minute. Phase-0 §B. |
+| Step-only push | `0x51 lo hi` | push | trivial | Passive stats | 🟢 | LE-16. Used when only step count changes (no cal/dist). 小猪 `DataParser.java:92`. |
+| HR (real-time) | `0x69 01 01` start, `0x6A 01 …` stop | start/stop stream | PPG LED on continuously = **large** drain | On-demand | 🟡 | **25-second stream per QRing** (`HeartActivity.java:415-481`), not 3 s as our current code assumes. Tick = 500 ms. Phase-0 `r08_health_probe.py`. |
+| SpO2 / Stress / HRV / Temp | `0x69 <kind> 01` (kind = 3 / 8 / 10 / 11) | same | same | On-demand | 🟡 | All identical 25-s recipe per QRing. |
+| Wear-detection (via vitals) | `0x69` response `data[2] = errCode` | passive on streaming | — | **Gate (opportunistic)** | 🟡 | `errCode = 1` → "not worn properly". Only fires while vitals stream is active. Use as a cheap wear-state hint without dedicated wear-sense hardware. Phase-0 §D. |
+| HR history | `0x15` query → multi-packet `15 <sub>` | pull | low | On-demand | 🟡 | 288 samples/day = ~24 packets. QRing `ReadHeartRateRsp.java:17-52`. |
+| HRV history | `0x39` query → multi-packet | pull | low | On-demand | 🟡 | Was `0x37` in earlier doc drafts — **wrong**. QRing maps `0x37 = stress` and `0x39 = HRV`. |
+| Stress history | `0x37` query → multi-packet | pull | low | On-demand | 🟡 | Same multi-packet shape as HRV. |
+| Step history | `0x43` query → multi-packet | pull | low | On-demand | 🟡 | 96 records/day, 15-min granularity. QRing `ReadDetailSportDataRsp.java:9-43`. |
+| Sleep history | `0x44` query → multi-packet | pull | low | On-demand | 🟡 | Q-staged sleep records. QRing `ReadSleepDetailsRsp.java:8-37`. |
+| Auto-monitor cadence (HR/SpO2/Stress/HRV) | `0x16` / `0x2C` / `0x36` / `0x38` | read/write | low | Config (cadence is ring-side) | 🟡 | **Ring is cadence master**, not phone. We set the interval; ring measures internally and pushes via `0x73 <sub>` when ready. |
+| Accelerometer raw | `0xA1` 16-byte frame, 6-byte payload `[2..7]` | push (continuously?) | low (default) / high (raw IMU mode) | **TBD: control (potential)** | 🟢 frame present, 🟡 encoding | 小猪 receives but does **not** decode (`DataParser.java:58-69`). QRing does not decode either. Likely 3× int16 axes from STK8321. Phase-0 §A2 — log raw bytes during specific motion. |
+| LED + vibration | `0x50 AA AA` (find-device per QRing) | write | trivial | **Output channel** | 🟡 | Vibrate + LED blink. Replaces the unverified 🔵 `0x06` (find) / `0x10` (blink-twice) we'd inherited. Phase-0 §B. |
+| Soft reboot | `0x08 01` | write | trivial | Housekeeping | 🟡 | Per QRing `SystemSettingActivity.java:60`. Real shutdown cmd unknown (no opcode confirmed). |
+| Capability bitmap | `0x3C` query → 9-byte response | pull (once per connect) | trivial | Config gate | 🟡 | 28+ feature flags from `DeviceSupportFunctionRsp.java:60-136`. Lets UI hide unsupported actions on a given firmware. Phase-0 §B. |
+| Time sync | `0x01` (BCD payload) | write (once per connect) | trivial | Housekeeping | 🟡 | Required for any history read to return useful timestamps. Phase-0 §B. |
+| Firmware version, MAC, model | TBD queries | pull | — | Housekeeping | 🔵 | Opcode for "get firmware version" not yet identified in either source. About page can use the BLE-advertised name's hex suffix as a proxy. |
+| Auto-sleep state | inferred from disconnect+reconnect timing | — | — | Gate | 🟢 | Drives `armWakeSwallow()`. |
+| G-sensor still-time tick | `0x73 0x3E` push | push | trivial | **Power gate (potential)** | 🟡 | QRing only. Likely fires when the ring detects it's not moving. Phase-0 §A — does R08 emit? If yes, replaces our screen-on/off wear proxy with a real "ring still" signal. |
+| "Lover double-tap" event | `0x73 0x30` push | push | trivial | **Control (potential shortcut)** | 🟡 | QRing-side handler; if R08 touch firmware emits this for the same double-tap we already synthesise app-side, we could short-circuit the synthesiser for ~280 ms latency improvement on double-tap. Phase-0 §A. |
 
 ### 1.2 Glasses sensors
 
@@ -149,28 +165,37 @@ debug HUD. Wrapped by the device's `DisplayAdapter`.
 
 ## 3. The "物尽其用" check
 
-A sanity test: did we use every signal the hardware offers? Going down the matrix:
+A sanity test: did we use every signal the hardware offers? Going down the matrix. After the
+QRing decompile (2026-05-15), three rows previously marked TBD have candidate solutions pending
+phase-0 verification.
 
-| Signal | Used? | If not, why |
-|---|---|---|
-| Ring touch (4 events) | ✓ Core control |  |
-| Touch status echo | ✓ Connection ACK |  |
-| Battery | ✓ HUD + adaptive |  |
-| Activity (steps/cal/dist) | ✓ Passive stats (optional) |  |
-| HR / SpO2 / stress / HRV | ✓ Vitals snapshot |  |
-| Ring accel `0xA1` | TBD (Phase 3) | Encoding unknown; pending phase-0 decode |
-| Ring LED | ✓ Status feedback patterns |  |
-| Firmware version / MAC | ✓ About page |  |
-| "Worn on finger" frame | TBD | Phase-0 investigation; if found → gates gesture processing |
-| Glasses IMU | TBD (Phase 3) | Head-gaze cursor mode is optional |
-| Glasses wear detection | ✓ Power state + hand-over |  |
-| Glasses screen on/off | ✓ Screen state + wake/sleep system gestures |  |
-| Glasses battery | ✓ HUD (optional) |  |
-| Glasses foreground app | ✓ Auto-switch profile |  |
-| Glasses' own temple touchpad | ✓ Navigates our own config UI |  |
+| Signal | Used? | Tier | If not, why |
+|---|---|---|---|
+| Ring touch (4 events) | ✓ Core control | 🟢 |  |
+| Touch status echo | ✓ Connection ACK | 🟢 |  |
+| Battery | ✓ HUD + adaptive | 🟢 | + 🟡 charging-byte and `73 0C` low-push pending phase-0 confirmation |
+| Activity (steps/cal/dist push) | ✓ Passive stats (optional) | 🟢 |  |
+| Activity totals (canonical `0x48`) | △ designed | 🟡 | Wired pending phase-0 §B — more authoritative than `73 12` push |
+| HR / SpO2 / stress / HRV (real-time) | △ designed | 🟡 | App calls `0x69`/`0x6A` but our duration is a guess (3 s); QRing protocol is **25 s** — `r08_health_probe.py` will confirm |
+| Wear via `0x69 errCode=1` | △ designed | 🟡 | Replaces "needs dedicated wear-sense hardware" gap — opportunistic during vitals streams |
+| Ring accel `0xA1` | TBD (Phase 3) | 🟢 frame / 🟡 layout | Encoding unknown; pending phase-0 §A2 motion-correlation |
+| Ring LED / vibration | △ designed | 🟡 | `0x50 AA AA` (per QRing) replaces unverified 🔵 `0x06` we inherited |
+| Firmware version / MAC | ✗ partial | 🔵 | Get-version opcode not yet identified; About page uses BLE-name hex suffix instead |
+| Capability bitmap `0x3C` | TBD | 🟡 | Phase-0 §B; if R08 responds, lets UI gate features per firmware |
+| Time sync `0x01` | TBD | 🟡 | Phase-0 §B; required if we ever pull history |
+| G-sensor still-tick `73 3E` | TBD | 🟡 | Phase-0 §A; alternative wear-state proxy |
+| "Lover double-tap" `73 30` | TBD | 🟡 | Phase-0 §A; firmware-side double-tap shortcut |
+| 0x73 sync-trigger fanout (~30 sub-codes) | TBD | 🟡 | Phase-0 §A presence-check; useful subset: low-battery push, alarm-ring, current-HR push |
+| Glasses IMU | TBD (Phase 3) | — | Head-gaze cursor mode is optional |
+| Glasses wear detection | ✓ Power state + hand-over | — |  |
+| Glasses screen on/off | ✓ Screen state + wake/sleep system gestures | — |  |
+| Glasses battery | ✓ HUD (optional) | — |  |
+| Glasses foreground app | ✓ Auto-switch profile | — |  |
+| Glasses' own temple touchpad | ✓ Navigates our own config UI | — |  |
 
-Coverage: ~85% (everything except the two TBDs). Acceptable. The TBDs unlock real value (raw
-IMU = spatial mode; worn-on-finger = better power gating) when decoded.
+Coverage outlook after phase-0: every 🟡 row promotes to ✓ if the R08 firmware honours QRing's
+broader protocol — that's the path to ~95 %. The 🔵 "get firmware version" gap stays open until
+we sniff the QRing app talking to a real R08 (or another decompile turns up the opcode).
 
 ## 4. Module interactions (dependency cheat sheet)
 

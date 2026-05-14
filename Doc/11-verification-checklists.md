@@ -22,6 +22,26 @@ python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
+### A0. The three-source picture (read first)
+
+Phase-0 has to adjudicate between **three reverse-engineered sources** (see [Doc/02 §0](02-hardware-and-protocol.md)):
+
+- **小猪遥控戒指** (`com.ring.r08remote` v2) — narrow but proven on R08; 4 write cmds + a handful of notify
+  prefixes. Trust on what it documents.
+- **QRing** (official Yawell/oudmon app) — broad and authoritative for the Colmi family; ~70 write
+  cmds + ~30 `0x73` sub-codes. We **don't yet know** which of these the R08 firmware honours.
+- **`tahnok/colmi_r02_client`** — cross-check for QRing's claims.
+
+Three phase-0 scripts cover the matrix:
+
+| Script | Purpose |
+|---|---|
+| [`r08_probe.py`](../phase0/r08_probe.py) | The original 小猪-aligned probe. Confirms the 🟢 core (touch / battery / 4 raw gestures). |
+| [`r08_verify_qring.py`](../phase0/r08_verify_qring.py) | Phase A passive listen + Phase B additive QRing queries + Phase C contested-opcode adjudication. |
+| `r08_health_probe.py` (new) | Vitals-stream timing (3 s vs 25 s), errCode=1 wear-detect probe, accelerometer characterisation. |
+
+Run them in that order. Each section below cites which script + sub-phase the test lives in.
+
 ### A1. Acceptance criteria (must-pass before any further work)
 
 ```bash
@@ -100,21 +120,26 @@ Now try with a 30-second keepalive: connect, write `BATTERY_QUERY` every 30 s. T
       Set the BLE client to keep a 30-second keepalive when the user is wearing the glasses.
 - [ ] Update [06-performance-and-power.md](06-performance-and-power.md) §3.2.
 
-### A7. LED command behaviour
+### A7. LED command behaviour (CONTESTED — use r08_verify_qring.py §C)
+
+> Heritage: `R08-Dev.md` claimed `0x06` = find-device-blink and `0x10` = blink-twice. **Neither is
+> backed by 小猪 v2 source nor by QRing source** — both are 🔵 inherited speculation. QRing names
+> `0x06 = CMD_MUTE` and `0x10 = CMD_BIND_SUCCESS`. Phase-0 §C tests what they actually do on R08;
+> a real find-device path is more likely to be `0x50 AA AA` (QRing's `CMD_ANTI_LOST_RATE`).
 
 ```bash
-python3 r08_probe.py --interactive
-# at the REPL:
-blink   # 0x10
-# wait 5s
-blink
+python3 r08_verify_qring.py
+# answer the §C prompts for 0x06 and 0x10 honestly
 ```
 
-- [ ] Confirm `0x10` flashes the LED. How many times? How long total?
-- [ ] Confirm `0x06` (FIND_DEVICE) flashes for ~10 s.
-- [ ] Test a sequence: `blink`, wait 200 ms, `blink`. Can we drive faster patterns?
-- [ ] Update the LED feedback patterns in [05-interaction-design.md](05-interaction-design.md) §4.3
-      with the *actual* observable patterns the ring supports.
+- [ ] `0x06`: does the LED blink ~10 s (R08-Remote interpretation), or do notifications mute /
+      nothing visible (QRing interpretation)?
+- [ ] `0x10`: does the LED quickly double-blink, or is it silent (silent ACK)?
+- [ ] `0x50 AA AA`: does the ring vibrate + LED blink (QRing's "find device")? **Phase B test.**
+- [ ] `0x0F`: **dangerous** — gated behind `YES` confirmation. If you confirm, observe whether the
+      ring powers off cleanly (R08-Remote: SHUTDOWN) or enters OTA bootloader (QRing: TO_OTA — needs
+      https://atc1441.github.io/ATC_RF03_Writer.html to recover). **You can skip this.**
+- [ ] Paste the verdict back into Doc/02 §3.3.
 
 ### A8. Guided gesture tutorial run-through
 
@@ -126,6 +151,83 @@ python3 r08_probe.py --tutorial
       retry.
 - [ ] For frequently-retried gestures, the timing window defaults probably need tuning. Adjust
       in [`core/.../action/DefaultProfiles.kt`](../app-project/core/src/main/kotlin/com/halo/ring/core/action/DefaultProfiles.kt) and confirm.
+
+### A9. Passive observation — what does R08 firmware push on its own?
+
+> Phase A of [`r08_verify_qring.py`](../phase0/r08_verify_qring.py). Wear the ring, listen for 15 s
+> without provoking anything.
+
+```bash
+python3 r08_verify_qring.py --skip-b --skip-c   # passive only
+```
+
+- [ ] Does the `03` battery frame include a third byte (the `isCharging` flag QRing claims)?
+      Compare with charging-cradle-on vs charging-cradle-off measurements.
+- [ ] Do any `0x73 0xNN` frames appear with `NN` outside the R08-Remote set (`0x12 / 0x2A / 0x2D`)?
+      If yes, log them — those are QRing's sync triggers that R08 firmware also emits. The most
+      interesting ones to watch for: `73 0C` (battery low), `73 3E` (G-sensor still tick),
+      `73 30` (lover double-tap), `73 11` (step increment).
+- [ ] Does `0xA1` accelerometer appear at all? At what rate (frames/sec)?
+- [ ] Update Doc/02 §4.2 with what was observed.
+
+### A10. QRing-discovered additive queries
+
+> Phase B of `r08_verify_qring.py`. Single-write each — safe, low cost. The script does the
+> back-and-forth + asks you to grade each response.
+
+- [ ] `0x3C CMD_DEVICE_FUNCTION_SUPPORT` → does R08 reply with a 9-byte capability bitmap? If yes,
+      we can gate UI features on this. Paste the bytes back into Doc/02.
+- [ ] `0x48 CMD_GET_STEP_TODAY` → does R08 reply with a 14-byte today-totals frame? If yes, this
+      becomes our canonical "current activity" source (more authoritative than waiting for the
+      `73 12` push).
+- [ ] `0x01 CMD_SET_DEVICE_TIME` → does R08 ACK with a `01 …` capability-echo frame? If yes, we
+      can sync the clock at connect (needed for any future history read).
+- [ ] `0x50 AA AA CMD_ANTI_LOST_RATE` → does the ring vibrate / LED blink for ~3 s? If yes, this
+      replaces our unverified 🔵 `0x06` find-device.
+- [ ] `0x08 01 CMD_RE_BOOT` (gated) → does the ring disconnect briefly and reconnect? If yes, this
+      becomes our soft-reboot.
+- [ ] Update Doc/02 §3.2 promoting confirmed entries from 🟡 to ✓.
+
+### A11. Vitals stream timing (3 s vs 25 s) and wear-detection via errCode
+
+> `r08_health_probe.py` (new). Tests the 🟡 25-second universal-vitals protocol QRing documents
+> against the 3-second-per-kind sequence our `R08Protocol.kt` currently uses.
+
+```bash
+python3 r08_health_probe.py --measure hr      # start 0x69 01 01 stream, log every frame for 30 s
+python3 r08_health_probe.py --measure spo2    # same for SpO2 (0x69 03 01)
+python3 r08_health_probe.py --measure stress  # same for stress (0x69 08 01)
+python3 r08_health_probe.py --measure hr --wear-test  # start stream, then remove ring → errCode=1?
+```
+
+- [ ] When you send `0x69 01 01`, does the ring stream `69 01 <err> <bpm>` frames? At what cadence
+      (every 500 ms per QRing)?
+- [ ] Does the ring auto-stop after ~25 s (R08 firmware decides), or stream indefinitely until we
+      send `0x6A` (we decide)?
+- [ ] Remove the ring mid-stream — do subsequent frames carry `err = 1` (errCode = "not worn")?
+      If yes, we get a no-cost wear-detection signal opportunistically during measurements.
+- [ ] Update [Doc/02 §3.2](02-hardware-and-protocol.md) `0x69` timing column.
+- [ ] Update [R08Protocol.kt](../app-project/core/src/main/kotlin/com/halo/ring/core/ble/R08Protocol.kt)
+      `VITALS_*_DURATION_MS` constants once timing is confirmed.
+
+### A12. Accelerometer `0xA1` characterisation
+
+> `r08_health_probe.py --accel <motion>` (new). Records a motion-labelled CSV the user can
+> correlate with bytes to guess the encoding.
+
+```bash
+python3 r08_health_probe.py --accel still       # hold ring still 30 s → noise floor
+python3 r08_health_probe.py --accel rotate-x    # rotate around X axis 10× → x-axis range
+python3 r08_health_probe.py --accel rotate-y    # ditto y
+python3 r08_health_probe.py --accel rotate-z    # ditto z
+python3 r08_health_probe.py --accel free        # generic movement
+```
+
+- [ ] Are 0xA1 frames present? Rate (Hz)?
+- [ ] In each "rotate-X" recording, which payload bytes change the most? That's the X axis.
+- [ ] Signed vs unsigned? Little vs big endian (try both, pick the one giving plausible g values
+      ±1g at rest from gravity on one axis)?
+- [ ] Update [Doc/02 §4.1](02-hardware-and-protocol.md) accelerometer row with the decode.
 
 ---
 

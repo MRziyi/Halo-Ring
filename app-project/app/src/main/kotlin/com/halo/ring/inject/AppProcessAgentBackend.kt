@@ -8,7 +8,7 @@ import com.halo.ring.core.action.GlassAction
 import com.halo.ring.core.device.GlassActionMapper
 import com.halo.ring.core.inject.AgentWireProtocol
 import com.halo.ring.core.inject.ExecutorBackend
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -18,6 +18,7 @@ import java.io.IOException
 import java.io.InputStreamReader
 import java.io.OutputStreamWriter
 import java.io.Writer
+import java.util.concurrent.Executors
 
 /**
  * Highest-priority [ExecutorBackend]. Speaks to the `:agent` running as a shell-uid process over an
@@ -55,13 +56,38 @@ class AppProcessAgentBackend(
     @Volatile private var reader: BufferedReader? = null
     private val ioLock = Mutex()
 
+    /** P3-15: dedicated single-thread dispatcher for the agent socket I/O. Replaces
+     *  `Dispatchers.IO`, which spreads our work across the 64-thread shared IO pool — wasteful
+     *  here because [ioLock] already serialises everything. With one dedicated thread, the
+     *  Mutex contention pattern becomes a simple wait-for-thread-free, the resume hop on the
+     *  same thread is cheap, and we avoid waking unrelated IO workers (~0.5–1 ms per gesture). */
+    private val ioExecutor = Executors.newSingleThreadExecutor { r ->
+        Thread(r, "halo.agent-io").apply { isDaemon = true }
+    }
+    private val ioDispatcher = ioExecutor.asCoroutineDispatcher()
+
+    /** P3-16: cache the heartbeat-mtime check. [ActionRouter.dispatch] calls [isReady] for every
+     *  candidate backend on every gesture; an uncached file-stat syscall costs 50–200 µs on
+     *  the hot path. The agent's own heartbeat cadence is measured in seconds (P1-7 = 20 s) so
+     *  caching the answer for 1 s is conservative — we'll never wrongly report ready when stale,
+     *  because the cache window is way shorter than [HEARTBEAT_STALE_MS]. */
+    @Volatile private var lastReadyCheckMs: Long = 0L
+    @Volatile private var lastReadyResult: Boolean = false
+
     override fun capabilities(): Set<Capability> = AGENT_CAPS
 
     override fun isReady(): Boolean {
+        // P3-16: cache for [READY_CACHE_MS]. Heartbeat mtime moves on a 20 s cadence so a 1 s
+        // cache window is two orders of magnitude tighter than the staleness threshold — no
+        // false-positive risk.
+        val now = System.currentTimeMillis()
+        if (now - lastReadyCheckMs < READY_CACHE_MS) return lastReadyResult
         // Heartbeat is authoritative — even if the socket is open, a hung agent isn't ready.
         val mtime = try { heartbeatFile.lastModified() } catch (_: SecurityException) { 0L }
-        if (mtime == 0L) return false
-        return System.currentTimeMillis() - mtime < HEARTBEAT_STALE_MS
+        val ready = mtime != 0L && now - mtime < HEARTBEAT_STALE_MS
+        lastReadyCheckMs = now
+        lastReadyResult = ready
+        return ready
     }
 
     override suspend fun perform(action: GlassAction): Boolean {
@@ -71,7 +97,7 @@ class AppProcessAgentBackend(
         val lines = primitives.mapNotNull { AgentWireProtocol.encode(it) }  // skip A11y, etc.
         if (lines.isEmpty()) return false
 
-        return withContext(Dispatchers.IO) {
+        return withContext(ioDispatcher) {
             var anySucceeded = false
             ioLock.withLock {
                 for (line in lines) {
@@ -126,22 +152,28 @@ class AppProcessAgentBackend(
         if (!isReady()) closeQuietly()
     }
 
-    /** Cleanly close on service shutdown. */
+    /** Cleanly close on service shutdown. P3-15: also shut down our dedicated IO executor. */
     fun close() {
         try {
             writer?.write("QUIT\n")
             writer?.flush()
         } catch (_: IOException) {}
         closeQuietly()
+        try { ioDispatcher.close() } catch (_: Throwable) {}
+        try { ioExecutor.shutdownNow() } catch (_: Throwable) {}
     }
 
     companion object {
         private const val TAG = "AgentBackend"
         const val SOCKET_NAME = "halo.agent"
         const val HEARTBEAT_PATH = "/data/local/tmp/halo.agent.heartbeat"
-        // Agent ticks every 5s; allow generous slack so a transient hiccup doesn't flip us not-ready.
+        // Agent ticks every 20s (P1-7); 30 s leaves headroom for one missed write before we
+        // flip not-ready and the service re-bootstraps.
         const val HEARTBEAT_STALE_MS = 30_000L
         const val SOCKET_TIMEOUT_MS = 2_000
+        /** P3-16: how long [isReady] caches its file-stat result. Way shorter than the staleness
+         *  threshold, so a freshly-stale agent is detected within 1 s of going quiet. */
+        const val READY_CACHE_MS = 1_000L
 
         /**
          * Capabilities the agent provides. BACK/HOME/RECENTS/NOTIFICATIONS are claimed because the

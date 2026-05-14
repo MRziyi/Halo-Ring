@@ -37,11 +37,13 @@ fun VitalsPrefsScreen(
     prefs: VitalsPrefs,
     onUpdated: (VitalsPrefs) -> Unit = {},
 ) {
-    // Audit-pass 2026-05-13t: every toggle in this screen is persisted, but NO runtime
-    // consumer reads any of these prefs — `showHrOnHud` doesn't show HR on HUD because no
-    // code reads it; `autoSnapshotIntervalMin` doesn't schedule snapshots; CSV export +
-    // wear-detection are stubs. The whole screen is forward-looking. Marking disabled so
-    // we don't lie to the user. Wire up properly in B-9 (Vitals scheduler).
+    // Audit-pass 2026-05-15x (P0-2/3/4):
+    //   - showHrOnHud + activityOverlay: gate fields on the HUD's Peek event (rendered when the
+    //     user fires PeekHud / SystemGestures.peek). HudOverlay reads them via the prefs flow.
+    //   - autoSnapshotIntervalMin: HaloRingService runs a periodic requestVitalsSnapshot loop.
+    //   - csvExportEnabled: HaloRingService records every Health frame into VitalsLogger; the
+    //     Advanced screen's "Export vitals log" CTA writes it to Downloads/.
+    //   - wearDetectionEnabled: gates the auto-snapshot loop on the wear-state provider.
     Column(modifier = Modifier.fillMaxSize().padding(top = 4.dp)) {
         Text(
             text = stringResource(R.string.vitals_prefs_title),
@@ -54,29 +56,32 @@ fun VitalsPrefsScreen(
             description = stringResource(R.string.vitals_prefs_show_hr_desc),
             on = prefs.showHrOnHud,
             onToggle = { onUpdated(prefs.copy(showHrOnHud = !prefs.showHrOnHud)) },
-            disabled = true,
         )
         ToggleRow(
             title = stringResource(R.string.vitals_prefs_activity_title),
             description = stringResource(R.string.vitals_prefs_activity_desc),
             on = prefs.activityOverlay,
             onToggle = { onUpdated(prefs.copy(activityOverlay = !prefs.activityOverlay)) },
-            disabled = true,
         )
 
-        // Auto-snapshot interval — disabled (no scheduler wired yet).
-        FocusableRow(onClick = { /* no-op: disabled */ }) {
+        // Auto-snapshot interval — cycle through AUTO_SNAPSHOT_INTERVALS on tap.
+        FocusableRow(onClick = {
+            onUpdated(prefs.copy(autoSnapshotIntervalMin = cycleNextInterval(prefs.autoSnapshotIntervalMin)))
+        }) {
             Column(Modifier.padding(end = 8.dp).weight(1f)) {
                 Text(
                     stringResource(R.string.vitals_prefs_auto_snapshot_title),
-                    style = HaloType.Body.copy(color = HaloColors.Mute),
+                    style = HaloType.Body,
                 )
                 Text(
                     stringResource(R.string.vitals_prefs_auto_snapshot_desc),
                     style = HaloType.Caption.copy(fontSize = 11.sp),
                 )
             }
-            HaloSwitch(on = false, disabled = true)
+            Text(
+                text = formatInterval(prefs.autoSnapshotIntervalMin),
+                style = HaloType.Body.copy(color = HaloColors.Accent),
+            )
         }
         Divider()
 
@@ -85,14 +90,12 @@ fun VitalsPrefsScreen(
             description = stringResource(R.string.vitals_prefs_csv_desc),
             on = prefs.csvExportEnabled,
             onToggle = { onUpdated(prefs.copy(csvExportEnabled = !prefs.csvExportEnabled)) },
-            disabled = true,
         )
         ToggleRow(
             title = stringResource(R.string.vitals_prefs_pause_offfinger_title),
             description = stringResource(R.string.vitals_prefs_pause_offfinger_desc),
             on = prefs.wearDetectionEnabled,
             onToggle = { onUpdated(prefs.copy(wearDetectionEnabled = !prefs.wearDetectionEnabled)) },
-            disabled = true,
         )
 
         Spacer(Modifier.height(12.dp))

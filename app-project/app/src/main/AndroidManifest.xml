@@ -54,12 +54,19 @@
         android:localeConfig="@xml/locales_config"
         tools:ignore="MissingTvBanner"><!-- not deploying to Android TV; the LEANBACK_LAUNCHER intent is there to look right in Rokid Sprite Launcher's big-icon grid -->
 
+        <!-- P2-13: configChanges keeps MainActivity alive across rotation / fontScale / locale /
+             uiMode / density changes. The HUD overlay (in HaloRingService) is unaffected by
+             config changes anyway, but having the Activity recreate every time the user opens a
+             system Settings deep-link from Advanced screen would (a) lose the navStack and (b)
+             flash the splash. AppCompatDelegate.setApplicationLocales (audit-2026-05-13s) handles
+             locale-change recreation explicitly when needed. -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
             android:label="@string/app_name"
             android:theme="@style/Theme.HaloRing.Splash"
-            android:launchMode="singleTask">
+            android:launchMode="singleTask"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|fontScale|uiMode|density|keyboardHidden">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -73,9 +80,13 @@
             android:exported="false"
             android:foregroundServiceType="connectedDevice" />
 
+        <!-- P2-12: exported=false. All three actions (BOOT_COMPLETED / LOCKED_BOOT_COMPLETED /
+             MY_PACKAGE_REPLACED) are protected broadcasts — only the system can send them, and
+             the system delivers them regardless of exported state. Exporting buys nothing here
+             and lets a hostile app discover our receiver via PackageManager. -->
         <receiver
             android:name=".receiver.BootReceiver"
-            android:exported="true">
+            android:exported="false">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />

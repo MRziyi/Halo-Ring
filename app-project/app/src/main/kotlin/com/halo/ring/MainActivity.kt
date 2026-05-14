@@ -252,29 +252,46 @@ class MainActivity : AppCompatActivity() {
             AdvancedAction.DEEP_LINK_ACCESSIBILITY      -> openSettings(Settings.ACTION_ACCESSIBILITY_SETTINGS)
             AdvancedAction.DEEP_LINK_BATTERY_EXEMPTION  -> requestBatteryExemption()
             AdvancedAction.REOPEN_ADB_WIZARD            -> lifecycleScope.launch { firstRunStore.reset() }
-            AdvancedAction.EXPORT_LATENCY_LOG           -> exportLatencyCsv()
+            AdvancedAction.EXPORT_LATENCY_LOG           -> {
+                val graph = (application as HaloRingApplication).graph
+                exportCsv(
+                    samples = graph.latencyLogger.size(),
+                    csvProvider = graph.latencyLogger::toCsv,
+                    fileStem = "halo-latency",
+                    emptyMsg = getString(R.string.advanced_export_latency_empty),
+                )
+            }
+            AdvancedAction.EXPORT_VITALS_LOG            -> {
+                val graph = (application as HaloRingApplication).graph
+                exportCsv(
+                    samples = graph.vitalsLogger.size(),
+                    csvProvider = graph.vitalsLogger::toCsv,
+                    fileStem = "halo-vitals",
+                    emptyMsg = getString(R.string.advanced_export_vitals_empty),
+                )
+            }
         }
     }
 
     /**
-     * A-5: write the LatencyLogger ring buffer to Downloads/ as a CSV via MediaStore (scoped
-     * storage, no WRITE_EXTERNAL_STORAGE required on Android 10+). Returns silently if the
-     * buffer is empty or the file write fails — the user can tell from logcat / file system
-     * whether it succeeded; a toast pops to surface success / empty / failure.
+     * A-5 / P0-2: write a CSV ring-buffer dump to Downloads/ via MediaStore (scoped storage, no
+     * WRITE_EXTERNAL_STORAGE required on Android 10+). Shared by the latency + vitals exports —
+     * only the source logger and filename stem differ. Toast surfaces success / empty / failure.
      */
-    private fun exportLatencyCsv() {
-        val graph = (application as HaloRingApplication).graph
-        val samples = graph.latencyLogger.size()
+    private fun exportCsv(
+        samples: Int,
+        csvProvider: () -> String,
+        fileStem: String,
+        emptyMsg: String,
+    ) {
         if (samples == 0) {
-            android.widget.Toast.makeText(this,
-                "Latency log is empty — enable measurement first, then exercise the ring.",
-                android.widget.Toast.LENGTH_SHORT).show()
+            android.widget.Toast.makeText(this, emptyMsg, android.widget.Toast.LENGTH_SHORT).show()
             return
         }
-        val csv = graph.latencyLogger.toCsv()
+        val csv = csvProvider()
         val ts = java.text.SimpleDateFormat("yyyyMMdd-HHmmss", java.util.Locale.US)
             .format(java.util.Date())
-        val displayName = "halo-latency-$ts.csv"
+        val displayName = "$fileStem-$ts.csv"
 
         val resolver = contentResolver
         val values = android.content.ContentValues().apply {
@@ -290,7 +307,7 @@ class MainActivity : AppCompatActivity() {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 resolver.insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
             } else {
-                @Suppress("DEPRATION")
+                @Suppress("DEPRECATION")
                 val downloads = android.os.Environment.getExternalStoragePublicDirectory(
                     android.os.Environment.DIRECTORY_DOWNLOADS).apply { mkdirs() }
                 val out = java.io.File(downloads, displayName)
@@ -298,13 +315,13 @@ class MainActivity : AppCompatActivity() {
                 android.net.Uri.fromFile(out)
             }
         } catch (e: Exception) {
-            Log.e("Halo", "latency CSV export failed: ${e.message}")
+            Log.e("Halo", "$fileStem CSV export failed: ${e.message}")
             null
         }
 
         if (uri == null) {
             android.widget.Toast.makeText(this,
-                "Latency export failed — see logcat", android.widget.Toast.LENGTH_SHORT).show()
+                getString(R.string.advanced_export_failed), android.widget.Toast.LENGTH_SHORT).show()
             return
         }
 
@@ -312,13 +329,13 @@ class MainActivity : AppCompatActivity() {
             try {
                 resolver.openOutputStream(uri)?.use { it.write(csv.toByteArray(Charsets.UTF_8)) }
             } catch (e: Exception) {
-                Log.e("Halo", "latency CSV write to $uri failed: ${e.message}")
+                Log.e("Halo", "$fileStem CSV write to $uri failed: ${e.message}")
             }
         }
 
-        Log.i("Halo", "wrote $samples latency samples to $uri")
+        Log.i("Halo", "wrote $samples $fileStem samples to $uri")
         android.widget.Toast.makeText(this,
-            "Wrote $samples samples → Downloads/$displayName",
+            getString(R.string.advanced_export_success, samples, displayName),
             android.widget.Toast.LENGTH_LONG).show()
     }
 

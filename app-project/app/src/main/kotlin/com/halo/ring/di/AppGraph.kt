@@ -22,6 +22,7 @@ import com.halo.ring.core.gesture.Gesture
 import com.halo.ring.core.gesture.SystemGestures
 import com.halo.ring.core.inject.ExecutorBackend
 import com.halo.ring.core.perf.LatencyLogger
+import com.halo.ring.core.perf.VitalsLogger
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -74,6 +75,10 @@ class AppGraph private constructor(
      *  The foreground service records into this when [advancedPrefsFlow.latencyMeasurement] is on;
      *  the Advanced screen's "Export latency log" action pulls [LatencyLogger.toCsv]. */
     val latencyLogger: LatencyLogger,
+    /** Per-reading vitals ring buffer (HR / SpO2 / stress). The foreground service records into
+     *  this when [vitalsPrefsFlow.csvExportEnabled] is on; the Advanced screen's
+     *  "Export vitals log" action pulls [VitalsLogger.toCsv]. */
+    val vitalsLogger: VitalsLogger,
     /**
      * Live stream of recognised gestures, published by the foreground service's
      * `InteractionRouter.onGestureRecognized` callback. Consumers (the interactive
@@ -136,6 +141,7 @@ class AppGraph private constructor(
                 vitalsPrefsFlow = MutableStateFlow(com.halo.ring.ui.screens.VitalsPrefs()),
                 vitalsSnapshotFlow = MutableStateFlow(com.halo.ring.ui.screens.VitalsSnapshot()),
                 latencyLogger = LatencyLogger(capacity = 200),
+                vitalsLogger = VitalsLogger(capacity = 500),
                 recognisedGestureFlow = MutableSharedFlow(extraBufferCapacity = 8),
             )
         }

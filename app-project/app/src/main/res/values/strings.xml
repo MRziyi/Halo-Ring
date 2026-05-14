@@ -289,6 +289,12 @@
     <string name="advanced_adb_desc">Push the agent dex + grant WRITE_SECURE_SETTINGS again.</string>
     <string name="advanced_export_title">Export latency log (CSV)</string>
     <string name="advanced_export_desc">Available after you\'ve used Latency measurement.</string>
+    <string name="advanced_export_vitals_title">Export vitals log (CSV)</string>
+    <string name="advanced_export_vitals_desc">Available after CSV export is enabled in Vitals settings.</string>
+    <string name="advanced_export_latency_empty">Latency log is empty — enable measurement first, then exercise the ring.</string>
+    <string name="advanced_export_vitals_empty">Vitals log is empty — enable CSV in Vitals settings, then take a measurement.</string>
+    <string name="advanced_export_failed">Export failed — see logcat.</string>
+    <string name="advanced_export_success">Wrote %1$d samples → Downloads/%2$s</string>
 
     <!-- ════════════════════════════════════════════════════════════════════════
          About.
@@ -450,6 +456,7 @@
     <string name="hud_disconnected">Ring disconnected</string>
     <string name="hud_disconnected_hint">Open app → Settings → Ring → Reconnect</string>
     <string name="hud_profile_cycle">cycle</string>
+    <string name="hud_steps_value">%d steps</string>
 
     <!-- ════════════════════════════════════════════════════════════════════════
          Gesture names.

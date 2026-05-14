@@ -65,7 +65,13 @@ class HudOverlay(
 
     private var view: ComposeView? = null
     private var currentEvent by mutableStateOf<HudEvent?>(null)
-    private val hideRunnable = Runnable { currentEvent = null; removeView() }
+    // P1-9: hide just clears the current event; the ComposeView stays installed in the
+    // WindowManager. With currentEvent=null the composable renders nothing (no Surface, no
+    // background, no draw pass), so the empty WRAP_CONTENT view occupies a window slot but
+    // doesn't consume drawing/layout budget. Saves the per-show wm.addView IPC + ComposeView
+    // teardown that was happening on every gesture-hint pulse during the post-pairing 5-min
+    // auto-hint window (~1 add/remove per second).
+    private val hideRunnable = Runnable { currentEvent = null }
 
     /** User-selected HUD anchor (Doc/08-ui-design.md §6). Default TopRight: off-axis on both
      *  Rokid (mono right-eye, ~480 px) and RayNeo (binocular 1280×480 — right peripheral). */
@@ -166,8 +172,20 @@ class HudOverlay(
         else                          -> defaultDurationMs
     }
 
-    /** Force-hide the HUD (e.g. when Disconnected resolves into Reconnected). */
+    /** Force-hide the HUD (e.g. when Disconnected resolves into Reconnected). P1-9: keeps the
+     *  ComposeView installed for the next show; clears the current event so the composable
+     *  renders nothing. Use [destroy] for actual teardown. */
     fun hide() {
+        runOnMain {
+            main.removeCallbacks(hideRunnable)
+            currentEvent = null
+        }
+    }
+
+    /** P1-9: tear down the WindowManager view + Compose composition. Call from
+     *  [com.halo.ring.service.HaloRingService.onDestroy] only — `hide()` is for the per-event
+     *  auto-hide and no longer removes the view. */
+    fun destroy() {
         runOnMain {
             main.removeCallbacks(hideRunnable)
             currentEvent = null
@@ -305,6 +323,19 @@ private fun PeekContent(p: HudEvent.Peek) {
         ))
         p.batteryPct?.let {
             Text(androidx.compose.ui.res.stringResource(com.halo.ring.R.string.ring_battery_pct, it), style = HaloType.Caption.copy(
+                fontSize = 14.sp,
+            ))
+        }
+        // P0-4: optional vitals fields. Service populates only when the matching pref is on AND a
+        // recent reading exists. Both null in the common case → no extra glyphs.
+        p.heartRateBpm?.let {
+            Text("♥ $it", style = HaloType.Caption.copy(
+                fontSize = 14.sp,
+                color = HaloColors.Accent,
+            ))
+        }
+        p.activitySteps?.let {
+            Text(androidx.compose.ui.res.stringResource(com.halo.ring.R.string.hud_steps_value, it), style = HaloType.Caption.copy(
                 fontSize = 14.sp,
             ))
         }

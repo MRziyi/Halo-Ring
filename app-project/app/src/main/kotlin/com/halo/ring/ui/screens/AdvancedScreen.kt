@@ -33,6 +33,7 @@ enum class AdvancedAction {
     DEEP_LINK_BATTERY_EXEMPTION,
     REOPEN_ADB_WIZARD,
     EXPORT_LATENCY_LOG,
+    EXPORT_VITALS_LOG,
 }
 
 /**
@@ -97,6 +98,9 @@ fun AdvancedScreen(
         }
         ActionRow(stringResource(R.string.advanced_export_title), stringResource(R.string.advanced_export_desc)) {
             onActionTriggered(AdvancedAction.EXPORT_LATENCY_LOG)
+        }
+        ActionRow(stringResource(R.string.advanced_export_vitals_title), stringResource(R.string.advanced_export_vitals_desc)) {
+            onActionTriggered(AdvancedAction.EXPORT_VITALS_LOG)
         }
     }
 }

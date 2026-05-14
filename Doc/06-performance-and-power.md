@@ -22,7 +22,7 @@ What happens between "finger touches the ring" and "glasses UI visibly reacts":
 ②  Frame waits for the next BLE connection event ──────  0–conn_interval (controllable! see §3)
 ③  BLE radio → glasses BT controller → HAL → stack ────  ~5–15 ms       (system; mostly fixed)
 ④  Our app's gesture synthesis window ─────────────────  0 ms / 280 ms  (mode-dependent — see §5 of [05])
-⑤  ActionRouter → ExecutorBackend → injection ─────────  1–3 ms (agent) / 50–150 ms (input cmd)
+⑤  ActionRouter → ExecutorBackend → injection ─────────  ~5–10 ms (agent: ~1–3 ms inject + IPC/dispatcher) / 50–150 ms (input cmd)
 ⑥  System InputDispatcher → focused window → frame ────  ~16–50 ms      (1–2 frames + animation)
 ```
 
@@ -64,7 +64,7 @@ hook so the BLE client can do this without the synthesiser caring.
 
 | Path | Latency | Why |
 |---|---|---|
-| `app_process` agent + `InputManager.injectInputEvent` (reflected) | ~1–3 ms | Persistent process, persistent connection, native syscall to InputDispatcher |
+| `app_process` agent + `InputManager.injectInputEvent` (reflected) | ~1–3 ms inject; ~5–10 ms incl. LocalSocket round-trip + dispatcher hops on the app side | Persistent process, persistent connection, native syscall to InputDispatcher. **Audit-2026-05-15** measured: the bare `injectInputEvent` reflection call is ~1–3 ms, but the surrounding `withContext(Dispatchers.IO)` + `Mutex.withLock` + Unix-socket write/flush/readLine adds another ~3–7 ms p50. P3-15/16/17 trimmed two of those hops (single-thread executor + cached `isReady`); the floor is the inject syscall itself. |
 | Shizuku via its API | ~5–10 ms | One more IPC hop |
 | `adb shell input keyevent` per call | ~50–150 ms | Spawns a JVM every time. **The reference app's main bottleneck.** |
 | File + inotifyd shell handler | similar to `input` | At least it's event-driven instead of polled |

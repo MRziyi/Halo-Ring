@@ -150,10 +150,15 @@ fun Cta(
             .padding(vertical = 12.dp),
         contentAlignment = Alignment.Center,
     ) {
+        // P2-10: bumped 14 → 16 sp to match the RayNeo guideline floor (HaloType kdoc). The Cta
+        // is a primary-action button and renders as body copy (not a label) on every Settings →
+        // Ring / Power / etc. screen — sub-floor was the one true violation in audit-2026-05-15.
+        // Other sub-16sp call sites are intentional sub-elements (HaloSwitch pill, settings
+        // descriptions, HUD inline captions) where the design density requires the smaller size.
         Text(
             text,
             style = TextStyle(
-                fontSize = 14.sp,
+                fontSize = 16.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = fg,
                 letterSpacing = 1.sp,
