@@ -12,8 +12,8 @@ android {
         applicationId = "com.halo.ring"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "0.2.0"
         ndk { abiFilters += "arm64-v8a" }
         externalNativeBuild {
             cmake {
@@ -119,6 +119,11 @@ dependencies {
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
     implementation("androidx.activity:activity-compose:1.9.3")
+    // AppCompat 1.6+ for per-app locale (`AppCompatDelegate.setApplicationLocales`) — backs the
+    // language switch under Settings → Language. Android 13+ uses the system LocaleManager;
+    // older versions get the same UX via AppCompat's emulation. Doesn't force us to use
+    // AppCompatActivity; the static APIs are usable from any Activity.
+    implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")

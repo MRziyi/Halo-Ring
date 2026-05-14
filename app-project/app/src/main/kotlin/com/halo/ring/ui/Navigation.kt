@@ -23,6 +23,10 @@ sealed interface SubScreen {
     object Advanced : SubScreen
     object About : SubScreen
     object VitalsPrefs : SubScreen
+    /** Settings → Language (audit-2026-05-13o). */
+    object Language : SubScreen
+    /** Settings → About → "Show operation guide" — re-opens the post-wizard guide. */
+    object Guide : SubScreen
 }
 
 /** The 5 always-on system gesture slots (Doc/05 §5). */

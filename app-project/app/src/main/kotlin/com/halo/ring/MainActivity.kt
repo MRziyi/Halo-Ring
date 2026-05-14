@@ -93,6 +93,11 @@ class MainActivity : ComponentActivity() {
                 val advancedPrefs by graph.advancedPrefsFlow.collectAsState()
                 val vitalsPrefs by graph.vitalsPrefsFlow.collectAsState()
                 val vitalsSnapshot by graph.vitalsSnapshotFlow.collectAsState()
+                // Audit-2026-05-13o: app-wide prefs — language override + post-wizard guide flag.
+                val appPrefs = (application as HaloRingApplication).appPrefs
+                val guideSeen by appPrefs.guideSeenFlow.collectAsState(initial = true)
+                val currentLanguage by appPrefs.languageFlow
+                    .collectAsState(initial = com.halo.ring.ui.screens.AppLanguage.SYSTEM)
 
                 if (!firstRunCompleted) {
                     var adbStatus by remember { mutableStateOf("") }
@@ -114,6 +119,17 @@ class MainActivity : ComponentActivity() {
                         onStartRingPairing = { graph.bleClient.start() },
                         onCompleted = {
                             lifecycleScope.launch { firstRunStore.markCompleted() }
+                        },
+                    )
+                    return@CompositionLocalProvider
+                }
+
+                // Post-wizard onboarding (audit-2026-05-13o). First-time users see the operation
+                // guide once after finishing the wizard. Re-openable later from Settings → About.
+                if (!guideSeen) {
+                    com.halo.ring.ui.screens.GuideScreen(
+                        onDismiss = {
+                            lifecycleScope.launch { appPrefs.markGuideSeen() }
                         },
                     )
                     return@CompositionLocalProvider
@@ -161,6 +177,10 @@ class MainActivity : ComponentActivity() {
                     onAdvancedPrefsChanged = { graph.advancedPrefsFlow.value = it },
                     onVitalsPrefsChanged = { graph.vitalsPrefsFlow.value = it },
                     onAdvancedAction = { handleAdvancedAction(it) },
+                    currentLanguage = currentLanguage,
+                    onLanguageSelected = { lang ->
+                        lifecycleScope.launch { appPrefs.setLanguage(lang) }
+                    },
                     // A-4: onMeasureNow / onFindRing / onShutdownRing / onForgetRing removed —
                     // VitalsScreen + RingScreen consume LocalAppGraph directly. No callback
                     // threading, same semantics.

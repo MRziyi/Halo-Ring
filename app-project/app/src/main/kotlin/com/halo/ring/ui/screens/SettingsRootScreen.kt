@@ -25,6 +25,7 @@ enum class SettingsSection(val title: String, val key: String) {
     POWER("Power & Connection", "power"),
     FEEDBACK("Feedback", "feedback"),
     VITALS_PREFS("Vitals", "vitals_prefs"),
+    LANGUAGE("Language", "language"),
     ADVANCED("Advanced", "advanced"),
     ABOUT("About", "about"),
 }

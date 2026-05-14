@@ -45,6 +45,26 @@ the ring is your remote forever.
 > [`phase0/`](phase0/) (`python3 r08_probe.py --tutorial`) walks you through all 12 gestures on
 > any laptop with Bluetooth, so you can confirm the ring works before sideloading anything.
 
+### What it looks like
+
+The three main tabs and the settings tree — these are the mockup renders; real on-glasses
+screenshots will replace them once hardware arrives. Live version at
+[`Doc/ui-mockup.html`](Doc/ui-mockup.html).
+
+![Main tabs — VITALS / SETTINGS / STATUS](Doc/screenshots/01-home.png)
+
+Per-profile gesture mapping and the always-on system gestures:
+
+![Profiles list + 12-slot gesture editor + 5 system gestures](Doc/screenshots/02-gesture.png)
+
+Ring telemetry, BLE-interval / timing tuning, and feedback prefs:
+
+![Ring screen + Power & Connection + Feedback](Doc/screenshots/03-ring.png)
+
+The transient HUD overlay on the glasses (disconnect + per-gesture hints):
+
+![HUD — disconnect indicator + gesture-recognised hint](Doc/screenshots/04-hud.png)
+
 ### What's in the box
 
 - **12-gesture vocabulary** — tap / double / triple / quadruple-tap, long-press, two swipes,
@@ -59,6 +79,11 @@ the ring is your remote forever.
   low battery, connection drops. Off-axis so it never blocks your line of sight.
 - **Cross-glasses hand-over** — if you wear two pairs of glasses at different times, the ring
   follows whichever one is currently on your face. No re-pairing.
+- **Bilingual UI** — Settings → Language lets you pick English / 中文, or follow the device's
+  system locale. Default follows system.
+- **Operates with anything that fits the focus model** — the ring is primary; the X3 Pro temple
+  touchpad works as a fallback; external mouse / touchscreen also click any element since the
+  app uses standard Compose `clickable` throughout.
 
 ### Architecture in one paragraph
 
@@ -146,6 +171,25 @@ code is incorporated. Not affiliated with QRing, Rokid, RayNeo, Mercury, or any 
 > （`python3 r08_probe.py --tutorial`）会在任何带蓝牙的笔记本上引导你走完 12 个手势，先验证
 > 戒指是好的再侧载 app。
 
+### 界面预览
+
+下面四张是 mockup 渲染（拿到硬件后会换成真机截图）。可在浏览器打开
+[`Doc/ui-mockup.html`](Doc/ui-mockup.html) 看 1:1 实时版。
+
+![三个主 tab — VITALS / SETTINGS / STATUS](Doc/screenshots/01-home.png)
+
+每个 profile 的 12 槽位手势编辑 + 5 个系统手势：
+
+![Profiles 列表 + 12 槽位编辑 + System gestures](Doc/screenshots/02-gesture.png)
+
+戒指遥测 / BLE 间隔与时序调整 / 反馈偏好：
+
+![Ring 屏 + Power & Connection + Feedback](Doc/screenshots/03-ring.png)
+
+眼镜上的瞬时 HUD（断连指示 + 单次手势提示）：
+
+![HUD — 断连指示 + 手势识别提示](Doc/screenshots/04-hud.png)
+
 ### 你能拿到什么
 
 - **12 个手势词汇**：单/双/三/四连击、长按、上滑、下滑，外加各种长按 + 滑动的组合。app 内的
@@ -156,6 +200,9 @@ code is incorporated. Not affiliated with QRing, Rokid, RayNeo, Mercury, or any 
   代表模态内动作，模态退出后自动恢复。
 - **HUD**：眼镜上的瞬时浮层显示戒指状态、识别到的手势、低电量、断线等。放在视线外侧，不挡视野。
 - **跨眼镜切换**：先后戴两副眼镜时，戒指自动跟随当前佩戴的那一副，不用重新配对。
+- **双语界面**：Settings → Language 切换中文 / English，或跟随系统语言（默认）。
+- **任何能聚焦的输入都能操作**：戒指为主；X3 Pro 镜腿触控板作为备选；外接鼠标 / 触屏点击也
+  可以——全 app 都用 Compose 标准 `clickable`，自动接受所有输入源。
 
 ### 一段话讲清架构
 

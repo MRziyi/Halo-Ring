@@ -11,9 +11,16 @@ import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -23,6 +30,9 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -34,6 +44,7 @@ import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
@@ -197,15 +208,23 @@ private fun PairingPanel(
 
     Column(
         modifier = Modifier
-            .width(360.dp)
+            // Width chosen to fit Rokid's mono 480 px content area at 1.5x density (≈ 320dp wide)
+            // with margin; on RayNeo binocular 1280×480 (≈ 640dp per eye at 1x), this stays well
+            // within the safe area. Doc/08 §2 caps useful width at ~320dp for single-eye displays.
+            .width(300.dp)
             .clip(RoundedCornerShape(12.dp))
             .background(HaloColors.Bg)
-            .padding(16.dp),
+            .padding(16.dp)
+            // verticalScroll so the panel never gets clipped on small AR displays even when the
+            // text field + status text + NumPad all stack up.
+            .verticalScroll(androidx.compose.foundation.rememberScrollState()),
     ) {
         Text("Pairing code", style = HaloType.Title)
         Spacer(Modifier.height(6.dp))
         Text(
-            "Type the 6-digit code from the dialog above.",
+            "Type the 6-digit code from the dialog above. " +
+                "If you have a keyboard, use the field; otherwise use the number grid below " +
+                "(ring: swipe to navigate, tap to commit).",
             style = HaloType.Caption,
         )
         Spacer(Modifier.height(10.dp))
@@ -216,6 +235,16 @@ private fun PairingPanel(
             enabled = !isRunning,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
             modifier = Modifier.fillMaxWidth(),
+        )
+        // Audit-2026-05-13o: ring-navigable NumPad. AR glasses without an external keyboard
+        // can't type into the field above; this 3x4 grid is fully reachable via Compose's
+        // focus traversal (DPAD_UP/DOWN/LEFT/RIGHT from injected swipes or the temple's
+        // TempleAction.Slide{Forward,Backward,Upwards,Downwards}). DPAD_CENTER = TAP commits.
+        Spacer(Modifier.height(10.dp))
+        NumberPad(
+            enabled = !isRunning,
+            onDigit = { d -> if (code.length < 6) code += d },
+            onBackspace = { if (code.isNotEmpty()) code = code.dropLast(1) },
         )
         if (status.isNotBlank()) {
             Spacer(Modifier.height(8.dp))
@@ -230,5 +259,82 @@ private fun PairingPanel(
                 enabled = code.length == 6 && !isRunning,
             ) { Text("PAIR") }
         }
+    }
+}
+
+/**
+ * Ring-navigable 3x4 number pad: 1 2 3 / 4 5 6 / 7 8 9 / DEL 0 ENTER-style PAIR-area.
+ * Each cell is a `clickable` focusable Box — DPAD_CENTER (injected by the ring as `TAP`)
+ * fires its onClick. NavPrev/NavNext from ring SWIPE_UP/DOWN walks the grid via Compose
+ * focus traversal.
+ *
+ * Layout chosen so the most-used digits (1-9) form a phone-style grid; row 4 has DEL
+ * (backspace) and 0. The "PAIR" trigger lives outside the grid (in the parent's TextButton
+ * row) so it's reachable after the digits are entered.
+ */
+@Composable
+private fun NumberPad(
+    enabled: Boolean,
+    onDigit: (Char) -> Unit,
+    onBackspace: () -> Unit,
+) {
+    val rows = listOf(
+        listOf("1", "2", "3"),
+        listOf("4", "5", "6"),
+        listOf("7", "8", "9"),
+        listOf("⌫", "0", ""),  // backspace, zero, spacer (PAIR is in the parent row)
+    )
+    Column(modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        rows.forEach { row ->
+            Row(modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                row.forEach { label ->
+                    if (label.isEmpty()) {
+                        Spacer(Modifier.weight(1f).aspectRatio(3.0f))
+                    } else {
+                        NumberPadKey(
+                            label = label,
+                            enabled = enabled,
+                            modifier = Modifier.weight(1f).aspectRatio(3.0f),
+                            onClick = {
+                                if (label == "⌫") onBackspace() else onDigit(label[0])
+                            },
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun NumberPadKey(
+    label: String,
+    enabled: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    var focused by remember { mutableStateOf(false) }
+    val borderColor = if (focused) HaloColors.Accent else HaloColors.Line
+    val bg = if (focused) HaloColors.FocusTint else androidx.compose.ui.graphics.Color.Transparent
+    val fg = if (enabled) HaloColors.Fg else HaloColors.Mute
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(6.dp))
+            .background(bg)
+            .border(1.dp, borderColor, RoundedCornerShape(6.dp))
+            .onFocusChanged { focused = it.isFocused }
+            .clickable(enabled = enabled, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = label,
+            style = HaloType.Title.copy(
+                fontSize = 22.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = fg,
+            ),
+        )
     }
 }

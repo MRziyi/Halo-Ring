@@ -23,6 +23,9 @@ import com.halo.ring.ui.screens.ActionPickerScreen
 import com.halo.ring.ui.screens.AdvancedAction
 import com.halo.ring.ui.screens.AdvancedPrefs
 import com.halo.ring.ui.screens.AdvancedScreen
+import com.halo.ring.ui.screens.AppLanguage
+import com.halo.ring.ui.screens.GuideScreen
+import com.halo.ring.ui.screens.LanguageScreen
 import com.halo.ring.ui.screens.FeedbackPrefField
 import com.halo.ring.ui.screens.FeedbackPrefs
 import com.halo.ring.ui.screens.FeedbackScreen
@@ -71,9 +74,10 @@ fun HaloRingApp(
     onAdvancedPrefsChanged: (AdvancedPrefs) -> Unit = {},
     onVitalsPrefsChanged: (VitalsPrefs) -> Unit = {},
     onAdvancedAction: (AdvancedAction) -> Unit = {},
-    // A-4: onFindRing/onShutdownRing/onForgetRing/onMeasureNow removed — RingScreen + VitalsScreen
-    // now read the BLE client directly off [LocalAppGraph]. Pure threading removal; semantics
-    // unchanged.
+    /** Current app-locale override; the LanguageScreen renders this as the selected row. */
+    currentLanguage: AppLanguage = AppLanguage.SYSTEM,
+    /** User picked a language from Settings → Language; caller persists + applies. */
+    onLanguageSelected: (AppLanguage) -> Unit = {},
 ) {
     HaloRingTheme {
         var state by remember { mutableStateOf(initial) }
@@ -157,6 +161,7 @@ fun HaloRingApp(
                                     SettingsSection.ADVANCED         -> SubScreen.Advanced
                                     SettingsSection.ABOUT            -> SubScreen.About
                                     SettingsSection.VITALS_PREFS     -> SubScreen.VitalsPrefs
+                                    SettingsSection.LANGUAGE         -> SubScreen.Language
                                 })
                             },
                         )
@@ -282,11 +287,21 @@ fun HaloRingApp(
                         versionName = versionName,
                         versionCode = versionCode,
                         detectedProfile = deviceProfile,
+                        onShowGuide = { push(SubScreen.Guide) },
                     )
 
                     SubScreen.VitalsPrefs -> VitalsPrefsScreen(
                         prefs = vitalsPrefs,
                         onUpdated = onVitalsPrefsChanged,
+                    )
+
+                    SubScreen.Language -> LanguageScreen(
+                        current = currentLanguage,
+                        onSelect = { onLanguageSelected(it) },
+                    )
+
+                    SubScreen.Guide -> GuideScreen(
+                        onDismiss = { pop() },
                     )
                 }
             }
