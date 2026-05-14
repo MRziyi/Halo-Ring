@@ -1,6 +1,7 @@
 package com.halo.ring.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -24,7 +25,7 @@ import com.halo.ring.ui.screens.AdvancedAction
 import com.halo.ring.ui.screens.AdvancedPrefs
 import com.halo.ring.ui.screens.AdvancedScreen
 import com.halo.ring.ui.screens.AppLanguage
-import com.halo.ring.ui.screens.GuideScreen
+import com.halo.ring.ui.screens.GuidedTour
 import com.halo.ring.ui.screens.LanguageScreen
 import com.halo.ring.ui.screens.FeedbackPrefField
 import com.halo.ring.ui.screens.FeedbackPrefs
@@ -78,6 +79,15 @@ fun HaloRingApp(
     currentLanguage: AppLanguage = AppLanguage.SYSTEM,
     /** User picked a language from Settings → Language; caller persists + applies. */
     onLanguageSelected: (AppLanguage) -> Unit = {},
+    /** When true, an interactive coachmark tour ([GuidedTour]) is overlaid on top of the app —
+     *  drives navigation through every tab + key sub-screen with a dim layer + callout card.
+     *  Audit-2026-05-13p. */
+    tourActive: Boolean = false,
+    /** Tour fires this on SKIP or final DONE. Caller persists `guide_seen = true` + clears the
+     *  `tourActive` flag. */
+    onTourDismissed: () -> Unit = {},
+    /** Settings → About → "Show operation guide" — caller flips tourActive=true on this. */
+    onRequestTour: () -> Unit = {},
 ) {
     HaloRingTheme {
         var state by remember { mutableStateOf(initial) }
@@ -123,6 +133,7 @@ fun HaloRingApp(
             state = state.copy(navStack = if (i < 0) emptyList() else state.navStack.subList(0, i + 1))
         }
 
+        Box(modifier = Modifier.fillMaxSize().background(HaloColors.Bg)) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -287,7 +298,10 @@ fun HaloRingApp(
                         versionName = versionName,
                         versionCode = versionCode,
                         detectedProfile = deviceProfile,
-                        onShowGuide = { push(SubScreen.Guide) },
+                        // Re-trigger the interactive tour. SubScreen.Guide is unused now (the
+                        // static cheatsheet was replaced by GuidedTour); the About row instead
+                        // tells the host to flip tourActive=true.
+                        onShowGuide = onRequestTour,
                     )
 
                     SubScreen.VitalsPrefs -> VitalsPrefsScreen(
@@ -299,13 +313,24 @@ fun HaloRingApp(
                         current = currentLanguage,
                         onSelect = { onLanguageSelected(it) },
                     )
-
-                    SubScreen.Guide -> GuideScreen(
-                        onDismiss = { pop() },
-                    )
                 }
             }
         }
+
+        // Interactive coachmark tour overlay (audit-2026-05-13p). Drawn on top of the entire
+        // app when tourActive=true so it can dim the underlying UI + drive navigation through
+        // every key tab + sub-screen.
+        if (tourActive) {
+            GuidedTour(
+                onDismiss = onTourDismissed,
+                onSelectTab = { tab ->
+                    state = state.copy(tab = tab, navStack = emptyList())
+                },
+                onPush = { screen -> push(screen) },
+                onPopAll = { state = state.copy(navStack = emptyList()) },
+            )
+        }
+        }   // close the outer Box
     }
 }
 

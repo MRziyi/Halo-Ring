@@ -124,16 +124,13 @@ class MainActivity : ComponentActivity() {
                     return@CompositionLocalProvider
                 }
 
-                // Post-wizard onboarding (audit-2026-05-13o). First-time users see the operation
-                // guide once after finishing the wizard. Re-openable later from Settings → About.
-                if (!guideSeen) {
-                    com.halo.ring.ui.screens.GuideScreen(
-                        onDismiss = {
-                            lifecycleScope.launch { appPrefs.markGuideSeen() }
-                        },
-                    )
-                    return@CompositionLocalProvider
-                }
+                // Post-wizard onboarding (audit-2026-05-13p). First-time users see the
+                // interactive coachmark tour once after finishing the wizard, AND the user can
+                // re-open it later from Settings → About → "Show operation guide". Both paths
+                // flow through the single `tourRequested` state below; `tourActive` is the
+                // disjunction of "haven't dismissed it yet" and "explicitly re-requested".
+                var tourRequested by remember { mutableStateOf(false) }
+                val tourActive = !guideSeen || tourRequested
 
                 HaloRingApp(
                     initial = AppState(
@@ -181,6 +178,14 @@ class MainActivity : ComponentActivity() {
                     onLanguageSelected = { lang ->
                         lifecycleScope.launch { appPrefs.setLanguage(lang) }
                     },
+                    tourActive = tourActive,
+                    onTourDismissed = {
+                        // Auto-show only happens the first time guide_seen=false; mark it now
+                        // so subsequent launches skip straight to the app.
+                        if (!guideSeen) lifecycleScope.launch { appPrefs.markGuideSeen() }
+                        tourRequested = false
+                    },
+                    onRequestTour = { tourRequested = true },
                     // A-4: onMeasureNow / onFindRing / onShutdownRing / onForgetRing removed —
                     // VitalsScreen + RingScreen consume LocalAppGraph directly. No callback
                     // threading, same semantics.

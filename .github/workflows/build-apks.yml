@@ -1,7 +1,12 @@
 name: build-apks
 
-# Builds both flavor APKs (rokid + rayneo) in debug and release configurations on every push
-# to main, on every PR, and on every git tag matching `v*`. Outputs land in two places:
+# Builds release APKs for both flavors (rokid + rayneo) on every push to main, every PR, and
+# every git tag matching `v*`. Debug APKs are NOT produced by CI — debug is a dev-machine
+# concern (you want logcat verbose locally) and shipping debug binaries from CI just confuses
+# the Releases page (audit-2026-05-13p). Use `./gradlew :app:assemble*Debug` locally if you
+# need them.
+#
+# Outputs land in two places:
 #
 #   1. Always — uploaded as a 14-day workflow artifact (the Actions-tab download path).
 #   2. On push to main — overwrites a rolling **Latest build** GitHub Release so users can
@@ -56,11 +61,7 @@ jobs:
         working-directory: app-project
         run: ./gradlew :agent:packageDex --no-daemon
 
-      - name: Build debug APKs
-        working-directory: app-project
-        run: ./gradlew :app:assembleRokidDebug :app:assembleRayneoDebug --no-daemon
-
-      - name: Build release APKs (debug-signed for size measurement; see Doc/03)
+      - name: Build release APKs (rokid + rayneo, R8-shrunk; ~3.4 MB each)
         working-directory: app-project
         run: ./gradlew :app:assembleRokidRelease :app:assembleRayneoRelease --no-daemon
 
@@ -75,18 +76,15 @@ jobs:
           retention-days: 14
           if-no-files-found: error
 
-      # Stage the four APKs in a flat directory with predictable names so the Release page
-      # shows clean labels (`halo-ring-rokid-debug.apk` etc.) instead of the Gradle output
-      # paths.
+      # Stage the two release APKs with predictable names so the Release page shows clean
+      # labels (`halo-ring-rokid-release.apk` etc.) instead of the Gradle output paths.
       - name: Stage APKs for release upload
         if: |
           (github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')))
         run: |
           mkdir -p release-staging
-          cp app-project/app/build/outputs/apk/rokid/debug/app-rokid-debug.apk      release-staging/halo-ring-rokid-debug.apk
-          cp app-project/app/build/outputs/apk/rokid/release/app-rokid-release.apk  release-staging/halo-ring-rokid-release.apk
-          cp app-project/app/build/outputs/apk/rayneo/debug/app-rayneo-debug.apk    release-staging/halo-ring-rayneo-debug.apk
-          cp app-project/app/build/outputs/apk/rayneo/release/app-rayneo-release.apk release-staging/halo-ring-rayneo-release.apk
+          cp app-project/app/build/outputs/apk/rokid/release/app-rokid-release.apk   release-staging/halo-ring-rokid.apk
+          cp app-project/app/build/outputs/apk/rayneo/release/app-rayneo-release.apk release-staging/halo-ring-rayneo.apk
           ls -lh release-staging/
 
       # Rolling "Latest build" Release — overwritten on every push to main so users always
@@ -105,8 +103,8 @@ jobs:
 
             ### Which APK do I want?
 
-            - **Rokid Glasses** → `halo-ring-rokid-release.apk` (or `…-debug.apk` if you want logs).
-            - **RayNeo X3 Pro** → `halo-ring-rayneo-release.apk` (or `…-debug.apk`).
+            - **Rokid Glasses** → `halo-ring-rokid.apk`
+            - **RayNeo X3 Pro** → `halo-ring-rayneo.apk`
 
             Install via `adb install -r <apk>`; see the README for the full setup walk-through.
 
