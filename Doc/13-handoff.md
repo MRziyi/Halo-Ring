@@ -3,7 +3,28 @@
 > **For the next agent picking up this project.** This document is the canonical "where we are,
 > what's left, and where to look" — keep it current as you work. If a TODO here is wrong, fix it.
 
-Last updated: 2026-05-14 (after **audit-pass-w**: AI / system-slot / profile-content
+Last updated: 2026-05-24 (after **plugin-protocol-pass**: full Doc/18 implementation —
+External-App Plugin Protocol v1; new `:test-plugin` module; first cross-app integration shipping
+as v0.2.5). Previously: 2026-05-14 (audit-pass-w).
+
+**Doc/18 plugin protocol shipped — v1.** Halo Ring can now discover other installed apps that
+declare `halo.ring.plugin_version=1` meta-data, query their `ContentProvider` for action lists,
+surface those in the Action Picker's new EXTERNAL APPS group, persist user bindings (via
+`GlassAction.PluginAction` round-tripped through `GlassActionCodec`), and fire targeted TRIGGER
+broadcasts on gesture recognition. Plus a `ProfileStack` for overlay apps to push temporary
+gesture bindings via PROFILE_PUSH/POP (Doc/18 §6). All sealed-class `when` blocks across
+`:core/:app/:rokid/:rayneo` updated to handle the new variant. New `ExternalPluginsScreen`
+under Settings; trailing "N active" badge on the Settings root row when plugins are present.
+Eager refresh on `HaloRingService.onCreate` so plugin count is visible without UI navigation.
+Auto-pop of pushed profiles on owner-package uninstall. **+36 :core tests** (PluginAction codec
+round-trip + escape, ProfileStack semantics, PluginBindingsParser tolerance) — **250/250 green**
+(was 214). New `:test-plugin` Gradle module ships a reference plugin app for on-device
+validation; T1/T4/T5/T6/T7 confirmed live on OnePlus 9 Pro; T10–T12 verified at the OS
+permission-gate layer (signature|privileged `PUSH_PROFILE` denies third-party shell broadcasts
+as designed — proving the security boundary). Full spec + test matrix in
+[`Doc/18-plugin-protocol.md`](18-plugin-protocol.md).
+
+Previously the audit was at: **audit-pass-w**: AI / system-slot / profile-content
 redesign on top of audit-pass-u/v.
 
 **OpenAIAssistant action split from AskVisualAI**: new `GlassAction.OpenAIAssistant` distinct

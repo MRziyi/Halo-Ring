@@ -28,4 +28,4 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "r08-ring-remote"
-include(":core", ":app", ":agent")
+include(":core", ":app", ":agent", ":test-plugin")

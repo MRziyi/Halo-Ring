@@ -79,6 +79,14 @@ class AppGraph private constructor(
      *  this when [vitalsPrefsFlow.csvExportEnabled] is on; the Advanced screen's
      *  "Export vitals log" action pulls [VitalsLogger.toCsv]. */
     val vitalsLogger: VitalsLogger,
+    /** Doc/18 plugin discovery + cache. The foreground service registers package-event receivers
+     *  in onCreate so the cache invalidates on plugin install/uninstall; UI screens read via
+     *  [com.halo.ring.plugin.PluginRegistry.plugins] (StateFlow) for snappy recomposition. */
+    val pluginRegistry: com.halo.ring.plugin.PluginRegistry,
+    /** Doc/18 §6 — overlay-app profile stack. Pure-JVM state in :core; the service plus the
+     *  [com.halo.ring.plugin.PluginBroadcastReceiver] are the only writers. The router consults
+     *  this BEFORE the active KeyMapProfile on every gesture (still after system gestures). */
+    val profileStack: com.halo.ring.core.plugin.ProfileStack,
     /**
      * Live stream of recognised gestures, published by the foreground service's
      * `InteractionRouter.onGestureRecognized` callback. Consumers (the interactive
@@ -90,6 +98,14 @@ class AppGraph private constructor(
      * the instant the user opens it.
      */
     val recognisedGestureFlow: MutableSharedFlow<Gesture>,
+    /**
+     * Most-recent [RecognisedGesture] — gesture + resolved action + synth-latency. Distinct from
+     * [recognisedGestureFlow] because (a) the Test Arena needs the action + latency to render the
+     * mockup's big "LAST GESTURE → Action · NN ms latency" card, and (b) StateFlow gives a
+     * persistent "what just happened" snapshot whereas the SharedFlow is replay=0 (intentional —
+     * GuidedTour shouldn't react to stale gestures on open).
+     */
+    val lastRecognisedFlow: MutableStateFlow<RecognisedGesture?>,
 ) {
     /**
      * Best-effort detection of which input source the wearer is using right now. Drives the
@@ -142,7 +158,10 @@ class AppGraph private constructor(
                 vitalsSnapshotFlow = MutableStateFlow(com.halo.ring.ui.screens.VitalsSnapshot()),
                 latencyLogger = LatencyLogger(capacity = 200),
                 vitalsLogger = VitalsLogger(capacity = 500),
+                pluginRegistry = com.halo.ring.plugin.PluginRegistry(context.applicationContext),
+                profileStack = com.halo.ring.core.plugin.ProfileStack(),
                 recognisedGestureFlow = MutableSharedFlow(extraBufferCapacity = 8),
+                lastRecognisedFlow = MutableStateFlow(null),
             )
         }
 
@@ -168,6 +187,20 @@ class AppGraph private constructor(
  * coaching content (ring-vocabulary vs temple-vocabulary).
  */
 enum class InputSource { RING, TEMPLE, NONE }
+
+/**
+ * What the gesture pipeline just recognised, with enough context to render the Test Arena's
+ * "LAST GESTURE" hero card. Published by [com.halo.ring.service.HaloRingService] on every
+ * `InteractionRouter.onGestureRecognized` callback.
+ */
+data class RecognisedGesture(
+    val gesture: com.halo.ring.core.gesture.Gesture,
+    val action: com.halo.ring.core.action.GlassAction,
+    /** Synthesizer-only latency in ms: time from the last raw BLE event contributing to this
+     *  gesture to the gesture's emission. Does NOT include executor / dispatch cost (Test Arena
+     *  doesn't dispatch; the displayed action is just informational). Coerced to 0..9999. */
+    val latencyMs: Int,
+)
 
 /** Each flavor's `DeviceFlavorBindings.kt` exposes this exact shape. */
 data class Bindings(

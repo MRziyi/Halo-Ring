@@ -388,6 +388,32 @@ This is described in user-facing terms in [09-user-manual.md](09-user-manual.md)
 
 ---
 
+## 7b. External plugin actions (Doc/18 protocol)
+
+A gesture can be bound to an action provided by another installed Android app instead of one of
+Halo Ring's built-in `GlassAction` cases. From the wearer's perspective there's no observable
+difference — the action shows up in the picker under "EXTERNAL APPS", the binding persists like
+any other, and firing the gesture invokes the plugin within ~10–50 ms.
+
+Under the hood: when the gesture is recognised, [`HaloRingService`'s `onGestureRecognized`](../app-project/app/src/main/kotlin/com/halo/ring/service/HaloRingService.kt)
+listener intercepts `GlassAction.PluginAction` before the executor-backend chain, and
+[`PluginTrigger`](../app-project/app/src/main/kotlin/com/halo/ring/plugin/PluginTrigger.kt) sends
+a targeted `com.halo.ring.action.TRIGGER` broadcast (gated by the
+`com.halo.ring.permission.SEND_PLUGIN_TRIGGER` permission so spoofers can't fire plugin actions).
+The plugin's own `BroadcastReceiver` handles the trigger however it likes.
+
+**Pushed profiles** (optional, for overlay apps) — an overlay plugin can temporarily push a
+gesture-binding overlay via the `PROFILE_PUSH` broadcast: `SWIPE_UP/DOWN` becomes "move focus
+across the overlay's options" etc., regardless of the wearer's underlying profile. The push is
+LIFO-stacked, falls through for unbound gestures, and is auto-popped when the owning package is
+uninstalled. System gestures (TRIPLE_TAP / QUAD_TAP / LP+SWIPE / DOUBLE_LP) always bypass the
+push stack — the wearer can never be locked out of profile cycling, peek-HUD, or AI-assistant.
+
+See [Doc/18 — External-App Plugin Protocol](18-plugin-protocol.md) for the full wire format
++ test matrix.
+
+---
+
 ## 8. State machines summary
 
 There are **five concurrent state machines** in the runtime. Knowing which is which helps debug

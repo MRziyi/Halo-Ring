@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>R08 Ring Remote — UI mockup</title>
+<title>Halo Ring · 环意 — UI mockup</title>
 <meta name="viewport" content="width=1200">
 <style>
   /* ── page chrome (the docs layer, NOT the on-device UI) ─────────────── */
@@ -12,22 +12,25 @@
     --doc-mute: #6e6e6e;
     --doc-line: #e0ddd5;
 
-    /* ── on-device UI tokens — keep these MINIMAL ───────────────────── */
-    --ui-bg: #000;            /* pure black; least light-leak on see-through display */
-    --ui-fg: #fff;
-    --ui-mute: #8a8a8a;
-    --ui-line: #2a2a2a;
-    --ui-accent: #5ee08c;      /* matches the ring's green LED for visual coherence */
-    --ui-accent-dim: #2a5a36;
-    --ui-warn: #ffb84d;
-    --ui-bad: #ff7c7c;
+    /* ── on-device UI tokens — keep these MINIMAL.  Names match the brand
+         tokens in Doc/brand/README.md and HaloRingTheme.kt ────────────── */
+    --halo-bg: #000;             /* halo_black            — every surface */
+    --halo-fg: #fff;             /* halo_fg               — primary text  */
+    --halo-mute: #8a8a8a;        /* halo_mute             — secondary     */
+    --halo-accent: #5ee08c;      /* halo_accent           — focus + CTA   */
+    --halo-mint-bright: #b8ffd4; /* halo_mint_bright      — used only as the bright head of icon blades */
+    --halo-accent-dim: #2a5a36;
+    --halo-warn: #ffb84d;        /* halo_warn             — battery low   */
+    --halo-bad: #ff7c7c;         /* halo_bad              — disconnect    */
+    --halo-line: #2a2a2a;        /* halo_line             — dividers      */
+    --halo-focus-tint: rgba(94, 224, 140, 0.07);   /* 7 % accent — focused rows */
   }
 
   html, body { background: var(--doc-bg); color: var(--doc-fg); margin: 0; padding: 0;
                font: 14px/1.55 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI",
                      "Helvetica Neue", system-ui, sans-serif; }
 
-  .doc { max-width: 1504px; margin: 0 auto; padding: 48px 32px 96px; }
+  .doc { max-width: 1180px; margin: 0 auto; padding: 48px 32px 96px; }
   h1 { font: 700 32px/1.2 -apple-system, system-ui, sans-serif; margin: 0 0 8px; letter-spacing: -.5px; }
   h2 { font: 600 22px/1.3 -apple-system, system-ui, sans-serif; margin: 56px 0 12px;
        padding-top: 24px; border-top: 1px solid var(--doc-line); letter-spacing: -.3px; }
@@ -37,6 +40,18 @@
   code { font: 12px/1.4 "SF Mono", Menlo, Consolas, monospace; background: #ececec;
          padding: 1px 6px; border-radius: 3px; }
 
+  /* ── brand-mark row at the top ─────────────────────────────────────── */
+  .brand { display: flex; align-items: center; gap: 24px; margin: 16px 0 4px; }
+  .brand .mark { width: 96px; height: 96px; background: #000; border-radius: 22%; padding: 4px;
+                 display: grid; place-items: center; box-shadow: 0 0 0 1px var(--doc-line); }
+  .brand .name h1  { margin: 0 0 6px; }
+  .brand .name .zh { font: 600 20px/1.2 -apple-system, system-ui, sans-serif; color: #444;
+                     letter-spacing: 1px; }
+  .brand .name .slogan { font: 16px/1.5 -apple-system, system-ui, sans-serif; color: var(--doc-mute);
+                         margin-top: 8px; }
+  .brand .name .slogan .zh { display: block; font-size: 14px; }
+  .brand .name .by { font-size: 12px; color: var(--doc-mute); margin-top: 6px; }
+
   /* ── design-token gallery ──────────────────────────────────────────── */
   .tokens { display: grid; grid-template-columns: repeat(8, 1fr); gap: 16px; margin: 16px 0 8px; }
   .tok { display: flex; flex-direction: column; gap: 8px; }
@@ -45,86 +60,102 @@
   .tok .va { font: 600 13px/1.2 sans-serif; }
 
   /* ── type-scale demo ───────────────────────────────────────────────── */
-  .ts { background: var(--ui-bg); color: var(--ui-fg); padding: 32px; border-radius: 6px;
+  .ts { background: var(--halo-bg); color: var(--halo-fg); padding: 32px; border-radius: 6px;
         display: flex; flex-direction: column; gap: 12px; margin: 12px 0; }
   .ts .row { display: flex; align-items: baseline; gap: 24px; }
-  .ts .row .label { color: var(--ui-mute); font: 12px/1 "SF Mono", monospace; min-width: 110px; }
-  .ts .row .demo  { color: var(--ui-fg); }
+  .ts .row .label { color: var(--halo-mute); font: 12px/1 "SF Mono", monospace; min-width: 110px; }
+  .ts .row .demo  { color: var(--halo-fg); }
   .ts .row .demo.metric { font-variant-numeric: tabular-nums; letter-spacing: -1px; }
 
   /* ── device-frame ──────────────────────────────────────────────────── */
-  /* Targets the smaller eye-area; both Rokid (mono ≈480px) and X3 Pro (per-eye 640×480)   */
-  /* are designed to receive the same 480×480 content, centred. No stereo / parallax.       */
-  .frame { width: 480px; height: 480px; background: var(--ui-bg); color: var(--ui-fg);
+  /* Targets the smaller eye-area; both Rokid (single projector → both eyes, ≈480 px wide)
+     and X3 Pro (per-eye 640×480, ~30° diagonal FOV) receive the same 480×480 content, centred.
+     No stereo, no parallax — one Composable, two Activity hosts.                          */
+  .frame { width: 480px; height: 480px; background: var(--halo-bg); color: var(--halo-fg);
            position: relative; box-shadow: 0 0 0 1px var(--doc-line), 0 12px 32px rgba(0,0,0,.10);
            overflow: hidden;
-           font: 16px/1.4 -apple-system, system-ui, sans-serif; }
+           font: 17px/1.4 -apple-system, system-ui, sans-serif; }
   .frame *  { box-sizing: border-box; }
   .frame .pad { padding: 24px; height: 100%; display: flex; flex-direction: column; }
 
   /* Common UI atoms */
   .frame .statusbar { display: flex; justify-content: space-between; align-items: center;
-                      font: 600 13px/1 -apple-system, system-ui, sans-serif; color: var(--ui-mute);
+                      font: 600 16px/1 -apple-system, system-ui, sans-serif; color: var(--halo-mute);
                       padding-bottom: 12px; }
   .frame .statusbar .left  { display: flex; gap: 10px; align-items: center; }
   .frame .statusbar .right { display: flex; gap: 10px; align-items: center; }
   .frame .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%;
-                background: var(--ui-accent); }
-  .frame .dot.bad { background: var(--ui-bad); }
-  .frame .dot.dim { background: var(--ui-mute); }
+                background: var(--halo-accent); }
+  .frame .dot.bad { background: var(--halo-bad); }
+  .frame .dot.warn { background: var(--halo-warn); }
+  .frame .dot.dim { background: var(--halo-mute); }
 
   .frame .tabs { display: flex; gap: 0; margin: 0 -24px 16px; padding: 0 24px 0;
-                 border-bottom: 1px solid var(--ui-line); }
+                 border-bottom: 1px solid var(--halo-line); }
   .frame .tabs .tab { padding: 12px 0; flex: 1; text-align: center;
-                      font: 600 13px/1 -apple-system, system-ui, sans-serif;
-                      color: var(--ui-mute); letter-spacing: 1px; }
-  .frame .tabs .tab.on  { color: var(--ui-fg); border-bottom: 2px solid var(--ui-accent);
+                      font: 600 16px/1 -apple-system, system-ui, sans-serif;
+                      color: var(--halo-mute); letter-spacing: 1px; }
+  .frame .tabs .tab.on  { color: var(--halo-fg); border-bottom: 2px solid var(--halo-accent);
                           margin-bottom: -1px; padding-bottom: 11px; }
 
   .frame .title { font: 600 24px/1.1 -apple-system, system-ui, sans-serif; letter-spacing: -.3px;
                   margin: 4px 0 18px; }
-  .frame .subtitle { font: 400 14px/1.3 -apple-system, system-ui, sans-serif;
-                     color: var(--ui-mute); margin-top: -10px; margin-bottom: 18px; }
+  .frame .subtitle { font: 400 16px/1.3 -apple-system, system-ui, sans-serif;
+                     color: var(--halo-mute); margin-top: -10px; margin-bottom: 18px; }
 
   .frame .row-list .row { display: flex; align-items: center; justify-content: space-between;
-                          padding: 14px 0; border-top: 1px solid var(--ui-line); font-size: 17px; }
+                          padding: 14px 0; border-top: 1px solid var(--halo-line); font-size: 17px; }
   .frame .row-list .row:first-child { border-top: 0; }
-  .frame .row-list .row .key { color: var(--ui-mute); font-size: 14px; }
+  .frame .row-list .row .key { color: var(--halo-mute); font-size: 16px; }
   .frame .row-list .row .val { font-weight: 600; }
-  .frame .row-list .row.focused { background: rgba(94, 224, 140, 0.07);
-                                  box-shadow: inset 2px 0 0 var(--ui-accent);
+  .frame .row-list .row.focused { background: var(--halo-focus-tint);
+                                  box-shadow: inset 2px 0 0 var(--halo-accent);
                                   margin: 0 -24px; padding: 14px 24px; }
 
   .frame .stat { display: flex; flex-direction: column; gap: 4px; }
   .frame .stat .v { font: 700 56px/1 -apple-system, system-ui, sans-serif;
                     font-variant-numeric: tabular-nums; letter-spacing: -2px; }
-  .frame .stat .v .u { font-size: 18px; color: var(--ui-mute); font-weight: 400;
+  .frame .stat .v .u { font-size: 18px; color: var(--halo-mute); font-weight: 400;
                        margin-left: 6px; letter-spacing: 0; }
-  .frame .stat .k { font: 13px/1 -apple-system, system-ui, sans-serif; color: var(--ui-mute);
+  .frame .stat .k { font: 11px/1 -apple-system, system-ui, sans-serif; color: var(--halo-mute);
                     text-transform: uppercase; letter-spacing: 1px; }
 
   .frame .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px 32px; }
   .frame .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px 16px; }
 
-  .frame .cta { background: transparent; border: 1px solid var(--ui-accent); color: var(--ui-accent);
-                padding: 12px 16px; text-align: center; font: 600 14px/1 -apple-system, sans-serif;
+  .frame .cta { background: transparent; border: 1px solid var(--halo-accent); color: var(--halo-accent);
+                padding: 12px 16px; text-align: center; font: 600 16px/1 -apple-system, sans-serif;
                 letter-spacing: 1px; }
-  .frame .cta.focused { background: var(--ui-accent); color: var(--ui-bg); }
+  .frame .cta.focused { background: var(--halo-accent); color: var(--halo-bg); }
+  .frame .cta.danger  { border-color: var(--halo-bad); color: var(--halo-bad); }
   .frame .cta + .cta { margin-top: 8px; }
 
-  .frame .bar { height: 4px; background: var(--ui-line); position: relative; border-radius: 2px;
+  /* HaloSwitch — the shared ON/OFF pill (audit-pass 2026-05-14u) */
+  .frame .switch { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px;
+                   border-radius: 14px; font: 600 13px/1 -apple-system, sans-serif;
+                   letter-spacing: 0.5px; width: 64px; justify-content: space-between; }
+  .frame .switch.on  { background: var(--halo-accent-dim); color: var(--halo-accent);
+                       border: 1px solid var(--halo-accent); flex-direction: row-reverse; }
+  .frame .switch.on::before  { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--halo-accent); }
+  .frame .switch.off { background: transparent; color: var(--halo-mute);
+                       border: 1px solid var(--halo-line); }
+  .frame .switch.off::after { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--halo-mute); }
+  .frame .switch.off::before { content: "OFF"; margin-right: auto; }
+  .frame .switch.on::after   { content: "ON";  margin-left: auto; }
+
+  .frame .bar { height: 4px; background: var(--halo-line); position: relative; border-radius: 2px;
                 overflow: hidden; }
-  .frame .bar > i { display: block; height: 100%; background: var(--ui-accent); }
+  .frame .bar > i { display: block; height: 100%; background: var(--halo-accent); }
 
   .frame .spark { display: flex; align-items: flex-end; gap: 2px; height: 28px; }
-  .frame .spark > i { flex: 1; background: var(--ui-mute); opacity: .6; }
-  .frame .spark > i.h { background: var(--ui-accent); opacity: 1; }
+  .frame .spark > i { flex: 1; background: var(--halo-mute); opacity: .6; }
+  .frame .spark > i.h { background: var(--halo-accent); opacity: 1; }
 
-  .frame .footer-hint { color: var(--ui-mute); font-size: 13px; margin-top: auto; padding-top: 12px;
-                        border-top: 1px solid var(--ui-line); display: flex;
+  .frame .footer-hint { color: var(--halo-mute); font-size: 13px; margin-top: auto; padding-top: 12px;
+                        border-top: 1px solid var(--halo-line); display: flex;
                         justify-content: space-between; align-items: center; }
-  .frame .footer-hint .pill { padding: 4px 8px; border: 1px solid var(--ui-line); border-radius: 12px;
-                              font: 11px/1 "SF Mono", monospace; color: var(--ui-mute); }
+  .frame .footer-hint .pill { padding: 4px 8px; border: 1px solid var(--halo-line); border-radius: 12px;
+                              font: 11px/1 "SF Mono", monospace; color: var(--halo-mute); }
 
   /* HUD overlay shown over arbitrary content */
   .frame.hud-bg::after {
@@ -135,13 +166,13 @@
       radial-gradient(circle at 30% 80%, rgba(255,255,255,.04), transparent 240px);
   }
   .frame .hud { position: absolute; top: 16px; right: 16px; z-index: 1;
-                background: rgba(0,0,0,.78); border: 1px solid var(--ui-line);
-                color: var(--ui-fg); padding: 8px 12px; border-radius: 8px;
+                background: rgba(0,0,0,.78); border: 1px solid var(--halo-line);
+                color: var(--halo-fg); padding: 8px 12px; border-radius: 8px;
                 font: 600 13px/1.1 -apple-system, system-ui, sans-serif;
-                display: flex; align-items: center; gap: 10px; max-width: 260px;
+                display: flex; align-items: center; gap: 10px; max-width: 280px;
                 backdrop-filter: blur(8px); }
   .frame .hud .dot { width: 7px; height: 7px; }
-  .frame .hud .sub { color: var(--ui-mute); font-weight: 400; font-size: 12px; }
+  .frame .hud .sub { color: var(--halo-mute); font-weight: 400; font-size: 12px; }
   .frame .hud.center { top: 50%; left: 50%; transform: translate(-50%, -50%); right: auto;
                        padding: 14px 18px; font-size: 16px; }
 
@@ -151,7 +182,6 @@
   /* ── doc layout helpers ────────────────────────────────────────────── */
   .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(480px, 1fr));
           gap: 32px 32px; margin-top: 16px; }
-  .grid.three-col { grid-template-columns: repeat(3, 480px); }
   .group { display: flex; flex-direction: column; gap: 12px; }
   .group .label { font: 600 13px/1.2 sans-serif; color: #1c1c1c; }
   .group .desc  { font: 400 13px/1.4 sans-serif; color: var(--doc-mute); }
@@ -164,24 +194,58 @@
 
   .principles { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px 32px; margin-top: 16px; }
   .principles .pr { display: flex; gap: 12px; }
-  .principles .pr .n { flex: 0 0 24px; height: 24px; border-radius: 50%; background: var(--ui-fg);
+  .principles .pr .n { flex: 0 0 24px; height: 24px; border-radius: 50%; background: var(--halo-fg);
                        color: var(--doc-bg); display: grid; place-items: center;
                        font: 700 12px/1 sans-serif; }
   .principles .pr .t { color: #1c1c1c; }
   .principles .pr .t b { color: #000; }
 
-  /* mini ring icon used in some states */
-  .ring-glyph { width: 18px; height: 18px; border: 2px solid currentColor; border-radius: 50%;
-                position: relative; }
-  .ring-glyph::after { content: ""; position: absolute; top: -1px; right: -1px; width: 4px;
-                       height: 4px; background: var(--ui-accent); border-radius: 50%; }
+  /* Audit-pass note callout */
+  .audit { background: #fff; border-left: 3px solid var(--halo-accent); padding: 10px 14px;
+           margin: 8px 0; font-size: 13px; color: #2a2a2a; }
+  .audit b { color: #000; }
 </style>
 </head>
 <body>
 <div class="doc">
 
-  <h1>R08 Ring Remote — UI</h1>
-  <p class="lede">
+  <div class="brand">
+    <div class="mark">
+      <!-- Halo Ring · 环意 brand mark — v10a "Aperture Arcs": three 150° blades at 12/4/8 o'clock,
+           120° rotational symmetry, mint-bright heads fading to alpha-0 tails. Master at
+           Doc/brand/v10a-aperture-arcs.svg; this is a stylised 80 × 80 inline preview. -->
+      <svg viewBox="0 0 80 80" width="80" height="80" aria-label="Halo Ring brand mark">
+        <defs>
+          <linearGradient id="bladeA" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0"   stop-color="#B8FFD4" stop-opacity="1"/>
+            <stop offset="0.87" stop-color="#5EE08C" stop-opacity="0"/>
+          </linearGradient>
+          <radialGradient id="halo" cx="40" cy="40" r="40" gradientUnits="userSpaceOnUse">
+            <stop offset="0.5"  stop-color="#5EE08C" stop-opacity="0"/>
+            <stop offset="0.82" stop-color="#5EE08C" stop-opacity="0.18"/>
+            <stop offset="0.96" stop-color="#5EE08C" stop-opacity="0"/>
+          </radialGradient>
+        </defs>
+        <circle cx="40" cy="40" r="40" fill="url(#halo)"/>
+        <g transform="translate(40 40)">
+          <g><path d="M 0,-26 A 26,26 0 0,1 22.52,13 L 17.32,10 A 20,20 0 0,0 0,-20 Z" fill="url(#bladeA)"/></g>
+          <g transform="rotate(120)"><path d="M 0,-26 A 26,26 0 0,1 22.52,13 L 17.32,10 A 20,20 0 0,0 0,-20 Z" fill="url(#bladeA)"/></g>
+          <g transform="rotate(240)"><path d="M 0,-26 A 26,26 0 0,1 22.52,13 L 17.32,10 A 20,20 0 0,0 0,-20 Z" fill="url(#bladeA)"/></g>
+        </g>
+      </svg>
+    </div>
+    <div class="name">
+      <h1>Halo Ring <span style="color:var(--doc-mute);font-weight:500;">·</span> 环意</h1>
+      <div class="zh">UI mockup</div>
+      <div class="slogan">
+        <i>Where the ring goes, the world moves.</i>
+        <span class="zh">「环之所至，意之所达」</span>
+      </div>
+      <div class="by">by Zack 紫意 · package <code>com.halo.ring</code></div>
+    </div>
+  </div>
+
+  <p class="lede" style="margin-top:24px;">
     Three jobs, one app: (1) show the wearer's biometrics that the ring streams in the background,
     (2) configure the ring, (3) host the resident background service that powers everything.
     The on-device UI is designed for two pairs of AR glasses with low-resolution, see-through
@@ -189,36 +253,54 @@
     1:1 scale — the screens are <code>480 × 480 px</code>, matching what the wearer actually sees.
   </p>
 
+  <p style="font-size:13px; color: var(--doc-mute); max-width: 740px;">
+    The Compose implementation matching this mockup lives in
+    <code><a href="../app-project/app/src/main/kotlin/com/halo/ring/ui/">app-project/app/src/main/kotlin/com/halo/ring/ui/</a></code>.
+    Token names below (<code>--halo-bg</code>, <code>--halo-accent</code>, …) match
+    <code>HaloColors</code>/<code>HaloType</code> in
+    <code><a href="../app-project/app/src/main/kotlin/com/halo/ring/ui/HaloRingTheme.kt">HaloRingTheme.kt</a></code>
+    and the brand-asset spec in <code><a href="brand/README.md">Doc/brand/README.md</a></code>.
+  </p>
+
   <h2>1. Visual language</h2>
   <p>
-    Six tokens. The minimum surface area we can get away with. Everything else is composed of these.
+    Eight color tokens + one type scale. The minimum surface area to make this product look like
+    itself.
   </p>
   <div class="tokens">
-    <div class="tok"><div class="sw" style="background:#000"></div><div class="ti">--ui-bg</div><div class="va">Black</div></div>
-    <div class="tok"><div class="sw" style="background:#fff"></div><div class="ti">--ui-fg</div><div class="va">White</div></div>
-    <div class="tok"><div class="sw" style="background:#8a8a8a"></div><div class="ti">--ui-mute</div><div class="va">Mute 54%</div></div>
-    <div class="tok"><div class="sw" style="background:#5ee08c"></div><div class="ti">--ui-accent</div><div class="va">Green</div></div>
-    <div class="tok"><div class="sw" style="background:#2a5a36"></div><div class="ti">--accent-dim</div><div class="va">Green-dim</div></div>
-    <div class="tok"><div class="sw" style="background:#ffb84d"></div><div class="ti">--ui-warn</div><div class="va">Warn</div></div>
-    <div class="tok"><div class="sw" style="background:#ff7c7c"></div><div class="ti">--ui-bad</div><div class="va">Bad</div></div>
-    <div class="tok"><div class="sw" style="background:#2a2a2a"></div><div class="ti">--ui-line</div><div class="va">Divider</div></div>
+    <div class="tok"><div class="sw" style="background:#000"></div><div class="ti">--halo-bg</div><div class="va">halo_black</div></div>
+    <div class="tok"><div class="sw" style="background:#fff"></div><div class="ti">--halo-fg</div><div class="va">halo_fg</div></div>
+    <div class="tok"><div class="sw" style="background:#8a8a8a"></div><div class="ti">--halo-mute</div><div class="va">halo_mute</div></div>
+    <div class="tok"><div class="sw" style="background:#5ee08c"></div><div class="ti">--halo-accent</div><div class="va">halo_accent</div></div>
+    <div class="tok"><div class="sw" style="background:#b8ffd4"></div><div class="ti">--halo-mint-bright</div><div class="va">icon head only</div></div>
+    <div class="tok"><div class="sw" style="background:#2a5a36"></div><div class="ti">--halo-accent-dim</div><div class="va">accent_dim</div></div>
+    <div class="tok"><div class="sw" style="background:#ffb84d"></div><div class="ti">--halo-warn</div><div class="va">halo_warn</div></div>
+    <div class="tok"><div class="sw" style="background:#ff7c7c"></div><div class="ti">--halo-bad</div><div class="va">halo_bad</div></div>
   </div>
 
   <p>
     Pure black background — least light-leak through the see-through optic and lowest pixel draw.
-    Green matches the ring's LED so visual + tactile feedback share a single brand colour. Mute is
-    only for secondary text; if a divider would do, use one instead. Warn / Bad only fire on real
-    events; never decorative.
+    Green matches the ring's LED so visual + tactile feedback share a single brand colour.
+    <code>halo_mint_bright</code> is reserved for the icon's three blade-head accents only — it
+    does <em>not</em> appear elsewhere in chrome. Mute is only for secondary text; if a divider
+    would do, use one instead. Warn / Bad only fire on real events; never decorative.
   </p>
 
   <h3>Type scale</h3>
+  <div class="audit">
+    <b>Audit-pass note (RayNeo design-guide alignment, 2026-05-13s).</b> Floor is <b>16 sp</b> —
+    RayNeo's developer doc warns anything smaller renders with sub-pixel artefacts on the
+    waveguide. Our previous 13 sp caption/tab was the visible offender; bumped to 16 sp + matching
+    weight tweaks. <code>MetricKey</code> is the only intentional exception (11 sp all-caps grouping
+    label — reads as a label, not body copy).
+  </div>
   <div class="ts">
     <div class="row"><div class="label">title / 24</div><div class="demo" style="font:600 24px/1.1 sans-serif">Settings</div></div>
     <div class="row"><div class="label">body / 17</div><div class="demo" style="font:400 17px/1.4 sans-serif">Navigation profile</div></div>
-    <div class="row"><div class="label">caption / 13</div><div class="demo" style="font:400 13px/1.4 sans-serif; color: var(--ui-mute)">Tap to edit gesture mappings</div></div>
-    <div class="row"><div class="label">tab / 13</div><div class="demo" style="font:600 13px/1 sans-serif; letter-spacing:1px">SETTINGS</div></div>
-    <div class="row"><div class="label">mono / 13</div><div class="demo" style="font:600 13px/1 'SF Mono', monospace; color: var(--ui-mute)">R08_2A3F</div></div>
-    <div class="row"><div class="label">metric / 56</div><div class="demo metric" style="font:700 56px/1 sans-serif; letter-spacing:-2px">72<span style="font-size:18px;color:var(--ui-mute); margin-left:6px; letter-spacing:0">bpm</span></div></div>
+    <div class="row"><div class="label">caption / 16</div><div class="demo" style="font:400 16px/1.4 sans-serif; color: var(--halo-mute)">Tap to edit gesture mappings</div></div>
+    <div class="row"><div class="label">tab / 16</div><div class="demo" style="font:600 16px/1 sans-serif; letter-spacing:1px">SETTINGS</div></div>
+    <div class="row"><div class="label">mono / 13</div><div class="demo" style="font:600 13px/1 'SF Mono', monospace; color: var(--halo-mute)">R08_2A3F</div></div>
+    <div class="row"><div class="label">metric / 56</div><div class="demo metric" style="font:700 56px/1 sans-serif; letter-spacing:-2px">72<span style="font-size:18px;color:var(--halo-mute); margin-left:6px; letter-spacing:0">bpm</span></div></div>
   </div>
 
   <h3>Principles</h3>
@@ -226,27 +308,28 @@
     <div class="pr"><div class="n">1</div><div class="t"><b>Black canvas.</b> Lit pixels leak into the user's view of the world. Default to pixel-off; light only what carries information.</div></div>
     <div class="pr"><div class="n">2</div><div class="t"><b>Transient by default.</b> The HUD is not always-on. It flashes on event, then disappears. Persistent UI only while the wearer is actively in a settings screen.</div></div>
     <div class="pr"><div class="n">3</div><div class="t"><b>One column, one focus.</b> No multi-pane, no grids of more than 3 items. The wearer reads top-to-bottom, picks one thing.</div></div>
-    <div class="pr"><div class="n">4</div><div class="t"><b>Big text, generous space.</b> 480 px wide, viewing distance equivalent to a 43" virtual screen — overshoot intentionally.</div></div>
+    <div class="pr"><div class="n">4</div><div class="t"><b>Big text, generous space.</b> 16 sp floor; 480 px wide content at viewing distance equivalent to a 43" virtual screen. Overshoot intentionally.</div></div>
     <div class="pr"><div class="n">5</div><div class="t"><b>Sound + ring LED, not just visual.</b> The wearer may be looking past the display. Click + green flash + LED blink cover every state change.</div></div>
     <div class="pr"><div class="n">6</div><div class="t"><b>Same image to both eyes.</b> Rokid's single projector drives both eyes; X3 Pro's binocular optics receive the same content. We never compose stereo.</div></div>
+    <div class="pr"><div class="n">7</div><div class="t"><b>Focus-only, no pointer.</b> Rokid has no touchscreen; X3 Pro's touch is the temple bar. Any <code>pointerInput</code>/<code>detectTapGestures</code> on the content is dead code — stay on <code>Modifier.clickable</code> + standard focus traversal.</div></div>
+    <div class="pr"><div class="n">8</div><div class="t"><b>One green, no exceptions.</b> No per-profile colour theming. The mint-bright is reserved for the icon's three blade-heads — nowhere else.</div></div>
   </div>
 
   <h2>2. The three jobs, as three tabs</h2>
   <p class="lede">
-    Top-level app structure: three tabs across the top, current tab below. No nested chrome — keeps
-    pixel budget for content. <code>VITALS</code> shows what the ring measures. <code>SETTINGS</code>
-    is the configuration root. <code>STATUS</code> exposes the background service so the user can
-    verify it's alive and lean.
+    Top-level app structure: three tabs across the top, current tab below. <code>VITALS</code>
+    shows what the ring measures. <code>SETTINGS</code> is the configuration root.
+    <code>STATUS</code> exposes the background service so the user can verify it's alive and lean.
   </p>
 
-  <div class="grid three-col">
+  <div class="grid">
 
     <!-- ─── A. Vitals dashboard ─────────────────────────────────────── -->
     <div class="group">
       <div class="frame">
         <div class="pad">
           <div class="statusbar">
-            <div class="left"><span class="dot"></span><span>R08_2A3F</span><span style="color:var(--ui-fg)">87%</span></div>
+            <div class="left"><span class="dot"></span><span>R08_2A3F</span><span style="color:var(--halo-fg)">87%</span></div>
             <div class="right"><span>Navigation</span></div>
           </div>
           <div class="tabs">
@@ -256,7 +339,7 @@
           </div>
           <div class="grid-3" style="margin-top: 6px;">
             <div class="stat">
-              <div class="v" style="color: var(--ui-accent)">72<span class="u">bpm</span></div>
+              <div class="v" style="color: var(--halo-accent)">72<span class="u">bpm</span></div>
               <div class="k">Heart rate</div>
             </div>
             <div class="stat">
@@ -268,8 +351,8 @@
               <div class="k">Stress</div>
             </div>
           </div>
-          <div style="font-size:13px; color: var(--ui-mute); margin-top: 6px;">
-            measured <span style="color:var(--ui-fg)">4 min ago</span>
+          <div style="font-size:13px; color: var(--halo-mute); margin-top: 6px;">
+            measured <span style="color:var(--halo-fg)">4 min ago</span>
           </div>
 
           <div class="cta focused" style="margin-top: 18px;">MEASURE NOW</div>
@@ -289,17 +372,18 @@
       <div class="label">VITALS tab — main dashboard</div>
       <div class="desc">
         Big metrics on top (eyes glance, comprehend in one read). Tap MEASURE NOW for a fresh
-        HR + SpO₂ + stress snapshot (PPG LED stays on only during the measurement; we never
-        stream continuously). Today's activity comes "free" from the ring's passive counters.
+        HR + SpO₂ + stress snapshot via QRing's <code>0x69</code> real-time start (PPG LED stays on
+        only during the measurement; we never stream continuously). Today's activity comes
+        "free" from the ring's passive counters.
       </div>
     </div>
 
-    <!-- ─── B. Settings root ────────────────────────────────────────── -->
+    <!-- ─── B. Settings root — 10 sections (audit-pass: TEST_ARENA + LANGUAGE added) ── -->
     <div class="group">
       <div class="frame">
         <div class="pad">
           <div class="statusbar">
-            <div class="left"><span class="dot"></span><span>R08_2A3F</span><span style="color:var(--ui-fg)">87%</span></div>
+            <div class="left"><span class="dot"></span><span>R08_2A3F</span><span style="color:var(--halo-fg)">87%</span></div>
             <div class="right"><span>Navigation</span></div>
           </div>
           <div class="tabs">
@@ -307,14 +391,18 @@
             <div class="tab on">SETTINGS</div>
             <div class="tab">STATUS</div>
           </div>
-          <div class="row-list" style="margin-top: 6px;">
-            <div class="row focused"><span style="font-size:17px;">Profiles & Gestures</span><span style="color: var(--ui-mute)">›</span></div>
-            <div class="row"><span style="font-size:17px;">System Gestures</span><span style="color: var(--ui-mute)">›</span></div>
-            <div class="row"><span style="font-size:17px;">Ring</span><span style="color: var(--ui-mute)">›</span></div>
-            <div class="row"><span style="font-size:17px;">Power & Connection</span><span style="color: var(--ui-mute)">›</span></div>
-            <div class="row"><span style="font-size:17px;">Vitals</span><span style="color: var(--ui-mute)">›</span></div>
-            <div class="row"><span style="font-size:17px;">Advanced</span><span style="color: var(--ui-mute)">›</span></div>
-            <div class="row"><span style="font-size:17px;">About</span><span style="color: var(--ui-mute)">›</span></div>
+          <div class="row-list" style="margin-top: 6px; font-size: 16px;">
+            <div class="row focused"><span>Profiles &amp; Gestures</span><span style="color: var(--halo-mute)">›</span></div>
+            <div class="row"><span>System Gestures</span><span style="color: var(--halo-mute)">›</span></div>
+            <div class="row"><span>Ring</span><span style="color: var(--halo-mute)">›</span></div>
+            <div class="row"><span>Power &amp; Connection</span><span style="color: var(--halo-mute)">›</span></div>
+            <div class="row"><span>Feedback</span><span style="color: var(--halo-mute)">›</span></div>
+            <div class="row"><span>Vitals</span><span style="color: var(--halo-mute)">›</span></div>
+            <div class="row"><span>Language</span><span style="color: var(--halo-mute)">›</span></div>
+            <div class="row"><span>Test Arena</span><span style="color: var(--halo-mute)">›</span></div>
+            <div class="row"><span>External plugins</span><span style="color: var(--halo-mute)">1&nbsp;&nbsp;›</span></div>
+            <div class="row"><span>Advanced</span><span style="color: var(--halo-mute)">›</span></div>
+            <div class="row"><span>About</span><span style="color: var(--halo-mute)">›</span></div>
           </div>
           <div class="footer-hint">
             <span>Tap to enter · Double-tap to go back</span>
@@ -323,8 +411,10 @@
       </div>
       <div class="label">SETTINGS tab — configuration root</div>
       <div class="desc">
-        Single column. The focused row uses a thin green left-edge bar + 7% green tint — visible
-        in any ambient light. Each item is one tap deeper; no multi-pane navigation.
+        Single column, 11 sections (Doc/18: "External plugins" added between Test Arena and
+        Advanced, with a trailing "N active" count when at least one plugin is installed). The
+        focused row uses a thin green left-edge bar + 7% green tint — visible in any ambient
+        light. Each item is one tap deeper; no multi-pane.
       </div>
     </div>
 
@@ -333,7 +423,7 @@
       <div class="frame">
         <div class="pad">
           <div class="statusbar">
-            <div class="left"><span class="dot"></span><span>R08_2A3F</span><span style="color:var(--ui-fg)">87%</span></div>
+            <div class="left"><span class="dot"></span><span>R08_2A3F</span><span style="color:var(--halo-fg)">87%</span></div>
             <div class="right"><span>Navigation</span></div>
           </div>
           <div class="tabs">
@@ -344,26 +434,26 @@
 
           <div class="row-list" style="margin-top: 6px;">
             <div class="row"><span class="key">Ring</span>
-              <span class="val" style="color: var(--ui-accent)">● Connected · −56 dBm</span></div>
+              <span class="val" style="color: var(--halo-accent)">● Connected · −56 dBm</span></div>
             <div class="row"><span class="key">Conn interval</span>
-              <span class="val">22 ms <span style="color:var(--ui-mute);font-weight:400">(active)</span></span></div>
-            <div class="row"><span class="key">Profile</span><span class="val">Navigation <span style="color:var(--ui-mute);font-weight:400">(auto)</span></span></div>
+              <span class="val">22 ms <span style="color:var(--halo-mute);font-weight:400">(active)</span></span></div>
+            <div class="row"><span class="key">Profile</span><span class="val">Navigation <span style="color:var(--halo-mute);font-weight:400">(auto)</span></span></div>
             <div class="row"><span class="key">Last gesture</span><span class="val">TAP · 1.2 s ago · 67 ms</span></div>
           </div>
 
           <div style="margin-top: 16px;">
-            <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--ui-mute);margin-bottom:6px">
-              <span>Background draw</span><span style="color:var(--ui-fg)">+ 3 mA</span>
+            <div style="display:flex;justify-content:space-between;font-size:16px;color:var(--halo-mute);margin-bottom:6px">
+              <span>Background draw</span><span style="color:var(--halo-fg)">+ 3 mA</span>
             </div>
             <div class="bar"><i style="width: 12%"></i></div>
-            <div style="font-size:11px;color:var(--ui-mute);margin-top:4px">
+            <div style="font-size:11px;color:var(--halo-mute);margin-top:4px">
               foreground service · no wakelock · agent ready
             </div>
           </div>
 
           <div style="margin-top: 16px;">
-            <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--ui-mute);margin-bottom:6px">
-              <span>BLE quality (1 hour)</span><span style="color:var(--ui-fg)">0 drops</span>
+            <div style="display:flex;justify-content:space-between;font-size:16px;color:var(--halo-mute);margin-bottom:6px">
+              <span>BLE quality (1 hour)</span><span style="color:var(--halo-fg)">0 drops</span>
             </div>
             <div class="spark">
               <i></i><i class="h"></i><i></i><i></i><i class="h"></i>
@@ -375,7 +465,7 @@
           </div>
 
           <div class="footer-hint">
-            <span>v0.1.0 · rokid</span>
+            <span>v0.2.x · rokid</span>
             <span class="pill">QUAD-TAP TO PEEK ANYTIME</span>
           </div>
         </div>
@@ -392,8 +482,9 @@
 
   <h2>3. Setting detail screens</h2>
   <p class="lede">
-    These are reachable from the Settings tab. Same layout language — single column, focused row
-    is the green-bar one, content scrolls if needed.
+    Reachable from the Settings tab. Same layout language — single column, focused row is the
+    green-bar one, content scrolls if needed. All shipped in Compose under
+    <code>ui/screens/</code>.
   </p>
 
   <div class="grid">
@@ -403,20 +494,20 @@
       <div class="frame">
         <div class="pad">
           <div class="statusbar">
-            <div class="left"><span class="dot"></span><span>R08_2A3F</span><span style="color:var(--ui-fg)">87%</span></div>
-            <div class="right" style="color:var(--ui-mute)">SETTINGS / PROFILES</div>
+            <div class="left"><span class="dot"></span><span>R08_2A3F</span><span style="color:var(--halo-fg)">87%</span></div>
+            <div class="right" style="color:var(--halo-mute)">SETTINGS / PROFILES</div>
           </div>
           <div class="title" style="margin-top: 14px">Profiles</div>
           <div class="subtitle">Triple-tap cycles. Auto-switch by foreground app — see Edit.</div>
 
           <div class="row-list">
             <div class="row focused">
-              <span><span style="color:var(--ui-accent);font-weight:600;margin-right:8px">●</span>Navigation <span style="color:var(--ui-mute);font-size:13px;margin-left:8px">active</span></span>
-              <span style="color:var(--ui-mute)">›</span>
+              <span><span style="color:var(--halo-accent);font-weight:600;margin-right:8px">●</span>Navigation <span style="color:var(--halo-mute);font-size:13px;margin-left:8px">active</span></span>
+              <span style="color:var(--halo-mute)">›</span>
             </div>
-            <div class="row"><span>Media</span><span style="color:var(--ui-mute)">›</span></div>
-            <div class="row"><span>Reader</span><span style="color:var(--ui-mute)">›</span></div>
-            <div class="row"><span>Fast</span><span style="color:var(--ui-mute)">›</span></div>
+            <div class="row"><span>Media</span><span style="color:var(--halo-mute)">›</span></div>
+            <div class="row"><span>Reader</span><span style="color:var(--halo-mute)">›</span></div>
+            <div class="row"><span>Fast</span><span style="color:var(--halo-mute)">›</span></div>
           </div>
 
           <div class="cta" style="margin-top: 16px">+ NEW PROFILE</div>
@@ -436,27 +527,27 @@
         <div class="pad">
           <div class="statusbar">
             <div class="left"><span class="dot"></span><span>Navigation</span></div>
-            <div class="right" style="color:var(--ui-mute)">EDIT</div>
+            <div class="right" style="color:var(--halo-mute)">EDIT</div>
           </div>
           <div class="title" style="margin-top: 14px">Gesture mapping</div>
 
-          <div class="row-list" style="font-size:15px;">
-            <div class="row"><span style="color:var(--ui-mute)">TAP</span><span class="val">Confirm</span></div>
-            <div class="row focused"><span style="color:var(--ui-mute)">DOUBLE_TAP</span><span class="val">Back</span></div>
-            <div class="row"><span style="color:var(--ui-mute)">SWIPE_UP</span><span class="val">Nav prev</span></div>
-            <div class="row"><span style="color:var(--ui-mute)">SWIPE_DOWN</span><span class="val">Nav next</span></div>
-            <div class="row"><span style="color:var(--ui-mute)">LONG_PRESS</span><span class="val">Menu</span></div>
-            <div class="row"><span style="color:var(--ui-mute)">DT + SWIPE_UP</span><span class="val">Take photo</span></div>
-            <div class="row"><span style="color:var(--ui-mute)">DT + SWIPE_DOWN</span><span class="val">Visual AI</span></div>
-            <div class="row"><span style="color:var(--ui-mute)">LP + SWIPE_UP</span><span class="val">Notifications</span></div>
+          <div class="row-list" style="font-size:16px;">
+            <div class="row"><span style="color:var(--halo-mute)">TAP</span><span class="val">Confirm</span></div>
+            <div class="row focused"><span style="color:var(--halo-mute)">DOUBLE_TAP</span><span class="val">Back</span></div>
+            <div class="row"><span style="color:var(--halo-mute)">SWIPE_UP</span><span class="val">Nav prev</span></div>
+            <div class="row"><span style="color:var(--halo-mute)">SWIPE_DOWN</span><span class="val">Nav next</span></div>
+            <div class="row"><span style="color:var(--halo-mute)">LONG_PRESS</span><span class="val">Menu</span></div>
+            <div class="row"><span style="color:var(--halo-mute)">DT + SWIPE_UP</span><span class="val">Take photo</span></div>
+            <div class="row"><span style="color:var(--halo-mute)">DT + SWIPE_DOWN</span><span class="val">Visual AI</span></div>
+            <div class="row"><span style="color:var(--halo-mute)">LP + SWIPE_UP</span><span class="val">Notifications</span></div>
             <div class="row" style="opacity:.55">
-              <span style="color:var(--ui-mute)">TRIPLE / QUAD / LP+DOWN / 2× LP</span>
-              <span class="val" style="color:var(--ui-mute);font-weight:400">system</span>
+              <span style="color:var(--halo-mute)">TRIPLE / QUAD / LP+DOWN / 2× LP</span>
+              <span class="val" style="color:var(--halo-mute);font-weight:400">(system) ›</span>
             </div>
           </div>
 
           <div class="footer-hint">
-            <span>Optimistic tap: <span style="color:var(--ui-fg)">OFF</span></span>
+            <span>Optimistic tap: <span style="color:var(--halo-fg)">OFF</span></span>
             <span class="pill">LP COMBOS · ON</span>
           </div>
         </div>
@@ -464,7 +555,65 @@
       <div class="label">Settings → Profile edit (12 slots)</div>
       <div class="desc">
         Mute label on the left = the gesture (small caps so it fades back), bold value on the right
-        = what the gesture does. Four reserved system slots greyed out — can't be re-bound here.
+        = what the gesture does. Four system slots show <code>(system) ›</code> — tapping them
+        jumps to the System Gestures screen.
+      </div>
+    </div>
+
+    <!-- E2. ACTION PICKER (new screen) -->
+    <div class="group">
+      <div class="frame">
+        <div class="pad">
+          <div class="statusbar">
+            <div class="left"><span style="color:var(--halo-mute)">PICK ACTION FOR</span><span style="color: var(--halo-fg)">DOUBLE_TAP</span></div>
+            <div class="right" style="color:var(--halo-mute)">CANCEL</div>
+          </div>
+
+          <div style="font-size:11px; color: var(--halo-mute); letter-spacing: 1px; margin-top: 10px;">NAVIGATION</div>
+          <div class="row-list" style="font-size:16px;">
+            <div class="row"><span>Nav prev</span><span style="color:var(--halo-mute)">›</span></div>
+            <div class="row"><span>Nav next</span><span style="color:var(--halo-mute)">›</span></div>
+            <div class="row"><span>Confirm</span><span style="color:var(--halo-mute)">›</span></div>
+            <div class="row focused"><span>Back</span><span style="color:var(--halo-accent)">●</span></div>
+            <div class="row"><span>Home</span><span style="color:var(--halo-mute)">›</span></div>
+          </div>
+
+          <div style="font-size:11px; color: var(--halo-mute); letter-spacing: 1px; margin-top: 12px;">MEDIA / VOLUME</div>
+          <div class="row-list" style="font-size:16px;">
+            <div class="row"><span>Play / pause</span><span style="color:var(--halo-mute)">›</span></div>
+            <div class="row"><span>Volume + / −</span><span style="color:var(--halo-mute)">›</span></div>
+          </div>
+
+          <!-- Doc/18 §8.1 — new EXTERNAL APPS group. Renders ALWAYS (even with no plugins) so
+               the wearer learns the section exists. One sub-heading per plugin, then a row per
+               action. -->
+          <div style="font-size:11px; color: var(--halo-mute); letter-spacing: 1px; margin-top: 12px;">EXTERNAL APPS</div>
+          <div style="font-size:14px; color: var(--halo-mute); letter-spacing: 1px; margin-top: 6px;">Constellation</div>
+          <div class="row-list" style="font-size:16px;">
+            <div class="row"><span>Voice invoke (mic + photo)</span><span style="color:var(--halo-mute)">›</span></div>
+            <div class="row"><span>Quick capture person</span><span style="color:var(--halo-mute)">›</span></div>
+            <div class="row"><span>OCR &amp; save to today</span><span style="color:var(--halo-mute)">›</span></div>
+            <div class="row"><span>Drop a thought</span><span style="color:var(--halo-mute)">›</span></div>
+          </div>
+
+          <div class="footer-hint">
+            <span>● = current binding</span>
+            <span class="pill">FEATURE · MODAL · SYSTEM groups + EXTERNAL APPS below ↓</span>
+          </div>
+        </div>
+      </div>
+      <div class="label">Settings → Profile → Pick action (Doc/18: + EXTERNAL APPS)</div>
+      <div class="desc">
+        Used from the mapping editor. Grouped by <code>SettingsCatalog.ActionGroup</code> (NAV /
+        MEDIA_VOL / FEATURE / MODAL / SYSTEM / NONE) plus the new <strong>EXTERNAL APPS</strong>
+        group from <a href="18-plugin-protocol.md">Doc/18</a>. Within EXTERNAL APPS, each
+        discovered plugin app is its own sub-heading; its actions follow as regular rows.
+        Plugin discovery is via <code>PackageManager.queryBroadcastReceivers(TRIGGER)</code> +
+        <code>halo.ring.plugin_version</code> meta-data check; action list via the plugin's own
+        <code>ContentProvider</code>. Current binding has a green dot, scroll for more groups.
+        Names route through <code>actionFriendlyText()</code> — same source as the gesture-hint
+        HUD. <em>Empty-state when no plugins installed</em>: header still renders, with "No
+        plugin apps installed." below — teaches the wearer the section exists.
       </div>
     </div>
 
@@ -474,12 +623,12 @@
         <div class="pad">
           <div class="statusbar">
             <div class="left"><span class="dot"></span><span>R08_2A3F</span></div>
-            <div class="right" style="color:var(--ui-mute)">SETTINGS</div>
+            <div class="right" style="color:var(--halo-mute)">SETTINGS</div>
           </div>
           <div class="title" style="margin-top: 14px">System gestures</div>
           <div class="subtitle">Always-on. Override the active profile.</div>
 
-          <div class="row-list" style="font-size:15px;">
+          <div class="row-list" style="font-size:16px;">
             <div class="row focused">
               <span>Wake screen</span>
               <span class="val" style="font-family:'SF Mono', monospace; font-size:13px">LONG_PRESS</span>
@@ -497,7 +646,7 @@
               <span class="val" style="font-family:'SF Mono', monospace; font-size:13px">QUADRUPLE_TAP</span>
             </div>
             <div class="row">
-              <span>Force reconnect</span>
+              <span>Reconnect</span>
               <span class="val" style="font-family:'SF Mono', monospace; font-size:13px">2× LONG_PRESS</span>
             </div>
           </div>
@@ -509,7 +658,7 @@
       </div>
       <div class="label">Settings → System gestures</div>
       <div class="desc">
-        The five always-on overrides. Tap any row to re-bind. Conflict detection: you can't bind
+        Five always-on overrides. Tap any row to re-bind. Conflict detection: you can't bind
         two slots to the same gesture; UI warns.
       </div>
     </div>
@@ -519,21 +668,21 @@
       <div class="frame">
         <div class="pad">
           <div class="statusbar">
-            <div class="left"><span class="dot"></span><span>R08_2A3F</span><span style="color:var(--ui-fg)">87%</span></div>
-            <div class="right" style="color:var(--ui-mute)">SETTINGS</div>
+            <div class="left"><span class="dot"></span><span>R08_2A3F</span><span style="color:var(--halo-fg)">87%</span></div>
+            <div class="right" style="color:var(--halo-mute)">SETTINGS</div>
           </div>
           <div class="title" style="margin-top: 14px">Ring</div>
 
-          <div class="row-list" style="font-size:15px;">
+          <div class="row-list" style="font-size:16px;">
             <div class="row"><span class="key">MAC</span><span class="val" style="font: 600 13px/1 'SF Mono', monospace">70:CB:0D:8A:2A:3F</span></div>
             <div class="row"><span class="key">Firmware</span><span class="val">1.4.2</span></div>
             <div class="row"><span class="key">Signal</span><span class="val">−56 dBm</span></div>
             <div class="row"><span class="key">Battery</span><span class="val">87%</span></div>
           </div>
 
-          <div class="cta focused" style="margin-top: 18px">FIND MY RING · BLINK 10 s</div>
-          <div class="cta" style="margin-top: 8px">SHUT DOWN RING</div>
-          <div class="cta" style="margin-top: 8px; border-color: var(--ui-bad); color: var(--ui-bad)">FORGET &amp; RE-PAIR</div>
+          <div class="cta focused" style="margin-top: 18px">FIND MY RING · 50 AA AA</div>
+          <div class="cta" style="margin-top: 8px">SHUT DOWN RING · 08 01</div>
+          <div class="cta danger" style="margin-top: 8px">FORGET &amp; RE-PAIR</div>
 
           <div class="footer-hint">
             <span>Auto-sleep after 60 s · double-tap to wake</span>
@@ -542,8 +691,11 @@
       </div>
       <div class="label">Settings → Ring</div>
       <div class="desc">
-        Identity + actions. FIND MY RING fires <code>0x06</code> on the ring (LED blinks ~10 s).
-        Forget is danger-coloured because it requires re-pairing on every glasses.
+        Identity + actions. <code>FIND MY RING</code> sends <code>0x50 AA AA</code> (QRing's
+        anti-lost-rate) — vibrates + LED-blinks the ring. The legacy <code>0x06 / 0x10 / 0x0F</code>
+        opcodes from <code>R08-Dev.md</code> are 🔴 speculation pending Phase-0 verification — see
+        Doc/02 §0. <code>FORGET</code> is danger-coloured because it requires re-pairing on every
+        glasses.
       </div>
     </div>
 
@@ -553,76 +705,78 @@
         <div class="pad">
           <div class="statusbar">
             <div class="left"><span class="dot"></span><span>R08_2A3F</span></div>
-            <div class="right" style="color:var(--ui-mute)">SETTINGS</div>
+            <div class="right" style="color:var(--halo-mute)">SETTINGS</div>
           </div>
           <div class="title" style="margin-top: 14px">Power &amp; Connection</div>
 
-          <div style="margin-top: 8px; font-size: 14px;">
-            <div style="color: var(--ui-mute); margin-bottom: 6px">
-              Multi-tap window <span style="color:var(--ui-fg)">280 ms</span>
+          <div style="margin-top: 8px; font-size: 16px;">
+            <div style="color: var(--halo-mute); margin-bottom: 6px">
+              Multi-tap window <span style="color:var(--halo-fg)">280 ms</span>
             </div>
             <div class="bar"><i style="width: 56%"></i></div>
           </div>
-          <div style="margin-top: 16px; font-size: 14px;">
-            <div style="color: var(--ui-mute); margin-bottom: 6px">
-              Combo window <span style="color:var(--ui-fg)">300 ms</span>
+          <div style="margin-top: 16px; font-size: 16px;">
+            <div style="color: var(--halo-mute); margin-bottom: 6px">
+              Combo window <span style="color:var(--halo-fg)">300 ms</span>
             </div>
             <div class="bar"><i style="width: 60%"></i></div>
           </div>
-          <div style="margin-top: 16px; font-size: 14px;">
-            <div style="color: var(--ui-mute); margin-bottom: 6px">
-              Long-press follow-up <span style="color:var(--ui-fg)">400 ms</span>
+          <div style="margin-top: 16px; font-size: 16px;">
+            <div style="color: var(--halo-mute); margin-bottom: 6px">
+              Long-press follow-up <span style="color:var(--halo-fg)">400 ms</span>
             </div>
             <div class="bar"><i style="width: 80%"></i></div>
           </div>
 
-          <div class="row-list" style="margin-top: 16px; font-size:15px;">
+          <div class="row-list" style="margin-top: 16px; font-size:16px;">
             <div class="row focused"><span>BLE interval (active)</span><span class="val">15–30 ms</span></div>
             <div class="row"><span>BLE interval (idle)</span><span class="val">75–100 ms</span></div>
             <div class="row"><span>Disconnect when not worn</span><span class="val">after 5 min</span></div>
-            <div class="row"><span>Keepalive while worn</span><span class="val" style="color:var(--ui-accent)">ON</span></div>
+            <div class="row"><span>Keepalive while worn</span><span class="val"><span class="switch on"></span></span></div>
           </div>
         </div>
       </div>
       <div class="label">Settings → Power &amp; Connection</div>
       <div class="desc">
         Sliders for the timing knobs; the BLE / power policy further down. Defaults are sensible
-        enough that most wearers won't touch this.
+        enough that most wearers won't touch this. ON/OFF rows use the shared
+        <code>HaloSwitch</code> widget (audit-pass 2026-05-14u — pill with fixed-side indicator
+        dot, more legible on the waveguide than colour-only "ON" text).
       </div>
     </div>
 
-    <!-- I-new. Feedback (with gesture-hint toggle) -->
+    <!-- I. Feedback (with gesture-hint toggle) -->
     <div class="group">
       <div class="frame">
         <div class="pad">
           <div class="statusbar">
             <div class="left"><span class="dot"></span><span>R08_2A3F</span></div>
-            <div class="right" style="color:var(--ui-mute)">SETTINGS</div>
+            <div class="right" style="color:var(--halo-mute)">SETTINGS</div>
           </div>
           <div class="title" style="margin-top: 14px">Feedback</div>
           <div class="subtitle">How the app confirms recognised gestures to you.</div>
 
-          <div class="row-list" style="font-size:15px;">
+          <div class="row-list" style="font-size:16px;">
             <div class="row focused">
               <span>
                 Show recognised gesture (HUD)
-                <div style="color:var(--ui-mute);font-size:12px;margin-top:2px">800 ms after each gesture</div>
+                <div style="color:var(--halo-mute);font-size:13px;margin-top:2px">800 ms after each gesture</div>
               </span>
-              <span class="val" style="color:var(--ui-accent)">ON</span>
+              <span class="switch on"></span>
             </div>
-            <div class="row"><span>Click sound on mode switch</span><span class="val" style="color:var(--ui-accent)">ON</span></div>
-            <div class="row"><span>Ring LED feedback</span><span class="val" style="color:var(--ui-accent)">ON</span></div>
+            <div class="row"><span>Click sound on mode switch</span><span class="switch on"></span></div>
+            <div class="row"><span>Ring LED feedback</span><span class="switch on"></span></div>
             <div class="row"><span>HUD position</span><span class="val">Top-right</span></div>
             <div class="row"><span>HUD duration</span><span class="val">2 s</span></div>
-            <div class="row"><span>Auto-enable hints for 5 min after pairing</span><span class="val" style="color:var(--ui-accent)">ON</span></div>
+            <div class="row"><span>Auto-enable hints for 5 min after pairing</span><span class="switch on"></span></div>
           </div>
 
           <div class="footer-hint">
-            <span style="color: var(--ui-mute); font-size: 12px;">Hints fire only while screen is on.</span>
+            <span style="color: var(--halo-mute); font-size: 13px;">Hints fire only while screen is on.</span>
           </div>
         </div>
       </div>
-      <div class="label">Settings → Feedback (new)</div>
+      <div class="label">Settings → Feedback</div>
       <div class="desc">
         Home for all user-facing feedback channels. The gesture-hint toggle is the headline —
         off by default, but auto-on for ~5 min after first pairing so wearers can confirm each
@@ -630,23 +784,23 @@
       </div>
     </div>
 
-    <!-- I. Vitals settings -->
+    <!-- J. Vitals settings -->
     <div class="group">
       <div class="frame">
         <div class="pad">
           <div class="statusbar">
             <div class="left"><span class="dot"></span><span>R08_2A3F</span></div>
-            <div class="right" style="color:var(--ui-mute)">SETTINGS</div>
+            <div class="right" style="color:var(--halo-mute)">SETTINGS</div>
           </div>
           <div class="title" style="margin-top: 14px">Vitals</div>
           <div class="subtitle">On-demand only. Never continuous (PPG draws a lot).</div>
 
-          <div class="row-list" style="font-size:15px;">
-            <div class="row focused"><span>Show HR on HUD</span><span class="val">OFF</span></div>
-            <div class="row"><span>Activity overlay on HUD</span><span class="val" style="color:var(--ui-accent)">ON</span></div>
+          <div class="row-list" style="font-size:16px;">
+            <div class="row focused"><span>Show HR on HUD</span><span class="switch off"></span></div>
+            <div class="row"><span>Activity overlay on HUD</span><span class="switch on"></span></div>
             <div class="row"><span>Auto-snapshot every</span><span class="val">never</span></div>
-            <div class="row"><span>Log to CSV</span><span class="val">OFF</span></div>
-            <div class="row"><span>Wear detection</span><span class="val" style="color:var(--ui-accent)">RING + GLASSES</span></div>
+            <div class="row"><span>Log to CSV</span><span class="switch off"></span></div>
+            <div class="row"><span>Wear detection</span><span class="val" style="color:var(--halo-accent)">RING + GLASSES</span></div>
           </div>
 
           <div class="cta" style="margin-top: 16px">EXPORT 7-DAY LOG</div>
@@ -664,14 +818,242 @@
       </div>
     </div>
 
+    <!-- K. Language (new) -->
+    <div class="group">
+      <div class="frame">
+        <div class="pad">
+          <div class="statusbar">
+            <div class="left"><span class="dot"></span><span>R08_2A3F</span></div>
+            <div class="right" style="color:var(--halo-mute)">SETTINGS</div>
+          </div>
+          <div class="title" style="margin-top: 14px">Language · 语言</div>
+          <div class="subtitle">UI + voice prompts.</div>
+
+          <div class="row-list" style="font-size:17px;">
+            <div class="row focused">
+              <span>English</span>
+              <span style="color:var(--halo-accent)">●</span>
+            </div>
+            <div class="row">
+              <span>简体中文</span>
+              <span style="color:var(--halo-mute)">○</span>
+            </div>
+            <div class="row" style="opacity:.55">
+              <span>日本語 <span style="color:var(--halo-mute);font-size:13px;margin-left:6px">coming soon</span></span>
+              <span style="color:var(--halo-mute)">○</span>
+            </div>
+          </div>
+
+          <div class="footer-hint">
+            <span>~280 keys translated (audit-pass 2026-05-13s)</span>
+          </div>
+        </div>
+      </div>
+      <div class="label">Settings → Language (new)</div>
+      <div class="desc">
+        Full EN / ZH i18n — every user-visible string flows through
+        <code>strings.xml</code> + <code>strings-zh.xml</code>. Action names match the
+        gesture-hint HUD (single source of truth via <code>actionFriendlyText()</code>). Future
+        locales as placeholders.
+      </div>
+    </div>
+
+    <!-- L. Test Arena (new) -->
+    <div class="group">
+      <div class="frame">
+        <div class="pad">
+          <div class="statusbar">
+            <div class="left"><span class="dot"></span><span>R08_2A3F</span></div>
+            <div class="right" style="color:var(--halo-mute)">TEST ARENA</div>
+          </div>
+          <div class="title" style="margin-top: 14px">Test Arena</div>
+          <div class="subtitle">Practice gestures here. Nothing in this screen affects anything outside it.</div>
+
+          <div style="margin-top: 20px; padding: 18px; background: rgba(94,224,140,0.04);
+                       border: 1px solid var(--halo-line); text-align: center;">
+            <div style="font-size:11px; color: var(--halo-mute); letter-spacing: 1px;">LAST GESTURE</div>
+            <div style="font: 700 36px/1 -apple-system, sans-serif; letter-spacing: -1px;
+                        color: var(--halo-accent); margin-top: 8px;">Double tap</div>
+            <div style="font: 14px/1.4 sans-serif; color: var(--halo-mute); margin-top: 6px;">
+              → Back &nbsp;·&nbsp; 67 ms latency
+            </div>
+          </div>
+
+          <div style="margin-top: 16px; font-size: 13px; color: var(--halo-mute);">
+            <div>✓ Tap  ✓ Double tap  ✓ Swipe up  ✓ Swipe down</div>
+            <div style="margin-top: 4px">… long-press? swipe combo?</div>
+          </div>
+
+          <div class="footer-hint">
+            <span>Auto-exits if you double-tap twice in a row</span>
+            <span class="pill">PHASE-0 FRIENDLY</span>
+          </div>
+        </div>
+      </div>
+      <div class="label">Settings → Test Arena (new)</div>
+      <div class="desc">
+        A safe gesture playground. The wearer practices each gesture, sees what it was recognised
+        as + which action it'd trigger + the BLE-to-injection round-trip latency. No side effects;
+        leaving requires a deliberate double-double-tap so you can't accidentally close it
+        mid-practice. Pairs well with the <code>--tutorial</code> mode of
+        <code>phase0/r08_probe.py</code>.
+      </div>
+    </div>
+
+    <!-- L2. External plugins (Doc/18 §8.2) -->
+    <div class="group">
+      <div class="frame">
+        <div class="pad">
+          <div class="statusbar">
+            <div class="left"><span class="dot"></span><span>R08_2A3F</span></div>
+            <div class="right" style="color:var(--halo-mute)">SETTINGS</div>
+          </div>
+          <div class="title" style="margin-top: 14px">External plugins</div>
+          <div class="subtitle">Apps that expose actions to Halo Ring via the Doc/18 plugin protocol.</div>
+
+          <div class="row-list" style="font-size:16px; margin-top: 16px;">
+            <div class="row focused">
+              <div>
+                <div>Constellation</div>
+                <div style="font-size:12px; color:var(--halo-mute); margin-top:2px;">com.constellation.glass</div>
+                <div style="font-size:12px; color:var(--halo-mute);">4 action(s)  ·  Protocol v1</div>
+              </div>
+              <span style="color:var(--halo-accent); font-size:12px;">● alive</span>
+            </div>
+            <div class="row">
+              <div>
+                <div>Halo Test Plugin</div>
+                <div style="font-size:12px; color:var(--halo-mute); margin-top:2px;">com.halo.ring.testplugin</div>
+                <div style="font-size:12px; color:var(--halo-mute);">4 action(s)  ·  Protocol v1</div>
+              </div>
+              <span style="color:var(--halo-accent); font-size:12px;">● alive</span>
+            </div>
+          </div>
+
+          <div style="margin-top: 20px; padding: 12px 0; border: 1px solid var(--halo-accent);
+                       text-align: center; color: var(--halo-accent); font-size: 16px;
+                       font-weight: 600; letter-spacing: 1px;">REFRESH PLUGINS</div>
+
+          <div class="footer-hint">
+            <span>Plugin actions appear in Action Picker → EXTERNAL APPS. New apps surface within 30 s.</span>
+          </div>
+        </div>
+      </div>
+      <div class="label">Settings → External plugins (Doc/18 §8.2)</div>
+      <div class="desc">
+        Read-only directory of <a href="18-plugin-protocol.md">Doc/18 plugins</a> the wearer has
+        installed. App name + package + declared protocol version + action count + status
+        (<span style="color:var(--halo-accent)">● alive</span> /
+        <span style="color:var(--halo-warn)">⚠ error</span>). One CTA: REFRESH PLUGINS forces a
+        rescan (cache is otherwise refreshed automatically on package install / uninstall +
+        every 30 s). v1 has no per-plugin disable toggle — to stop a plugin firing, unbind its
+        actions in the Action Picker.
+      </div>
+    </div>
+
+    <!-- M. Advanced (new) -->
+    <div class="group">
+      <div class="frame">
+        <div class="pad">
+          <div class="statusbar">
+            <div class="left"><span class="dot"></span><span>R08_2A3F</span></div>
+            <div class="right" style="color:var(--halo-mute)">SETTINGS</div>
+          </div>
+          <div class="title" style="margin-top: 14px">Advanced</div>
+
+          <div class="row-list" style="font-size:16px;">
+            <div class="row focused"><span>Active backend</span><span class="val" style="color:var(--halo-accent)">AppProcessAgent</span></div>
+            <div class="row"><span>Debug HUD overlay</span><span class="switch off"></span></div>
+            <div class="row"><span>Latency measurement</span><span class="switch off"></span></div>
+            <div class="row"><span>Re-run ADB bootstrap</span><span style="color:var(--halo-mute)">›</span></div>
+            <div class="row"><span>Open Accessibility settings</span><span style="color:var(--halo-mute)">›</span></div>
+            <div class="row"><span>Battery optimisation</span><span style="color:var(--halo-mute)">›</span></div>
+            <div class="row"><span>Spatial mode (raw IMU)</span><span class="val" style="color:var(--halo-warn)">PHASE-3</span></div>
+            <div class="row"><span>FeatureIntents override</span><span style="color:var(--halo-mute)">›</span></div>
+          </div>
+
+          <div class="footer-hint">
+            <span>Backend fallback: Agent › Inotifyd › Accessibility</span>
+          </div>
+        </div>
+      </div>
+      <div class="label">Settings → Advanced (new)</div>
+      <div class="desc">
+        Engineer / power-user tools. Backend status reflects the live
+        <code>ExecutorBackend.priority</code> picker. Spatial mode is gated PHASE-3 until the
+        <code>0xA1</code> accel encoding is decoded; the row is greyed + carries the badge so it's
+        clearly inert, not broken.
+      </div>
+    </div>
+
+    <!-- N. About (new) -->
+    <div class="group">
+      <div class="frame">
+        <div class="pad">
+          <div class="statusbar">
+            <div class="left"><span class="dot"></span><span>R08_2A3F</span></div>
+            <div class="right" style="color:var(--halo-mute)">SETTINGS</div>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 16px; margin-top: 12px;">
+            <svg viewBox="0 0 80 80" width="56" height="56" aria-label="brand mark">
+              <defs>
+                <linearGradient id="bAA" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0"   stop-color="#B8FFD4"/>
+                  <stop offset="0.87" stop-color="#5EE08C" stop-opacity="0"/>
+                </linearGradient>
+              </defs>
+              <g transform="translate(40 40)">
+                <g><path d="M 0,-26 A 26,26 0 0,1 22.52,13 L 17.32,10 A 20,20 0 0,0 0,-20 Z" fill="url(#bAA)"/></g>
+                <g transform="rotate(120)"><path d="M 0,-26 A 26,26 0 0,1 22.52,13 L 17.32,10 A 20,20 0 0,0 0,-20 Z" fill="url(#bAA)"/></g>
+                <g transform="rotate(240)"><path d="M 0,-26 A 26,26 0 0,1 22.52,13 L 17.32,10 A 20,20 0 0,0 0,-20 Z" fill="url(#bAA)"/></g>
+              </g>
+            </svg>
+            <div>
+              <div style="font: 700 22px/1 -apple-system, sans-serif; letter-spacing: -0.3px;">Halo Ring</div>
+              <div style="color: var(--halo-mute); font-size: 16px; margin-top: 2px;">环意 · v0.2.4</div>
+            </div>
+          </div>
+
+          <div class="row-list" style="margin-top: 16px; font-size:16px;">
+            <div class="row"><span class="key">Detected device</span><span class="val">ROKID_GLASSES</span></div>
+            <div class="row"><span class="key">Ring firmware</span><span class="val">1.4.2 (R08)</span></div>
+            <div class="row focused"><span>Open guide / tutorial</span><span style="color:var(--halo-mute)">›</span></div>
+          </div>
+
+          <div style="margin-top: 16px; padding: 12px; border: 1px solid var(--halo-line);
+                      font-size: 13px; color: var(--halo-mute); line-height: 1.5;">
+            <b style="color:var(--halo-fg)">Halo Ring is free &amp; open-source.</b><br>
+            If you paid anyone for it, you were scammed.<br>
+            <i style="color: var(--halo-accent)">Where the ring goes, the world moves.</i> ·
+            by Zack 紫意
+          </div>
+        </div>
+      </div>
+      <div class="label">Settings → About (audit-pass 2026-05-13t — slim)</div>
+      <div class="desc">
+        Stripped down for the on-glasses display. Version + detected-device + open-guide entry +
+        the open-source disclaimer ("if you paid you were scammed"). Phone-side docs / credits /
+        BLE-protocol-source links removed; they wasted pixels on a 480×480 waveguide.
+      </div>
+    </div>
+
   </div>
 
   <h2>4. The transient HUD overlay</h2>
   <p class="lede">
-    Not always-on. Appears for ~2 s on connection / mode-switch / low-battery events, or on
-    QUADRUPLE_TAP. Top-right corner so it never blocks the centre of vision. Same widget on top
-    of whatever the wearer is doing.
+    Not always-on. Appears for ~2 s on connection / mode-switch / low-battery events, on
+    QUADRUPLE_TAP, or — when the gesture-hint mode is on — for 800 ms after every recognised
+    gesture. Top-right corner so it never blocks the centre of vision. Same widget on top of
+    whatever the wearer is doing.
   </p>
+  <div class="audit">
+    <b>Audit-pass 2026-05-13s (binocular re-anchor).</b> On X3 Pro (binocular 1280 × 480) a naïve
+    <code>CENTER_HORIZONTAL</code> lands x ≈ 640 — between the eyes, only visible at the nose.
+    Workaround: when <code>DisplayAdapter.isBinocular = true</code>, <code>HudOverlay</code> uses
+    <code>Gravity.END</code> + an x-inset of ~160 px so the pill lands in the right-eye region.
+    Wired via <code>HudOverlay.setBinocular(true)</code> from <code>HaloRingService</code>.
+  </div>
 
   <div class="grid">
     <div class="group">
@@ -699,9 +1081,9 @@
         <div class="ghost-bg">
           <div style="font:600 18px sans-serif; color:#555">Photos</div>
         </div>
-        <div class="hud" style="border-color: var(--ui-accent); color: var(--ui-accent)">
+        <div class="hud" style="border-color: var(--halo-accent); color: var(--halo-accent)">
           <span>↻ →</span>
-          <span style="color: var(--ui-fg)">Navigation</span>
+          <span style="color: var(--halo-fg)">Navigation</span>
           <span class="sub">cycle</span>
         </div>
       </div>
@@ -714,9 +1096,9 @@
         <div class="ghost-bg">
           <div style="font:600 18px sans-serif; color:#555">Sprite Launcher</div>
         </div>
-        <div class="hud" style="border-color: var(--ui-warn); color: var(--ui-warn)">
-          <span class="dot" style="background: var(--ui-warn)"></span>
-          <span style="color: var(--ui-fg)">R08_2A3F</span>
+        <div class="hud" style="border-color: var(--halo-warn); color: var(--halo-warn)">
+          <span class="dot warn"></span>
+          <span style="color: var(--halo-fg)">R08_2A3F</span>
           <span class="sub">18%</span>
         </div>
       </div>
@@ -729,15 +1111,16 @@
         <div class="ghost-bg">
           <div style="font:600 18px sans-serif; color:#555">Camera</div>
         </div>
-        <div class="hud center" style="border-color: var(--ui-bad)">
+        <div class="hud center" style="border-color: var(--halo-bad)">
           <span class="dot bad"></span>
           <span>Ring disconnected</span>
         </div>
       </div>
       <div class="label">Disconnect — only situation that uses centre overlay</div>
       <div class="desc">
-        Single failure case where we momentarily centre + enlarge. Disappears once <code>autoConnect</code>
-        recovers (~1–2 s typical).
+        Single failure case where we momentarily centre + enlarge. Disappears once
+        <code>autoConnect</code> recovers (~1–2 s typical). Binocular path re-anchors via
+        <code>setBinocular(true)</code> so it still lands inside one eye, never on the nose.
       </div>
     </div>
 
@@ -747,8 +1130,8 @@
           <div style="font:600 18px sans-serif; color:#555">Sprite Launcher</div>
         </div>
         <div class="hud">
-          <span style="color: var(--ui-mute); font-weight: 400">Double tap</span>
-          <span style="color: var(--ui-mute)">→</span>
+          <span style="color: var(--halo-mute); font-weight: 400">Double tap</span>
+          <span style="color: var(--halo-mute)">→</span>
           <span>Back</span>
         </div>
       </div>
@@ -765,9 +1148,9 @@
           <div style="font:600 18px sans-serif; color:#555">Photos</div>
         </div>
         <div class="hud">
-          <span style="color: var(--ui-mute); font-weight: 400">Long-press + swipe down</span>
-          <span style="color: var(--ui-mute)">→</span>
-          <span style="color: var(--ui-accent)">Sleep screen</span>
+          <span style="color: var(--halo-mute); font-weight: 400">Long-press + swipe down</span>
+          <span style="color: var(--halo-mute)">→</span>
+          <span style="color: var(--halo-accent)">Sleep screen</span>
         </div>
       </div>
       <div class="label">Gesture-hint — system-level gesture recognised</div>
@@ -783,9 +1166,9 @@
           <div style="font:600 18px sans-serif; color:#555">Translate</div>
         </div>
         <div class="hud">
-          <span style="color: var(--ui-mute); font-weight: 400">Swipe up</span>
-          <span style="color: var(--ui-mute)">→</span>
-          <span style="color: var(--ui-mute); font-weight: 400; font-style: italic">(no action)</span>
+          <span style="color: var(--halo-mute); font-weight: 400">Swipe up</span>
+          <span style="color: var(--halo-mute)">→</span>
+          <span style="color: var(--halo-mute); font-weight: 400; font-style: italic">(no action)</span>
         </div>
       </div>
       <div class="label">Gesture-hint — unmapped gesture (debug aid)</div>
@@ -806,10 +1189,10 @@
     <div class="group">
       <div class="frame">
         <div class="pad">
-          <div class="statusbar"><div class="left" style="color:var(--ui-mute)">STEP 1 / 5</div><div class="right" style="color:var(--ui-mute)">first-run</div></div>
+          <div class="statusbar"><div class="left" style="color:var(--halo-mute)">STEP 1 / 5</div><div class="right" style="color:var(--halo-mute)">first-run</div></div>
           <div style="display:flex;flex-direction:column;height:100%;justify-content:center;text-align:center;padding:0 12px;">
-            <div style="font:700 28px/1.2 sans-serif; letter-spacing:-.5px;">Welcome.</div>
-            <div style="font:400 17px/1.45 sans-serif; color: var(--ui-mute); margin-top: 14px;">
+            <div style="font:700 28px/1.2 sans-serif; letter-spacing:-.5px;">Welcome to Halo Ring.</div>
+            <div style="font:400 17px/1.45 sans-serif; color: var(--halo-mute); margin-top: 14px;">
               Your ring will become a wireless remote for these glasses.<br>
               Setup takes about a minute.
             </div>
@@ -823,16 +1206,16 @@
     <div class="group">
       <div class="frame">
         <div class="pad">
-          <div class="statusbar"><div class="left" style="color:var(--ui-mute)">STEP 2 / 5</div><div class="right" style="color:var(--ui-mute)">first-run</div></div>
+          <div class="statusbar"><div class="left" style="color:var(--halo-mute)">STEP 2 / 5</div><div class="right" style="color:var(--halo-mute)">first-run</div></div>
           <div class="title" style="margin-top: 14px">Allow the app to act on the system</div>
           <div class="subtitle">One-time. Computer needed.</div>
 
           <div style="background:#0a0a0a; padding:14px; font: 600 13px/1.4 'SF Mono', monospace;
-                      color: var(--ui-accent); margin-top: 8px; border: 1px solid var(--ui-line);
-                      white-space: pre;">adb shell pm grant com.r08remote
+                      color: var(--halo-accent); margin-top: 8px; border: 1px solid var(--halo-line);
+                      white-space: pre;">adb shell pm grant com.halo.ring
   android.permission.WRITE_SECURE_SETTINGS</div>
 
-          <div style="font:14px/1.4 sans-serif; color: var(--ui-mute); margin-top: 12px;">
+          <div style="font:16px/1.4 sans-serif; color: var(--halo-mute); margin-top: 12px;">
             Copy this on your computer. We need it once — to manage the
             wireless ADB connection ourselves after this.
           </div>
@@ -847,19 +1230,19 @@
     <div class="group">
       <div class="frame">
         <div class="pad">
-          <div class="statusbar"><div class="left" style="color:var(--ui-mute)">STEP 3 / 5</div><div class="right" style="color:var(--ui-mute)">first-run</div></div>
+          <div class="statusbar"><div class="left" style="color:var(--halo-mute)">STEP 3 / 5</div><div class="right" style="color:var(--halo-mute)">first-run</div></div>
           <div class="title" style="margin-top: 14px">Accessibility (optional)</div>
           <div class="subtitle">Lets us auto-switch profiles by app, and read Back/Home without ADB.</div>
 
-          <div style="margin-top: 18px; padding: 16px; border: 1px solid var(--ui-line); font-size:14px;">
-            <div style="color: var(--ui-mute);">In the next screen, enable:</div>
-            <div style="margin-top: 6px; color: var(--ui-fg); font-weight: 600;">
-              "R08 Remote (foreground &amp; back/home helper)"
+          <div style="margin-top: 18px; padding: 16px; border: 1px solid var(--halo-line); font-size:16px;">
+            <div style="color: var(--halo-mute);">In the next screen, enable:</div>
+            <div style="margin-top: 6px; color: var(--halo-fg); font-weight: 600;">
+              "Halo Ring (foreground &amp; back/home helper)"
             </div>
           </div>
 
           <div class="cta focused" style="margin-top: auto;">OPEN ACCESSIBILITY</div>
-          <div class="cta" style="margin-top: 8px; border-color: var(--ui-mute); color: var(--ui-mute);">SKIP FOR NOW</div>
+          <div class="cta" style="margin-top: 8px; border-color: var(--halo-mute); color: var(--halo-mute);">SKIP FOR NOW</div>
         </div>
       </div>
       <div class="label">3. Accessibility (optional)</div>
@@ -869,20 +1252,20 @@
     <div class="group">
       <div class="frame">
         <div class="pad">
-          <div class="statusbar"><div class="left" style="color:var(--ui-mute)">STEP 5 / 5</div><div class="right" style="color:var(--ui-mute)">first-run</div></div>
+          <div class="statusbar"><div class="left" style="color:var(--halo-mute)">STEP 5 / 5</div><div class="right" style="color:var(--halo-mute)">first-run</div></div>
           <div class="title" style="margin-top: 14px">Pair the ring</div>
           <div class="subtitle">Take it out of the cradle and tap it once.</div>
 
           <div style="margin-top: 32px; display: flex; gap: 16px; align-items: center;
-                      font-size: 15px;">
+                      font-size: 16px;">
             <span style="font-size:34px;">⌖</span>
-            <span style="color: var(--ui-accent);">Scanning for R08_xxxx…</span>
+            <span style="color: var(--halo-accent);">Scanning for R08_xxxx…</span>
           </div>
 
-          <div style="margin-top: 14px; padding: 14px; border: 1px solid var(--ui-accent);
-                      background: rgba(94,224,140,0.06); font-size: 14px;">
-            <div style="color: var(--ui-accent); font-weight: 600;">Found: R08_2A3F</div>
-            <div style="color: var(--ui-mute); margin-top: 4px;">70:CB:0D:8A:2A:3F · −58 dBm</div>
+          <div style="margin-top: 14px; padding: 14px; border: 1px solid var(--halo-accent);
+                      background: rgba(94,224,140,0.06); font-size: 16px;">
+            <div style="color: var(--halo-accent); font-weight: 600;">Found: R08_2A3F</div>
+            <div style="color: var(--halo-mute); margin-top: 4px;">70:CB:0D:8A:2A:3F · −58 dBm</div>
           </div>
 
           <div class="cta focused" style="margin-top: 16px;">CONNECT</div>
@@ -900,7 +1283,7 @@
   <h2>6. Binocular preview</h2>
   <p class="lede">
     What the wearer actually sees. Same image to both eyes — no parallax, no eye-specific
-    content. Below: a 1:1 mock of one of the screens through both optics simultaneously.
+    content. Below: a 1:1 mock of the Vitals screen through both optics simultaneously.
   </p>
 
   <div class="binocular">
@@ -909,7 +1292,7 @@
       <div class="frame" style="width: 480px; height: 480px;">
         <div class="pad">
           <div class="statusbar">
-            <div class="left"><span class="dot"></span><span>R08_2A3F</span><span style="color:var(--ui-fg)">87%</span></div>
+            <div class="left"><span class="dot"></span><span>R08_2A3F</span><span style="color:var(--halo-fg)">87%</span></div>
             <div class="right"><span>Navigation</span></div>
           </div>
           <div class="tabs">
@@ -919,7 +1302,7 @@
           </div>
           <div class="grid-3" style="margin-top: 6px;">
             <div class="stat">
-              <div class="v" style="color: var(--ui-accent)">72<span class="u">bpm</span></div>
+              <div class="v" style="color: var(--halo-accent)">72<span class="u">bpm</span></div>
               <div class="k">Heart rate</div>
             </div>
             <div class="stat">
@@ -931,8 +1314,8 @@
               <div class="k">Stress</div>
             </div>
           </div>
-          <div style="font-size:13px; color: var(--ui-mute); margin-top: 6px;">
-            measured <span style="color:var(--ui-fg)">4 min ago</span>
+          <div style="font-size:13px; color: var(--halo-mute); margin-top: 6px;">
+            measured <span style="color:var(--halo-fg)">4 min ago</span>
           </div>
           <div class="cta focused" style="margin-top: 18px;">MEASURE NOW</div>
           <div class="row-list" style="margin-top: 18px;">
@@ -949,7 +1332,7 @@
       <div class="frame" style="width: 480px; height: 480px;">
         <div class="pad">
           <div class="statusbar">
-            <div class="left"><span class="dot"></span><span>R08_2A3F</span><span style="color:var(--ui-fg)">87%</span></div>
+            <div class="left"><span class="dot"></span><span>R08_2A3F</span><span style="color:var(--halo-fg)">87%</span></div>
             <div class="right"><span>Navigation</span></div>
           </div>
           <div class="tabs">
@@ -959,7 +1342,7 @@
           </div>
           <div class="grid-3" style="margin-top: 6px;">
             <div class="stat">
-              <div class="v" style="color: var(--ui-accent)">72<span class="u">bpm</span></div>
+              <div class="v" style="color: var(--halo-accent)">72<span class="u">bpm</span></div>
               <div class="k">Heart rate</div>
             </div>
             <div class="stat">
@@ -971,8 +1354,8 @@
               <div class="k">Stress</div>
             </div>
           </div>
-          <div style="font-size:13px; color: var(--ui-mute); margin-top: 6px;">
-            measured <span style="color:var(--ui-fg)">4 min ago</span>
+          <div style="font-size:13px; color: var(--halo-mute); margin-top: 6px;">
+            measured <span style="color:var(--halo-fg)">4 min ago</span>
           </div>
           <div class="cta focused" style="margin-top: 18px;">MEASURE NOW</div>
           <div class="row-list" style="margin-top: 18px;">
@@ -987,9 +1370,9 @@
 
   <p style="margin-top:16px; color: var(--doc-mute);">
     On Rokid Glasses (single projector → both eyes, ~480 px wide) the same composition fills the
-    visible area. On RayNeo X3 Pro (binocular, 640 × 480 per eye) the 480 × 480 composition is
-    centred with ~80 px of pixel-off padding on each side. No code path renders different content
-    per eye.
+    visible area. On RayNeo X3 Pro (binocular, 640 × 480 per eye, ~30° diagonal FOV) the
+    480 × 480 composition is centred with ~80 px of pixel-off padding on each side. No code path
+    renders different content per eye.
   </p>
 
   <h2>7. In-app navigation</h2>
@@ -1027,7 +1410,7 @@
     </div>
     <div style="background:#fff;border:1px solid var(--doc-line); padding:16px;">
       <div style="font:600 14px/1.2 sans-serif;">Temple touchpad of the glasses</div>
-      <div style="font:13px/1.5 'SF Mono', monospace; color: var(--doc-mute); margin-top:6px">Rokid: DPAD keys / X3 Pro: TempleAction via ARSDK</div>
+      <div style="font:13px/1.5 'SF Mono', monospace; color: var(--doc-mute); margin-top:6px">Rokid: DPAD keys / X3 Pro: TempleAction via ARSDK (bridged by TempleFocusBridge)</div>
       <div style="margin-top:8px; color:#333; font-size:13px;">→ Same focus operations. Works for first-run before the ring is paired.</div>
     </div>
   </div>
@@ -1040,39 +1423,61 @@
   <h2>8. Notes for implementation</h2>
   <ul>
     <li>
-      <b>Compose target.</b> One Activity (in <code>:app</code>) with a Compose root. For
-      RayNeo, the Activity extends Mercury SDK's <code>BaseMirrorActivity</code> so the same
-      composition is mirrored to both eyes for free. For Rokid, plain Activity (the optic
-      handles the doubling).
+      <b>Compose target.</b> One Activity (in <code>:app</code>) with a Compose root (<code>HaloRingApp</code>).
+      For RayNeo, the Activity extends Mercury SDK's <code>BaseMirrorActivity</code> so the same
+      composition is mirrored to both eyes for free; <code>TempleFocusBridge</code> wires
+      temple-bar <code>TempleAction</code> events to Compose's focus manager. For Rokid, plain
+      <code>ComponentActivity</code> (the optic handles the doubling; DPAD-key traversal works
+      natively).
     </li>
     <li>
-      <b>Theme.</b> Define <code>Colors</code> and <code>Typography</code> from the §1 tokens.
-      No <code>MaterialTheme</code> default — we want Material widgets to look like our system,
-      not the other way round.
+      <b>Theme.</b> <code>HaloColors</code> and <code>HaloType</code> in
+      <code>HaloRingTheme.kt</code>. No <code>MaterialTheme</code> default — Material widgets get
+      themed to look like our system, not the other way round.
     </li>
     <li>
       <b>Focus.</b> Default Android focus traversal works on both targets (Rokid temple → DPAD,
-      RayNeo via Mercury <code>FocusHolder</code>). Apply a global focus indicator: 2 px left
-      bar + 7 % accent tint, exactly as drawn here.
+      RayNeo via the Mercury <code>FocusHolder</code> path bridged by <code>TempleFocusBridge</code>).
+      Apply <code>Modifier.r08Focus()</code> for the universal 2 px left bar + 7 % accent tint
+      indicator.
     </li>
     <li>
       <b>HUD.</b> Implemented as a Compose composable hosted by an overlay <code>WindowManager</code>
-      view in the foreground service (so it can appear above any app, not just ours).
-      Auto-hides after 2 s via <code>delay() + remove()</code>.
+      view in the foreground service (<code>HaloRingService</code>) — so it can appear above any
+      app, not just ours. Auto-hides after the per-variant duration. <b>Binocular re-anchor</b>:
+      see §4 audit-pass note.
     </li>
     <li>
-      <b>Brightness.</b> Inherit system; never override. Wearers expect the glasses' anti-light-
-      leakage mode to apply uniformly.
+      <b>Switches.</b> All ON/OFF rows use the shared <code>HaloSwitch</code> pill. Don't use raw
+      <code>Text("ON" / "OFF")</code> — colour-only state is too easy to miss on the waveguide.
+    </li>
+    <li>
+      <b>Toggling system gestures.</b> Tap a row in System Gestures → modal opens →
+      <code>GesturePicker</code> screen → select gesture → conflict-checked against other slots
+      before commit.
+    </li>
+    <li>
+      <b>Brightness.</b> Inherit system; never override. Wearers expect the glasses'
+      anti-light-leakage mode to apply uniformly.
     </li>
     <li>
       <b>Pixel discipline.</b> If a UI element fits in less ink, prefer that. Every illuminated
-      pixel costs display power. Avoid filled icons; line icons at 1.5 px stroke.
+      pixel costs display power. Avoid filled icons; line icons at 1.5 px stroke. <b>16 sp text
+      floor</b> for everything except <code>MetricKey</code> (RayNeo dev-guide alignment, audit-pass
+      2026-05-13s).
+    </li>
+    <li>
+      <b>i18n.</b> All strings via <code>strings.xml</code>; ZH translations in
+      <code>strings-zh.xml</code>. Action friendly names route through
+      <code>actionFriendlyText()</code> — single source of truth shared with the gesture-hint
+      HUD, Test Arena, and Action Picker.
     </li>
   </ul>
 
   <p style="color: var(--doc-mute); margin-top: 48px;">
-    Mockup version v0.1 — 2026-05-13. Updates accompany changes to
-    <a href="08-ui-design.md">Doc/08-ui-design.md</a>.
+    Mockup version v0.2 — 2026-05-15. Updates accompany changes to
+    <a href="08-ui-design.md">Doc/08-ui-design.md</a>. Audit-pass references map to entries in
+    <a href="13-handoff.md">Doc/13-handoff.md</a>.
   </p>
 
 </div>

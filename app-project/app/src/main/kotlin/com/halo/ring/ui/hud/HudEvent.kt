@@ -104,6 +104,7 @@ fun actionFriendlyRes(a: GlassAction): Int = when (a) {
     GlassAction.OpenSettings   -> com.halo.ring.R.string.action_open_settings
     GlassAction.OpenGallery    -> com.halo.ring.R.string.action_open_gallery
     is GlassAction.LaunchApp   -> com.halo.ring.R.string.action_launch_app
+    is GlassAction.PluginAction -> com.halo.ring.R.string.action_plugin_generic
     GlassAction.ScreenSleep    -> com.halo.ring.R.string.action_screen_sleep
     GlassAction.ScreenWake     -> com.halo.ring.R.string.action_screen_wake
     GlassAction.PeekHud        -> com.halo.ring.R.string.action_peek_hud
@@ -118,16 +119,21 @@ fun actionFriendlyRes(a: GlassAction): Int = when (a) {
     is com.halo.ring.core.action.ModalSentinel -> com.halo.ring.R.string.action_modal_exit
 }
 
-/** Convenience composable that resolves an action's name including the LaunchApp variant. */
+/** Convenience composable that resolves an action's name including the LaunchApp variant and
+ *  plugin actions (the label comes from the plugin's `ContentProvider`, not a string resource). */
 @androidx.compose.runtime.Composable
-fun actionFriendlyText(a: GlassAction): String =
-    if (a is GlassAction.LaunchApp) {
-        androidx.compose.ui.res.stringResource(
-            com.halo.ring.R.string.action_launch_app, a.pkg.substringAfterLast('.'),
-        )
-    } else {
-        androidx.compose.ui.res.stringResource(actionFriendlyRes(a))
-    }
+fun actionFriendlyText(a: GlassAction): String = when (a) {
+    is GlassAction.LaunchApp -> androidx.compose.ui.res.stringResource(
+        com.halo.ring.R.string.action_launch_app, a.pkg.substringAfterLast('.'),
+    )
+    // Doc/18: "{app}: {label}" — app inferred from the bound plugin's package basename. Label is
+    // the snapshot from when the user bound this action; survives plugin uninstall so the
+    // Profile editor doesn't render an opaque hex code.
+    is GlassAction.PluginAction -> androidx.compose.ui.res.stringResource(
+        com.halo.ring.R.string.action_plugin_named, a.pluginPackage.substringAfterLast('.'), a.label,
+    )
+    else -> androidx.compose.ui.res.stringResource(actionFriendlyRes(a))
+}
 
 /** Convenience composable that resolves a gesture's friendly name in the current locale. */
 @androidx.compose.runtime.Composable

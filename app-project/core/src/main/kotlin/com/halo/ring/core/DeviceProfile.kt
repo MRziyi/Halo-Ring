@@ -12,8 +12,10 @@ enum class DeviceProfile {
 }
 
 /**
- * Detect [DeviceProfile] from build identifiers. Exact predicate values are placeholders — fill in
- * from real `getprop` output during phase-0 verification (§18.7 step 1).
+ * Detect [DeviceProfile] from build identifiers. Concrete impl lives in
+ * [com.halo.ring.di.AppGraph.detectDeviceProfile] (Build.BRAND / MANUFACTURER / MODEL probe).
+ * Hardware-specific predicate values are still subject to refinement once we have real
+ * `getprop` output from production glasses (Doc/13 §C7 / §C8).
  */
 fun interface DeviceProfileResolver {
     fun resolve(): DeviceProfile

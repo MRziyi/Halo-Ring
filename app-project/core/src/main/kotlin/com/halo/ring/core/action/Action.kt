@@ -69,6 +69,26 @@ sealed interface GlassAction {
     data class  Shell(val cmd: String) : GlassAction { override val needs = Capability.SHELL }
     /** "Do nothing" — useful to explicitly unbind a gesture. */
     data object None : GlassAction { override val needs = Capability.NONE }
+
+    // ── external plugins (Doc/18 — Halo Ring Plugin Protocol v1) ─────────────────────────────────
+    /**
+     * An action provided by an external app (a "plugin"). Carries enough to identify the target
+     * (package + action id) and to render its UI row without re-querying the plugin's
+     * `ContentProvider` (label cached at bind time).
+     *
+     * Dispatch path lives in `:app/plugin/PluginTrigger` because it requires Android `Intent`s —
+     * the router treats this as an out-of-band action handled by the foreground service before
+     * the normal `ExecutorBackend` chain (similar to how `PeekHud` is intercepted).
+     */
+    data class PluginAction(
+        /** Plugin owner package, e.g. `com.constellation.glass`. */
+        val pluginPackage: String,
+        /** Stable action id within the plugin, e.g. `voice_invoke`. Used as `action_id` extra. */
+        val actionId: String,
+        /** Human-readable label snapshotted at bind time. Survives plugin uninstall so the
+         *  Profile editor can show "(missing) Voice invoke" instead of an opaque hex code. */
+        val label: String,
+    ) : GlassAction { override val needs = Capability.NONE }
 }
 
 /**

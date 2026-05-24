@@ -216,12 +216,32 @@ class HaloRingService : Service() {
                 if (feedbackPrefs.gestureHintHud && action !is GlassAction.None) {
                     hud?.show(HudEvent.GestureRecognised(gesture, action))
                 }
+                // Doc/18 §5 — fire targeted broadcast for external plugin actions. Defensive: skip
+                // if the owning plugin is no longer installed (binding survived an uninstall via
+                // GlassActionCodec snapshot). PluginRegistry.plugin() reads the cached list — no
+                // PackageManager IPC on the hot path unless the cache is cold.
+                if (action is GlassAction.PluginAction) {
+                    if (graph.pluginRegistry.plugin(action.pluginPackage) != null) {
+                        com.halo.ring.plugin.PluginTrigger.fire(applicationContext, action, gesture)
+                    } else {
+                        Log.w(TAG, "PluginAction ${action.pluginPackage}/${action.actionId} skipped — owning plugin not installed")
+                    }
+                }
                 // Audit-2026-05-13q: publish every recognised gesture into a SharedFlow so the
                 // interactive `GuidedTour` and the Test Arena (Settings) can listen for the
                 // user's input and react ("✓ you did SWIPE_UP"). tryEmit is non-blocking; if
                 // the 8-slot buffer is somehow saturated, we drop the gesture for coaching but
                 // it's still dispatched through the normal action path — no functional impact.
                 graph.recognisedGestureFlow.tryEmit(gesture)
+                // Audit-pass-x-test-arena: also publish to lastRecognisedFlow with action +
+                // synth-latency so the Test Arena can render the mockup's "LAST GESTURE → Action
+                // · NN ms" hero card. lastActivityMs is updated on every GestureEvent so the
+                // delta below is exactly the synth-window cost (combo timer, multi-tap window,
+                // etc.). Negative values are impossible by construction; coerce defensively.
+                val latency = (graph.scheduler.nowMs() - lastActivityMs).toInt().coerceIn(0, 9999)
+                graph.lastRecognisedFlow.value = com.halo.ring.di.RecognisedGesture(
+                    gesture = gesture, action = action, latencyMs = latency,
+                )
             }
             // No HUD on screen-off wake — the display turning on is feedback enough, and the HUD
             // wouldn't be visible anyway until composition wakes back up.
@@ -231,6 +251,9 @@ class HaloRingService : Service() {
             r.inAppShortCircuit = { action ->
                 MainActivity.isInForeground.get() && InAppFocusController.route(action)
             }
+            // Doc/18 §6 — pushed-profile stack lookup. The router consults this BEFORE the
+            // wearer's active profile so overlay-app bindings win while their HUD is up.
+            r.pushedProfileLookup = { gesture -> graph.profileStack.lookup(gesture) }
         }
 
         // ── 2. install the HUD overlay (after router so it can dispatch into it) ────────────────
@@ -495,6 +518,74 @@ class HaloRingService : Service() {
             graph.scheduler.post { graph.modeManager.onForegroundPackage(pkg) }
         }
         cleanup += { HaloRingAccessibilityService.foregroundPackageListener = null }
+
+        // ── 9b. Doc/18 plugin discovery + push/pop receiver ────────────────────────────────────
+        // Three pieces:
+        //   (a) PluginRegistry's package-event receiver — invalidates the discovery cache on
+        //       plugin install/uninstall/replace so the next Action Picker open sees fresh state.
+        //   (b) An additional PACKAGE_REMOVED watch that drops every ProfileStack frame owned by
+        //       the removed package — Doc/18 §6.4: "auto-pop if the owner package's process
+        //       dies" (the spec allows generalising "dies" to "uninstalled", which is the
+        //       irrecoverable case; in-process death is harder to detect cheaply, so we settle
+        //       for the uninstall signal as the safest auto-prune trigger).
+        //   (c) PluginBroadcastReceiver itself for the PROFILE_PUSH / PROFILE_POP intents.
+        graph.pluginRegistry.registerPackageEventReceiver()
+        cleanup += { graph.pluginRegistry.unregisterPackageEventReceiver() }
+        // Eager discovery on service start so the Settings root row badge ("External plugins  N
+        // active") + ActionPicker show plugin actions immediately, not after the user navigates
+        // into one of those screens. Runs on Dispatchers.IO — PackageManager.queryBroadcastReceivers
+        // + a few CP queries take 20-80 ms total on a stock device.
+        serviceScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            try { graph.pluginRegistry.refresh() } catch (t: Throwable) {
+                Log.w(TAG, "initial plugin refresh failed: ${t.message}")
+            }
+        }
+
+        val pluginUninstallReceiver = object : BroadcastReceiver() {
+            override fun onReceive(c: Context?, intent: Intent?) {
+                if (intent?.action != Intent.ACTION_PACKAGE_REMOVED) return
+                val pkg = intent.data?.schemeSpecificPart ?: return
+                graph.scheduler.post {
+                    val dropped = graph.profileStack.dropOwner(pkg)
+                    if (dropped > 0) {
+                        Log.i(TAG, "auto-popped $dropped pushed profile(s) — $pkg uninstalled")
+                    }
+                }
+            }
+        }
+        registerReceiver(pluginUninstallReceiver, IntentFilter().apply {
+            addAction(Intent.ACTION_PACKAGE_REMOVED); addDataScheme("package")
+        })
+        cleanup += { try { unregisterReceiver(pluginUninstallReceiver) } catch (_: IllegalArgumentException) {} }
+
+        val pluginBroadcast = com.halo.ring.plugin.PluginBroadcastReceiver(
+            stack = graph.profileStack,
+            onStackChanged = { /* nothing extra for now; the next gesture lookup picks up the change */ },
+        )
+        val pluginFilter = IntentFilter().apply {
+            addAction(com.halo.ring.plugin.PluginBroadcastReceiver.ACTION_PROFILE_PUSH)
+            addAction(com.halo.ring.plugin.PluginBroadcastReceiver.ACTION_PROFILE_POP)
+        }
+        try {
+            // RECEIVER_EXPORTED on Android 14+ — receiver MUST opt in to receiving from external
+            // packages. PUSH_PROFILE permission gate is enforced by registerReceiver overload.
+            if (android.os.Build.VERSION.SDK_INT >= 33) {
+                @Suppress("UnspecifiedRegisterReceiverFlag")
+                registerReceiver(
+                    pluginBroadcast, pluginFilter,
+                    com.halo.ring.plugin.PluginBroadcastReceiver.PERMISSION_PUSH_PROFILE, null,
+                    Context.RECEIVER_EXPORTED,
+                )
+            } else {
+                registerReceiver(
+                    pluginBroadcast, pluginFilter,
+                    com.halo.ring.plugin.PluginBroadcastReceiver.PERMISSION_PUSH_PROFILE, null,
+                )
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "plugin push/pop receiver registration failed: ${e.message}")
+        }
+        cleanup += { try { unregisterReceiver(pluginBroadcast) } catch (_: IllegalArgumentException) {} }
 
         // ── 10. foreground notification + start BLE ───────────────────────────────────────────
         startInForeground()

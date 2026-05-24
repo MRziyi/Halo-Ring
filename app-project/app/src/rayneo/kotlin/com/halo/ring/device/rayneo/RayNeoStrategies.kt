@@ -38,6 +38,32 @@ class RayNeoActionMapper(private val intents: FeatureIntents) : GlassActionMappe
         else -> null
     }
 
+    /**
+     * RayNeo-specific honesty overrides (audit-pass-x+1):
+     *
+     *  - `EnterAIDictateModal`: same as Rokid — modal is a skeleton (no mic pipeline). UNSUPPORTED.
+     *  - `OpenAIAssistant`: best-effort `am start -a VOICE_SEARCH_HANDS_FREE`; may fall through
+     *    to RayNeo's bundled assistant on AIOS 2.0 but unverified. BEST_EFFORT (kdoc on
+     *    [RayNeoFeatureIntents.openAIAssistant] explains the trade-off).
+     *  - `OpenCamera` / `OpenMusic` / `OpenGallery`: standard AOSP Intents (`STILL_IMAGE_CAMERA`,
+     *    `MEDIA_PLAY_FROM_SEARCH`, `VIEW image/star`). They open something on every Android device,
+     *    but on RayNeo X3 Pro that "something" may be the system chooser rather than the
+     *    first-party RayNeo Camera/Music/Gallery apps. BEST_EFFORT until on-device verification
+     *    discovers the real package names (Doc/11 §B6).
+     *  - `Screenshot`: uses A11yGlobal `TAKE_SCREENSHOT` (API 30+) which works on stock Android
+     *    but RayNeo AIOS may suppress accessibility service screenshot privileges per their
+     *    "no third-party screenshot" policy (typical of OEM-customised launchers). BEST_EFFORT.
+     */
+    override fun supportLevel(action: GlassAction): GlassActionMapper.SupportLevel = when (action) {
+        GlassAction.EnterAIDictateModal -> GlassActionMapper.SupportLevel.UNSUPPORTED
+        GlassAction.OpenAIAssistant,
+        GlassAction.OpenCamera,
+        GlassAction.OpenMusic,
+        GlassAction.OpenGallery,
+        GlassAction.Screenshot          -> GlassActionMapper.SupportLevel.BEST_EFFORT
+        else                            -> super.supportLevel(action)
+    }
+
     override fun primitives(action: GlassAction): List<InjectionPrimitive> = when (action) {
         // ── navigation (swipe MotionEvents) ──
         // The X3 Pro temple is horizontal; the system maps forward/back swipes to focus prev/next.
@@ -98,6 +124,10 @@ class RayNeoActionMapper(private val intents: FeatureIntents) : GlassActionMappe
         GlassAction.None -> emptyList()
 
         is GlassAction.Shell -> listOf(InjectionPrimitive.Shell(action.cmd))
+
+        // External-plugin actions (Doc/18) — dispatched out-of-band by HaloRingService via
+        // PluginTrigger; never reach the executor backend.
+        is GlassAction.PluginAction -> emptyList()
 
         // Modal sentinels are consumed inside InteractionRouter; never reach the action mapper.
         is com.halo.ring.core.action.ModalSentinel -> emptyList()

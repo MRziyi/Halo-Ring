@@ -36,6 +36,7 @@
     <string name="settings_section_vitals_prefs">Vitals</string>
     <string name="settings_section_language">Language</string>
     <string name="settings_section_test_arena">Test Arena</string>
+    <string name="settings_section_external_plugins">External plugins</string>
     <string name="settings_section_advanced">Advanced</string>
     <string name="settings_section_about">About</string>
 
@@ -55,6 +56,7 @@
     <string name="common_unknown">Unknown</string>
     <string name="common_dash">—</string>
     <string name="common_coming_soon">(coming soon)</string>
+    <string name="common_best_effort">(beta — unverified on this device)</string>
 
     <!-- ════════════════════════════════════════════════════════════════════════
          Status bar (top of every tab).
@@ -319,8 +321,17 @@
          Test Arena.
          ════════════════════════════════════════════════════════════════════════ -->
     <string name="test_arena_title">Test Arena</string>
-    <string name="test_arena_subtitle">Try any gesture from your ring. The matching row below will light up.</string>
-    <string name="test_arena_inactive_hint">Double-tap to exit (same as Back everywhere else).</string>
+    <string name="test_arena_subtitle">Practice gestures here. Nothing in this screen affects anything outside it.</string>
+    <string name="test_arena_inactive_hint">Auto-exits if you double-tap twice in a row.</string>
+    <!-- Hero card -->
+    <string name="test_arena_last_gesture_label">LAST GESTURE</string>
+    <string name="test_arena_waiting">Try a gesture</string>
+    <string name="test_arena_waiting_hint">— anything from the list below</string>
+    <string name="test_arena_action_latency">→ %1$s · %2$d ms</string>
+    <!-- Chip grid -->
+    <string name="test_arena_progress">PRACTICED %1$d / %2$d</string>
+    <!-- Footer pill -->
+    <string name="test_arena_phase0_pill">PHASE-0 FRIENDLY</string>
 
     <!-- ════════════════════════════════════════════════════════════════════════
          Guided tour.
@@ -519,4 +530,40 @@
     <string name="action_shell">Shell</string>
     <string name="action_none">(no action)</string>
     <string name="action_modal_exit">(modal exit)</string>
+
+    <!-- ════════════════════════════════════════════════════════════════════════
+         Doc/18 — Halo Ring External-App Plugin Protocol v1.
+         ════════════════════════════════════════════════════════════════════════ -->
+    <!-- Permission user-visible labels (shown by system permission dialogs). Keep terse. -->
+    <string name="perm_read_plugin_actions_label">Read plugin actions</string>
+    <string name="perm_read_plugin_actions_desc">Allows reading the action lists external plugin apps expose to Halo Ring.</string>
+    <string name="perm_send_plugin_trigger_label">Send plugin triggers</string>
+    <string name="perm_send_plugin_trigger_desc">Allows sending gesture-triggered broadcasts to Halo Ring plugin apps.</string>
+    <string name="perm_push_profile_label">Push gesture profile</string>
+    <string name="perm_push_profile_desc">Allows an overlay app to temporarily override Halo Ring gesture bindings while its UI is visible.</string>
+
+    <!-- HUD + Action Picker rendering for plugin actions. -->
+    <string name="action_plugin_generic">External plugin action</string>
+    <!-- %1$s = short package basename (e.g. "constellation"), %2$s = plugin label (e.g. "Voice invoke") -->
+    <string name="action_plugin_named">%1$s: %2$s</string>
+    <string name="action_plugin_missing_prefix">(missing)</string>
+
+    <!-- Action Picker group heading. -->
+    <string name="action_group_external">External apps</string>
+    <string name="action_picker_external_empty">No plugin apps installed.</string>
+    <string name="action_picker_external_no_actions">(no actions)</string>
+
+    <!-- External plugins settings screen. -->
+    <string name="external_plugins_title">External plugins</string>
+    <string name="external_plugins_subtitle">Apps that expose actions to Halo Ring via the Doc/18 plugin protocol.</string>
+    <string name="external_plugins_refresh">REFRESH PLUGINS</string>
+    <string name="external_plugins_count_zero">No plugins installed</string>
+    <!-- %1$d = action count -->
+    <string name="external_plugins_actions_count">%1$d action(s)</string>
+    <string name="external_plugins_protocol_version">Protocol v%1$d</string>
+    <string name="external_plugins_status_alive">● alive</string>
+    <string name="external_plugins_status_error">⚠ %1$s</string>
+    <string name="external_plugins_footer">Plugin actions appear in the Action Picker under EXTERNAL APPS. Newly-installed apps appear within 30 seconds.</string>
+    <!-- Settings root entry — "External plugins  N ›" where N is the active plugin count. -->
+    <string name="settings_external_plugins_summary">%1$d active</string>
 </resources>

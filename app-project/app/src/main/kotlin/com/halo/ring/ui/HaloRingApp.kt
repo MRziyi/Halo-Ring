@@ -177,6 +177,7 @@ fun HaloRingApp(
                                     SettingsSection.VITALS_PREFS     -> SubScreen.VitalsPrefs
                                     SettingsSection.LANGUAGE         -> SubScreen.Language
                                     SettingsSection.TEST_ARENA       -> SubScreen.TestArena
+                                    SettingsSection.EXTERNAL_PLUGINS -> SubScreen.ExternalPlugins
                                 })
                             },
                         )
@@ -321,6 +322,8 @@ fun HaloRingApp(
                     SubScreen.TestArena -> com.halo.ring.ui.screens.TestArenaScreen(
                         onExit = { pop() },
                     )
+
+                    SubScreen.ExternalPlugins -> com.halo.ring.ui.screens.ExternalPluginsScreen()
                 }
             }
         }

@@ -5,15 +5,17 @@ import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 
 /**
- * Skeleton AccessibilityService. Referenced by [AndroidManifest.xml]; needs to exist for the APK to
- * install and for the user to be able to grant accessibility access. Full implementation is B11
- * (Doc/13 §B); for now this stub:
+ * AccessibilityService — referenced by [AndroidManifest.xml]; needs to exist for the user to be
+ * able to grant accessibility access. Two responsibilities:
  *
- *  - keeps a static reference to the running instance so [com.halo.ring.inject.AccessibilityBackend]
- *    can call `performGlobalAction(BACK / HOME / RECENTS / NOTIFICATIONS)` once that backend grows;
- *  - logs foreground-window changes so we can already see what auto-switch *would* trigger on.
+ *  1. Keeps a static reference to the running instance so [com.halo.ring.inject.AccessibilityBackend]
+ *     can call `performGlobalAction(BACK / HOME / RECENTS / NOTIFICATIONS / QUICK_SETTINGS / …)`.
+ *  2. Forwards foreground-window-package changes via [foregroundPackageListener] so
+ *     [com.halo.ring.core.action.ModeManager.onForegroundPackage] can auto-switch profiles
+ *     (B11 — wired in the foreground service's onCreate).
  *
- * IMPORTANT: never block in [onAccessibilityEvent] — Android will rate-limit/disable us.
+ * Both fully wired since audit-pass-c. IMPORTANT: never block in [onAccessibilityEvent] — Android
+ * will rate-limit / disable us.
  */
 class HaloRingAccessibilityService : AccessibilityService() {
 

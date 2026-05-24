@@ -68,6 +68,16 @@ class InteractionRouter(
      * Wired in the foreground service: `{ MainActivity.isInForeground.get() && InAppFocusController.route(it) }`.
      */
     var inAppShortCircuit: ((GlassAction) -> Boolean)? = null,
+    /**
+     * Doc/18 §6 — overlay-pushed profile stack lookup. Consulted AFTER system gestures + modal
+     * layer but BEFORE the wearer's active [com.halo.ring.core.action.KeyMapProfile]. Return null
+     * if nothing in the pushed stack binds this gesture; the router falls through to the active
+     * profile. Wired in the foreground service: `{ g -> graph.profileStack.lookup(g) }`.
+     *
+     * Null when no pushed-stack subsystem is plumbed (e.g. unit tests that don't care about
+     * external plugins) — degrades to identical pre-Doc/18 behaviour.
+     */
+    var pushedProfileLookup: ((Gesture) -> GlassAction?)? = null,
 ) {
     /** Whether the glasses display is currently on. Set by the foreground service from
      *  ACTION_SCREEN_ON/OFF (or RayNeo ARSDK wear/screen state when available). */
@@ -151,7 +161,19 @@ class InteractionRouter(
             return
         }
 
-        // 3. profile
+        // 3. pushed-profile stack (Doc/18 §6) — overlay-app bindings take precedence over the
+        //    wearer's chosen profile while their overlay is up. A null lookup means "fall through
+        //    to the active profile" — keeps every gesture not bound by the overlay working
+        //    normally. System gestures already returned above; this layer can never override them.
+        pushedProfileLookup?.invoke(gesture)?.let { pushedAction ->
+            onGestureRecognized?.invoke(gesture, pushedAction)
+            if (pushedAction is GlassAction.None) return
+            if (pushedAction.isModalEntry()) { onEnterModal(pushedAction); return }
+            dispatch(pushedAction)
+            return
+        }
+
+        // 4. profile
         val action = modeManager.active().actionFor(gesture)
         onGestureRecognized?.invoke(gesture, action)
         if (action is GlassAction.None) return
@@ -169,6 +191,10 @@ class InteractionRouter(
             GlassAction.ProfileCycle,
             GlassAction.ForceReconnect,
             GlassAction.None -> return
+            // External-plugin actions (Doc/18): the foreground service's [onGestureRecognized]
+            // listener fires the targeted broadcast via PluginTrigger. Intercept here so we don't
+            // waste a `mapper.primitives()` call only to find an empty list + silently drop.
+            is GlassAction.PluginAction -> return
             else -> {
                 // Foreground bypass: handled directly by Compose focus traversal — no backend hop.
                 if (inAppShortCircuit?.invoke(action) == true) return
@@ -201,8 +227,9 @@ private fun GlassAction.isModalEntry(): Boolean = when (this) {
 
 /**
  * A modal owns a window of the user's attention; subsequent gestures are routed to it instead of
- * the profile until it exits. See §25.1. Full implementation deferred — interfaces here so the
- * router compiles and the wiring is in place.
+ * the profile until it exits. See §25.1. Concrete modals: [com.halo.ring.core.modal.VolumeModal] /
+ * [com.halo.ring.core.modal.BrightnessModal] / [com.halo.ring.core.modal.RecentsModal] /
+ * [com.halo.ring.core.modal.AIDictateModal] (skeleton — see kdoc on AIDictateModal).
  */
 interface Modal {
     val timeoutMs: Long

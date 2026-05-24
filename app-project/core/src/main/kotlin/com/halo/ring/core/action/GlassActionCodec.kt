@@ -15,12 +15,20 @@ package com.halo.ring.core.action
  */
 object GlassActionCodec {
 
-    /** Encode an action to a single ASCII line. */
+    /** Encode an action to a single line.
+     *
+     *  PluginAction format: `Plugin:<pkg>|<actionId>|<label>`. Pipe is the separator because none
+     *  of (pkg / actionId) can contain it (Android package + identifier syntax) and the label is
+     *  taken last so we restore it verbatim. Any literal `|` in the label is escaped to `\\|`
+     *  with a leading backslash so the split is unambiguous; backslash itself escapes as `\\\\`.
+     */
     fun encode(action: GlassAction): String = when (action) {
-        is GlassAction.LaunchApp -> "LaunchApp:${action.pkg}"
-        is GlassAction.Shell     -> "Shell:${action.cmd}"
-        is ModalSentinel.Exit    -> "Exit"
-        is ModalSentinel.Cancel  -> "Cancel"
+        is GlassAction.LaunchApp     -> "LaunchApp:${action.pkg}"
+        is GlassAction.Shell         -> "Shell:${action.cmd}"
+        is GlassAction.PluginAction  ->
+            "Plugin:${action.pluginPackage}|${action.actionId}|${escapePipe(action.label)}"
+        is ModalSentinel.Exit        -> "Exit"
+        is ModalSentinel.Cancel      -> "Cancel"
         else -> action::class.simpleName ?: "None"
     }
 
@@ -33,10 +41,47 @@ object GlassActionCodec {
             return when (tag) {
                 "LaunchApp" -> GlassAction.LaunchApp(arg)
                 "Shell"     -> GlassAction.Shell(arg)
+                "Plugin"    -> decodePlugin(arg)
                 else        -> GlassAction.None
             }
         }
         return BY_NAME[s] ?: GlassAction.None
+    }
+
+    private fun decodePlugin(arg: String): GlassAction {
+        val parts = splitPipe(arg)
+        if (parts.size != 3) return GlassAction.None
+        val (pkg, actionId, label) = parts
+        if (pkg.isEmpty() || actionId.isEmpty()) return GlassAction.None
+        return GlassAction.PluginAction(pluginPackage = pkg, actionId = actionId, label = label)
+    }
+
+    private fun escapePipe(s: String): String =
+        s.replace("\\", "\\\\").replace("|", "\\|")
+
+    /** Inverse of [escapePipe], applied per field after splitting on unescaped pipes. */
+    private fun splitPipe(s: String): List<String> {
+        val out = mutableListOf<String>()
+        val cur = StringBuilder()
+        var i = 0
+        while (i < s.length) {
+            val c = s[i]
+            if (c == '\\' && i + 1 < s.length) {
+                cur.append(s[i + 1])
+                i += 2
+                continue
+            }
+            if (c == '|') {
+                out.add(cur.toString())
+                cur.setLength(0)
+                i += 1
+                continue
+            }
+            cur.append(c)
+            i += 1
+        }
+        out.add(cur.toString())
+        return out
     }
 
     /** All [GlassAction] singletons that the codec recognises, keyed by their `simpleName`. */

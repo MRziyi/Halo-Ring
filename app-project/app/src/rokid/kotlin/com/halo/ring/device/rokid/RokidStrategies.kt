@@ -36,6 +36,22 @@ class RokidActionMapper(private val intents: FeatureIntents) : GlassActionMapper
         else -> null   // default in GlassAction.needs
     }
 
+    /**
+     * Rokid-specific honesty overrides (audit-pass-x+1):
+     *
+     *  - `EnterAIDictateModal`: the `AIDictateModal` is a skeleton — `onEnter` opens the
+     *    Sprite Chat page (real), but the in-modal `TAP` doesn't drive a mic-capture pipeline
+     *    (Doc/05 §6 audio integration is deferred). Mark UNSUPPORTED so users don't bind it
+     *    expecting dictation and get "tap re-launches chat".
+     *  - `AskVisualAI`: targets `com.rokid.visualaidemo.ACTION_START` — visualaidemo is a
+     *    third-party reference APK from Rokid, not always pre-installed. Mark BEST_EFFORT.
+     */
+    override fun supportLevel(action: GlassAction): GlassActionMapper.SupportLevel = when (action) {
+        GlassAction.EnterAIDictateModal -> GlassActionMapper.SupportLevel.UNSUPPORTED
+        GlassAction.AskVisualAI         -> GlassActionMapper.SupportLevel.BEST_EFFORT
+        else                            -> super.supportLevel(action)
+    }
+
     override fun primitives(action: GlassAction): List<InjectionPrimitive> = when (action) {
         // ── navigation ──
         GlassAction.NavPrev    -> listOf(key(KeyEvent.KEYCODE_DPAD_UP))
@@ -96,6 +112,11 @@ class RokidActionMapper(private val intents: FeatureIntents) : GlassActionMapper
         GlassAction.None -> emptyList()
 
         is GlassAction.Shell -> listOf(InjectionPrimitive.Shell(action.cmd))
+
+        // ── external-plugin actions (Doc/18) ──
+        // Dispatched out-of-band by [HaloRingService] via [com.halo.ring.plugin.PluginTrigger];
+        // never reach the executor backend. Same pattern as PeekHud — intercepted upstream.
+        is GlassAction.PluginAction -> emptyList()
 
         // Modal sentinels are consumed inside InteractionRouter; never reach the action mapper.
         is com.halo.ring.core.action.ModalSentinel -> emptyList()

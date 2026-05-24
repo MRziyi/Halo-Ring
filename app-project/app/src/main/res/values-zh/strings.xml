@@ -29,6 +29,7 @@
     <string name="settings_section_vitals_prefs">健康设置</string>
     <string name="settings_section_language">语言</string>
     <string name="settings_section_test_arena">练习场</string>
+    <string name="settings_section_external_plugins">外部插件</string>
     <string name="settings_section_advanced">高级</string>
     <string name="settings_section_about">关于</string>
 
@@ -46,6 +47,7 @@
     <string name="common_unknown">未知</string>
     <string name="common_dash">—</string>
     <string name="common_coming_soon">（即将推出）</string>
+    <string name="common_best_effort">（待验证 / 可能不可用）</string>
 
     <!-- 状态栏 -->
     <string name="statusbar_ring_placeholder">R08_…</string>
@@ -284,8 +286,14 @@
 
     <!-- 练习场 -->
     <string name="test_arena_title">练习场</string>
-    <string name="test_arena_subtitle">用戒指做任何手势，下方对应行会亮起。</string>
-    <string name="test_arena_inactive_hint">双击戒指即可退出（和别处"返回"一致）。</string>
+    <string name="test_arena_subtitle">这里可随意练手势，本页内的操作不会影响外部任何东西。</string>
+    <string name="test_arena_inactive_hint">连续双击两次即可退出。</string>
+    <string name="test_arena_last_gesture_label">最近一次</string>
+    <string name="test_arena_waiting">来做个手势</string>
+    <string name="test_arena_waiting_hint">— 下面任意一个</string>
+    <string name="test_arena_action_latency">→ %1$s · %2$d ms</string>
+    <string name="test_arena_progress">已练 %1$d / %2$d</string>
+    <string name="test_arena_phase0_pill">PHASE-0 兼容</string>
 
     <!-- 引导教程 -->
     <string name="tour_step_counter">%1$d / %2$d</string>
@@ -472,4 +480,31 @@
     <string name="action_shell">Shell</string>
     <string name="action_none">（无动作）</string>
     <string name="action_modal_exit">（模式退出）</string>
+
+    <!-- Doc/18 — 外部插件协议 v1 -->
+    <string name="perm_read_plugin_actions_label">读取插件动作</string>
+    <string name="perm_read_plugin_actions_desc">允许读取外部插件应用提供给 Halo Ring 的动作列表。</string>
+    <string name="perm_send_plugin_trigger_label">发送插件触发</string>
+    <string name="perm_send_plugin_trigger_desc">允许在手势触发时向 Halo Ring 插件应用发送广播。</string>
+    <string name="perm_push_profile_label">推送手势配置</string>
+    <string name="perm_push_profile_desc">允许悬浮应用在其界面显示期间临时覆盖 Halo Ring 手势绑定。</string>
+
+    <string name="action_plugin_generic">外部插件动作</string>
+    <string name="action_plugin_named">%1$s：%2$s</string>
+    <string name="action_plugin_missing_prefix">（已卸载）</string>
+
+    <string name="action_group_external">外部应用</string>
+    <string name="action_picker_external_empty">未安装插件应用。</string>
+    <string name="action_picker_external_no_actions">（无动作）</string>
+
+    <string name="external_plugins_title">外部插件</string>
+    <string name="external_plugins_subtitle">通过 Doc/18 插件协议向 Halo Ring 暴露动作的应用。</string>
+    <string name="external_plugins_refresh">刷新插件</string>
+    <string name="external_plugins_count_zero">未安装插件</string>
+    <string name="external_plugins_actions_count">%1$d 个动作</string>
+    <string name="external_plugins_protocol_version">协议 v%1$d</string>
+    <string name="external_plugins_status_alive">● 在线</string>
+    <string name="external_plugins_status_error">⚠ %1$s</string>
+    <string name="external_plugins_footer">插件动作显示在 Action Picker 的"外部应用"分组中。新安装的应用约 30 秒内出现。</string>
+    <string name="settings_external_plugins_summary">%1$d 个</string>
 </resources>

@@ -34,6 +34,58 @@
          dialog and tears down the mDNS advertisement before we can find it. -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
+    <!-- ──────────────────────────────────────────────────────────────────────────────────────
+         Doc/18 — Halo Ring External-App Plugin Protocol v1.
+         Three permissions: we declare them all (we're the owner) and `uses-permission` the two
+         that we need to consume ourselves. External plugin apps reference these by name in their
+         own manifests; the system enforces the matching protectionLevel.
+         ────────────────────────────────────────────────────────────────────────────────────── -->
+
+    <permission
+        android:name="com.halo.ring.permission.READ_PLUGIN_ACTIONS"
+        android:protectionLevel="signature"
+        android:label="@string/perm_read_plugin_actions_label"
+        android:description="@string/perm_read_plugin_actions_desc" />
+    <!-- Plugin apps put this on their ContentProvider's `readPermission`. Halo Ring uses the
+         permission to query them. Signature level → only WE can hold it (it's our own
+         permission, defined with our app's signing cert). On a stock device only one app per
+         signing cert exists, so this is effectively self-permission. -->
+    <uses-permission android:name="com.halo.ring.permission.READ_PLUGIN_ACTIONS" />
+
+    <permission
+        android:name="com.halo.ring.permission.SEND_PLUGIN_TRIGGER"
+        android:protectionLevel="normal"
+        android:label="@string/perm_send_plugin_trigger_label"
+        android:description="@string/perm_send_plugin_trigger_desc" />
+    <!-- Plugin apps put this on their TRIGGER BroadcastReceiver. We hold it implicitly because
+         we declared it; the system rejects any other app's sendBroadcast(...) of our action
+         unless it has this permission. (Normal level — the trigger itself is not security-
+         sensitive; this just prevents random apps from spoofing triggers to plugins.) -->
+
+    <permission
+        android:name="com.halo.ring.permission.PUSH_PROFILE"
+        android:protectionLevel="signature|privileged"
+        android:label="@string/perm_push_profile_label"
+        android:description="@string/perm_push_profile_desc" />
+    <!-- External overlay apps that want to push HUD profiles declare uses-permission for this.
+         Signature|privileged — same-cert-signed plugins (rare; the wearer manually installs
+         them) and OEM-bundled privileged plugins. Not granted to random installs.
+         Halo Ring does NOT uses-permission this one — we're the receiver, not the sender. -->
+
+    <!-- ──────────────────────────────────────────────────────────────────────────────────────
+         Package visibility for Doc/18 plugin discovery.
+         On Android 11+ (targetSdk 30+), PackageManager queries only return packages our app
+         is "visible" to. Plugins declare a BroadcastReceiver for our TRIGGER action; declaring
+         visibility for that intent surfaces them — all of a visible package's components
+         (Activity / Service / ContentProvider) become reachable, so PluginQuery can hit each
+         plugin's `content://{pkg}.halo_actions/list` provider without additional declarations.
+         ────────────────────────────────────────────────────────────────────────────────────── -->
+    <queries>
+        <intent>
+            <action android:name="com.halo.ring.action.TRIGGER" />
+        </intent>
+    </queries>
+
     <!-- BLE is functionally required, but we leave it as "not required" to keep the same APK
          installable on the GENERIC_ANDROID dev fallback (e.g. an emulator without a BLE stack).
          The runtime guards in AndroidR08BleClient.start() degrade gracefully when adapter==null. -->

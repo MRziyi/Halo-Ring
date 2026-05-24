@@ -155,7 +155,8 @@ ambient light.
 | I | **Feedback** *(new)* | Toggles for the user-facing feedback channels: gesture-hint HUD (see §10), audio click, ring-LED patterns, HUD position |
 | J | **Vitals preferences** | What to show on HUD, opt-in for auto-snapshot, CSV export |
 | K | Advanced (TBD) | Debug HUD toggle, backend status, latency-measurement mode, re-run ADB bootstrap |
-| L | About (TBD) | Version, detected device profile, credits, links to Doc/ |
+| L | **External plugins** *(Doc/18)* | Read-only directory of [Doc/18-plugin-protocol](18-plugin-protocol.md) plugins. App name + package + protocol version + action count + status. REFRESH PLUGINS CTA. Plugin actions also surface in the Action Picker's new EXTERNAL APPS group (between SYSTEM and NONE). |
+| M | About (TBD) | Version, detected device profile, credits, links to Doc/ |
 
 ### HUD overlays
 

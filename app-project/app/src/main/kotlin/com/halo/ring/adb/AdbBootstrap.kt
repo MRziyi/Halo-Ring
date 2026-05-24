@@ -13,22 +13,15 @@ import kotlinx.coroutines.withContext
  *     cached for reuse.
  *  2. **Discover** the pairing port via mDNS (`_adb-tls-pairing._tcp.`) using [AdbMdnsDiscovery].
  *  3. **Pair** with the 6-digit code the user reads off the OS pairing screen (SPAKE2 + cert
- *     exchange). **TODO** — see [pairWithCode] kdoc.
+ *     exchange) — [AdbPairingClient].
  *  4. **Discover connect port** via mDNS (`_adb-tls-connect._tcp.`).
- *  5. **Connect** over TLS using the cached keypair + cert. **TODO** — see [pushAgentDex] kdoc.
+ *  5. **Connect** over TLS using the cached keypair + cert — [AdbConnection].
  *  6. **Push** the agent dex via ADB's `sync:` service.
  *  7. **Exec** `app_process` to start the agent.
  *
- * Status at handoff time (Doc/13 §B12-real):
- *   - Keypair + cert generation: **implemented** ([AdbCrypto])
- *   - mDNS discovery: **implemented** ([AdbMdnsDiscovery])
- *   - ADB wire packet: **implemented** ([AdbMessage])
- *   - SPAKE2 pairing handshake: **TODO** — port [`AdbPairingClient.java`](../../../../../../../refs/r08remote-decompiled-v2/sources/com/ring/r08remote/adb/AdbPairingClient.java)
- *     (~800 lines of BigInteger SPAKE2 + BouncyCastle TLS). Needs hardware to validate the cipher
- *     parameters — porting blind is dangerous.
- *   - TLS-wrapped ADB connection: **TODO** — port [`AdbConnection.java`](../../../../../../../refs/r08remote-decompiled-v2/sources/com/ring/r08remote/adb/AdbConnection.java)
- *     (~800 lines). Once SPAKE2 is verified, this is mostly mechanical: connect → CNXN handshake →
- *     STLS upgrade → run the standard ADB service protocol on top.
+ * **Status: end-to-end verified on OnePlus 9 Pro / Android 14 loopback** (audit-pass-h B12-real;
+ * Doc/15 §4 documents the five blockers cleared in that session). Hardware verification on real
+ * Rokid + RayNeo glasses is C7/C8 (see Doc/13 §2 Priority C).
  */
 class AdbBootstrap(private val context: Context) {
 

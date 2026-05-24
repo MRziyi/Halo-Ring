@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Optional: PUSH_PROFILE for testing T10–T12. Halo Ring's permission is signature|privileged
+         which won't be granted to this third-party app on a stock device — that's expected; we
+         test push/pop via `adb shell am broadcast` from the shell uid, which IS privileged. -->
+
+    <application
+        android:label="@string/app_name"
+        android:allowBackup="false">
+
+        <!-- Doc/18 §3.1 — declare as a Halo Ring plugin -->
+        <meta-data
+            android:name="halo.ring.plugin_version"
+            android:value="1" />
+
+        <!-- Doc/18 §4 — ContentProvider that lists actions -->
+        <provider
+            android:name=".HaloActionsProvider"
+            android:authorities="com.halo.ring.testplugin.halo_actions"
+            android:exported="true"
+            android:readPermission="com.halo.ring.permission.READ_PLUGIN_ACTIONS" />
+
+        <!-- Doc/18 §5 — receiver for TRIGGER broadcasts.
+             Production plugins SHOULD declare `android:permission="com.halo.ring.permission.SEND_PLUGIN_TRIGGER"`
+             so only Halo Ring (the permission holder) can deliver triggers. This **test** plugin
+             omits the gate so the harness can fire test triggers via `adb shell am broadcast` —
+             shell doesn't hold custom permissions on a stock device. Real-world use is via
+             Halo Ring's own PluginTrigger code path which DOES set the permission. -->
+        <receiver
+            android:name=".HaloTriggerReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.halo.ring.action.TRIGGER" />
+            </intent-filter>
+        </receiver>
+
+        <!-- A debug helper receiver that lets `adb shell am broadcast` push/pop overlay profiles
+             into Halo Ring. We can't directly hold PUSH_PROFILE (signature) from a third-party
+             app, but `am broadcast` runs as shell uid which IS privileged. This receiver lets the
+             test harness fire those broadcasts from inside an installed-app context (Doc/18
+             T10–T12). -->
+        <receiver
+            android:name=".PushProfileTestReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.halo.ring.testplugin.PUSH" />
+                <action android:name="com.halo.ring.testplugin.POP" />
+            </intent-filter>
+        </receiver>
+    </application>
+</manifest>

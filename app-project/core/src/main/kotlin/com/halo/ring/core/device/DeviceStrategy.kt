@@ -21,24 +21,42 @@ interface GlassActionMapper {
     fun primitives(action: GlassAction): List<InjectionPrimitive>
 
     /**
-     * True if this device can actually realise [action]. Used by [com.halo.ring.ui.screens.ActionPickerScreen]
-     * to grey out the rows that would otherwise be silently no-op when bound — e.g. RayNeo X3 Pro
-     * doesn't have a known Visual-AI / Translate / Chat package yet, so binding those actions on
-     * X3 Pro would do nothing without telling the user.
+     * Three-tier honesty about what this device can actually do (audit-pass-x+1):
      *
-     * Default impl: in-app pseudo-actions (`PeekHud`, `ProfileCycle`, `ForceReconnect`, the
-     * `Enter*Modal` sentinels, and `None`) are always supported because [com.halo.ring.core.interaction.InteractionRouter]
-     * intercepts them before they reach this mapper. Everything else is supported iff
-     * [primitives] yields a non-empty list.
+     *  - [SupportLevel.SUPPORTED] — verified or near-verified working. Picker shows normally.
+     *  - [SupportLevel.BEST_EFFORT] — primitives are present but the underlying Intent/package
+     *    is unverified on this device (e.g. RayNeo X3 Pro `OpenAIAssistant` uses the standard
+     *    `VOICE_SEARCH_HANDS_FREE` Intent; may or may not surface Gemini). Picker shows a
+     *    "(beta)" tag so the user knows binding it is exploratory.
+     *  - [SupportLevel.UNSUPPORTED] — primitives are empty OR the action is a known-incomplete
+     *    skeleton (e.g. `EnterAIDictateModal` opens chat on entry but the mic-capture pipeline
+     *    isn't wired). Picker greys out + "(coming soon)".
+     *
+     * Default: in-app pseudo-actions (`PeekHud`, `ProfileCycle`, `ForceReconnect`, the
+     * `Enter*Modal` sentinels, and `None`) are SUPPORTED because [com.halo.ring.core.gesture.InteractionRouter]
+     * intercepts them before they reach this mapper. Everything else is SUPPORTED iff
+     * [primitives] yields a non-empty list, otherwise UNSUPPORTED. Per-flavor mappers override
+     * for action-specific overrides.
      */
-    fun supports(action: GlassAction): Boolean = when (action) {
+    fun supportLevel(action: GlassAction): SupportLevel = when (action) {
         GlassAction.PeekHud, GlassAction.ProfileCycle, GlassAction.ForceReconnect,
         GlassAction.EnterVolumeModal, GlassAction.EnterBrightnessModal,
         GlassAction.EnterRecentsModal, GlassAction.EnterAIDictateModal,
         GlassAction.None,
-        -> true
-        else -> primitives(action).isNotEmpty()
+        -> SupportLevel.SUPPORTED
+        // External-plugin actions (Doc/18): also intercepted in HaloRingService before reaching
+        // the mapper. Always SUPPORTED at this layer — Profile editor may overlay a "(missing)"
+        // marker if the owning plugin is no longer installed, but that's a PluginRegistry concern
+        // and not a per-device capability question.
+        is GlassAction.PluginAction -> SupportLevel.SUPPORTED
+        else -> if (primitives(action).isNotEmpty()) SupportLevel.SUPPORTED else SupportLevel.UNSUPPORTED
     }
+
+    /** Backwards-compat shim: SUPPORTED + BEST_EFFORT both count as "the picker should let the
+     *  user bind it". UNSUPPORTED greys out. Existing call sites continue to work. */
+    fun supports(action: GlassAction): Boolean = supportLevel(action) != SupportLevel.UNSUPPORTED
+
+    enum class SupportLevel { SUPPORTED, BEST_EFFORT, UNSUPPORTED }
 }
 
 /** Tiny IR. The agent supports all of these (see :agent README); other backends do their best. */

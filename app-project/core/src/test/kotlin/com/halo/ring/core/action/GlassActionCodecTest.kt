@@ -71,4 +71,58 @@ class GlassActionCodecTest {
         assertEquals("Shell:ls /a:b", GlassActionCodec.encode(a))
         assertEquals(a, GlassActionCodec.decode("Shell:ls /a:b"))
     }
+
+    // ── PluginAction (Doc/18 Halo Ring Plugin Protocol v1) ──────────────────────────────────────
+
+    @Test fun `PluginAction encodes pkg + actionId + label pipe-separated`() {
+        val a = GlassAction.PluginAction("com.constellation.glass", "voice_invoke", "Voice invoke (mic + photo)")
+        assertEquals("Plugin:com.constellation.glass|voice_invoke|Voice invoke (mic + photo)",
+            GlassActionCodec.encode(a))
+    }
+
+    @Test fun `PluginAction round-trips with its three fields`() {
+        val a = GlassAction.PluginAction("com.example", "do_thing", "Do the thing")
+        assertEquals(a, GlassActionCodec.decode(GlassActionCodec.encode(a)))
+    }
+
+    @Test fun `PluginAction label containing pipe is escaped and restored`() {
+        val a = GlassAction.PluginAction("com.x", "act", "left | right")
+        val encoded = GlassActionCodec.encode(a)
+        // Encoded form must have an escaped pipe in the label, not a raw one
+        assertEquals("Plugin:com.x|act|left \\| right", encoded)
+        assertEquals(a, GlassActionCodec.decode(encoded))
+    }
+
+    @Test fun `PluginAction label containing backslash is escaped and restored`() {
+        val a = GlassAction.PluginAction("com.x", "act", "path\\sep")
+        val encoded = GlassActionCodec.encode(a)
+        assertEquals("Plugin:com.x|act|path\\\\sep", encoded)
+        assertEquals(a, GlassActionCodec.decode(encoded))
+    }
+
+    @Test fun `PluginAction label with both backslash and pipe round-trips`() {
+        val a = GlassAction.PluginAction("com.x", "act", "a\\b|c\\|d")
+        assertEquals(a, GlassActionCodec.decode(GlassActionCodec.encode(a)))
+    }
+
+    @Test fun `PluginAction with empty pkg decodes to None (corrupted)`() {
+        // Sanity guard — empty package isn't a legal Android pkg name; treat as corrupt.
+        assertEquals(GlassAction.None, GlassActionCodec.decode("Plugin:|action|label"))
+    }
+
+    @Test fun `PluginAction with empty actionId decodes to None (corrupted)`() {
+        assertEquals(GlassAction.None, GlassActionCodec.decode("Plugin:com.x||label"))
+    }
+
+    @Test fun `PluginAction with empty label still decodes (label is optional content)`() {
+        // The label CAN be empty — plugin author may have left it blank. Don't reject.
+        val a = GlassActionCodec.decode("Plugin:com.x|act|")
+        assertEquals(GlassAction.PluginAction("com.x", "act", ""), a)
+    }
+
+    @Test fun `PluginAction with wrong field count decodes to None`() {
+        assertEquals(GlassAction.None, GlassActionCodec.decode("Plugin:only_one_field"))
+        assertEquals(GlassAction.None, GlassActionCodec.decode("Plugin:two|fields"))
+        assertEquals(GlassAction.None, GlassActionCodec.decode("Plugin:a|b|c|d_too_many"))
+    }
 }

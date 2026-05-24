@@ -1,32 +1,31 @@
 # 02 — Ring Hardware & BLE Protocol
 
-The QRing R08 smart ring is the input device. This document is the working spec for its hardware
-and the BLE protocol our app speaks to it. Everything here is **reverse-engineered** — we have not
-yet had a real ring in hand to confirm, so values are tagged by source-confidence (see §0). Phase-0
-([`../phase0/`](../phase0/)) is the script suite that turns the tags into "verified ✓ / contradicted ✗".
+The QRing R08 smart ring is the input device. This doc is the working spec for its BLE protocol.
+**Everything here is reverse-engineered**; phase-0 ([`../phase0/`](../phase0/), 10 stages, see also
+[Doc/16 — phase-0 test plan](16-phase0-test-plan.md)) turns every claim into a "✓ verified on R08
+firmware" or "✗ contradicted, here's what it actually does".
 
-## 0. Three sources, three confidence tiers
+## 0. Source-of-truth hierarchy (revised 2026-05-15)
 
-Three independent reverse-engineering sources contribute to this doc. None is sufficient alone:
+Two reverse-engineered sources matter for this project; one prior source is being phased out:
 
-| Source | Scope | Confidence on R08 | What it covers |
+| Source | What it gives us | Confidence on R08 | Role |
 |---|---|---|---|
-| **小猪遥控戒指** (`com.ring.r08remote` v2) — see [`../refs/r08remote-decompiled-v2/`](../refs/r08remote-decompiled-v2/) | **Very narrow** — only what's needed to use the R08 as a *touch remote*. Confirmed to work on real R08 hardware (the third-party-app ecosystem proves it). | 🟢 **HIGH** for what it documents; says **nothing** about ~95 % of the protocol. | 4 write commands: `TOUCH_ENABLE`, `TOUCH_DISABLE`, `TOUCH_MODE`, `BATTERY_QUERY`. Notify-frame prefixes: `0x73` (sub `0x2A` touch-status, `0x2D` gesture, `0x12` activity), `0xA1` (accel, received but **not decoded**), `0x03` (battery), `0x69` (HR/SpO2/stress), `0x51` (steps). |
-| **QRing** (`com.qcwireless.smart` — the OFFICIAL Yawell/oudmon app) — see [`../refs/qring-new-version-protocol-2026-05-15.md`](../refs/qring-new-version-protocol-2026-05-15.md) | **Broad** — the official app for the whole Colmi family. ~70 write commands + ~30 `0x73` sub-codes. | 🟡 **MEDIUM** on R08 — same firmware family (BlueX RF03), but the broader family lacks R08's touch IC, so 小猪's `73 2D` gesture path likely isn't echoed in QRing decompile and some R08-specific firmware tweaks may diverge. Officially-authoritative for everything beyond touch. | Time-sync, capability bitmap, real-time vitals (HR/SpO2/stress/BP/HRV/temp), history reads (HR/sleep/steps/HRV/stress), today's totals, find-device, reboot, ~30 `0x73` sync-trigger sub-codes (battery-low, alarms, "current HR" push, G-sensor still tick, etc.). |
-| **`tahnok/colmi_r02_client`** — community Python client (see [`../research/colmi_r02_client/`](../research/colmi_r02_client/)) | Medium — confirms QRing on the subset it implements. | 🟡 cross-check only — same source corpus as QRing. | Time, HR settings, real-time start/stop, history reads. Mostly agrees with QRing where they overlap. |
+| **QRing official** (`com.qcwireless.smart` v3.x — Yawell/oudmon SDK) | Complete protocol — ~70 write commands, ~30 `0x73` sub-codes, full request/response builder catalogue. The Yawell SDK *is* the authoritative implementation; QRing is its consumer. | 🟡 Medium. R08 shares the BlueX RF03 firmware family with the rest of the Colmi ring lineup; QRing's protocol almost certainly applies in full, but R08 may differ on the touch-IC-specific path (which QRing doesn't expose). | **Primary** — phase-0 verifies QRing first, end-to-end. |
+| **小猪遥控戒指** (`com.ring.r08remote` v2) | Touch-IC path + 4 raw gesture frames. **The only known third-party app that drives the R08 touch ring as input.** | 🟢 High *for the 7 bytes it touches* (4 write cmds + 5 notify-frame interpretations) — confirmed working on real R08 by the existence of the app. But the developer may have got there by trial-and-error, not by understanding. | **Cross-check + R08-specific addendum** — phase-0 verifies after QRing, to catch where 小猪 differs from QRing's interpretation. |
+| ~~R08-Dev.md heritage~~ | The original handoff doc claimed `0x06 = find-device`, `0x10 = blink-twice`, `0x0F = shutdown`. **None of these are backed by either decompile** — they're inherited speculation that ended up in our `R08Protocol.kt`. | 🔴 Speculation. | **Phasing out** — phase-0 Stage 9 will judge each, expected outcome is "wrong → delete". |
+| ~~`tahnok/colmi_r02_client`~~ | Community Python implementation, same source corpus as QRing. | — | **Reference only** — interesting for the R02 cross-family check, but not load-bearing for our protocol decisions. |
 
-**Phase-0 verification is the gate.** Anything not yet confirmed on real R08 stays tagged below
-with one of:
+Confidence tags used below: 🟢 R08-verified · 🟡 QRing-only (phase-0 pending) · 🔴 speculation
+(scheduled for deletion) · ⚫ undecoded by anyone.
 
-- 🟢 **R08-confirmed** — appears in 小猪 v2 (which targets R08 specifically). Trust.
-- 🟡 **Family-known** — appears in QRing/colmi for the Colmi family but **not** verified on R08 yet.
-- 🔵 **Inherited speculation** — copied from the original `R08-Dev.md` handoff doc with no extant
-  source backing. Subject to phase-0 verification (which may simply delete the entry).
-- 🔴 **Conflicting** — 小猪 and QRing disagree about what the byte means. Phase-0 must adjudicate.
+**Phase-0 verification is the gate** — see [Doc/16](16-phase0-test-plan.md) for the 10-stage flow.
+Whenever phase-0 returns a verdict, [`../app-project/core/.../ble/R08Protocol.kt`](../app-project/core/src/main/kotlin/com/halo/ring/core/ble/R08Protocol.kt)
+gets updated and the corresponding 🟡 / 🔴 tag in this doc resolves to ✓ / ✗.
 
-`R08Protocol.kt` (in [`../app-project/core/.../ble/R08Protocol.kt`](../app-project/core/src/main/kotlin/com/halo/ring/core/ble/R08Protocol.kt))
-currently mixes 🟢 + 🔵 entries without distinguishing — the audit log captures the cleanup
-direction; the constants stay as-is until phase-0 returns evidence.
+After phase-0 closes, we'll publish a clean Colmi-family protocol spec as [Doc/17 community
+contribution](17-community-protocol-spec.md) for upstream / atc1441 / colmi_r02_client to pull
+from.
 
 ## 1. Hardware identity
 
@@ -35,27 +34,27 @@ direction; the constants stay as-is until phase-0 returns evidence.
 | Product | **QRing R08** smart ring | Marketing |
 | FCC ID | `2AOM3-R08` | https://fccid.io/2AOM3-R08 |
 | Registered to | Shenzhen YaWell intelligent Technology (Yawell) | FCC |
-| Distributed as | Yawell OEM = Colmi (largest rebrand) + Hugrow, Hyper, and dozens of smaller rebrands; all share PCB + firmware | atc1441 community research |
+| Distributed as | Yawell OEM = Colmi (largest rebrand) + Hugrow, Hyper, ~dozens of smaller rebrands; all share PCB + firmware | atc1441 community research |
 | Companion app | **QRing** (App Store / Google Play) | Marketing |
 
-Hardware specs (inferred from the shared Colmi BOM list — covers R02, R03, R02/03 Pro, R06, R06
-Pro, **R08**, R09, R10, R11, R12, R15–R22; all share the PCB):
+Hardware specs (inferred from the shared Colmi BOM):
 
 | Component | Part | Notes |
 |---|---|---|
 | Main SoC | **BlueX Micro RF03** | ARM Cortex-M0, 200 KB RAM, 512 KB Flash, BLE 5.0. Datasheet in `../research/ATC_RF03_Ring/`. |
 | Accelerometer | **STK8321** (Sitronix) | 3-axis, ±2/4/8/16 g, 14-bit, I²C. Datasheet in `../research/ATC_RF03_Ring/`. |
-| PPG sensor | Vcare VC30F | Optical heart rate + SpO2. Not relevant to remote control. |
-| Touch IC | Unknown capacitive controller | **R08-specific**; the broader Colmi BOM doesn't have it. Drives the `73 2D` gesture path that only `com.ring.r08remote` consumes. |
+| PPG sensor | Vcare VC30F | Optical heart rate + SpO2. The 25-s vitals stream burns this. |
+| Touch IC | Unknown capacitive controller | **R08-specific** — the broader Colmi BOM doesn't have it. Drives the `73 2D` gesture path. |
 | Battery | LiPo 17 mAh | ~5–7 days in event mode; <1 day with always-on raw IMU |
 | Charging | Magnetic-contact cradle, USB-C | ~60–90 min full charge. BLE is **off** while charging. |
 | Water resistance | IP68 / 5 ATM | 50 m water depth |
-| LED | Green (single colour) | Controllable via BLE — exact cmd unknown until phase-0 §A7 verifies |
+| LED | Green (single colour) | Controllable via BLE — opcode pending phase-0 Stage 9 |
 | Debug | SWD (P00 = SWCK, P01 = SWD) | Internal solder pads, need to crack the ring open |
 | OTA | BLE, **unsigned**, **unencrypted** | Browser-based flasher at https://atc1441.github.io/ATC_RF03_Writer.html |
 
-⚠ Touch IC presence and R08-specific firmware paths are the **only** hardware differentiator vs
-the rest of the Colmi family. Everything else (BLE stack, sensor I²C, firmware base) is shared.
+⚠ Touch IC is the **only** hardware differentiator between R08 and the rest of the Colmi family.
+That's why QRing's decompile lacks gesture-frame parsing — QRing targets ringless / touch-less
+models too — and why 小猪 is the only third-party app speaking the `73 2D` gesture frame.
 
 ## 2. BLE GATT structure
 
@@ -75,217 +74,240 @@ GATT service    : 6E40FFF0-B5A3-F393-E0A9-E50E24DCCA9E
   00002902-0000-1000-8000-00805F9B34FB
 ```
 
-Nordic-style "UART over BLE" service layout (`fff0` family). 🟢 Confirmed both by 小猪 v2
-(`ProtocolConstants.java` L87-99) and by QRing (`Constants.java` L100-102).
+🟢 Confirmed by both QRing (`Constants.java` L100-102) and 小猪 v2 (`ProtocolConstants.java` L87-99).
+Nordic-style "UART over BLE" service layout. No encryption, no pairing key — anyone can connect;
+multi-user defence is MAC whitelist on the central. One central at a time. Charging kills BLE.
 
-- No encryption, no pairing key, **anyone can connect**. Multi-user defence is MAC whitelist on the central.
-- One central at a time. Two devices trying to grab the ring conflict.
-- Charging the ring kills BLE.
-- High bit of `byte[0]` in any response = error flag (🟡 QRing `Constants.java` L112 — not seen in 小猪).
+## 3. Frame format (write commands)
 
-## 3. Write commands
+🟢 All write commands are **16 bytes fixed**: `[0] = command code`, `[1..14] = payload (zero-
+padded)`, `[15] = checksum = sum(bytes[0..14]) & 0xFF`. Confirmed by both decompiles.
 
-All commands are **16 bytes fixed**: `[0] = command code`, `[1..14] = payload (zero-padded)`,
-`[15] = checksum = sum(bytes[0..14]) & 0xFF`. 🟢 Confirmed by both 小猪 v2 (`ProtocolConstants.java`
-L100-103) and QRing (`Constants.java` L111, `BaseReqCmd.java` L13-19).
+⚫ **Response frames carry a high-bit error flag**: `data[0] & 0x80` set = error. QRing's
+`QCDataParser.parserAndDispatchNotifyData` (Constants.java L112) masks this before dispatch. 小猪
+ignores it (which is why 小猪 sometimes silently mis-decodes errors as `Unknown` frames).
+Phase-0 Stage 0 confirms whether R08 sets the high bit on error responses.
 
-### 3.1 🟢 R08-confirmed commands (small but trusted)
+## 4. QRing-discovered commands (🟡 primary protocol; phase-0 verifies)
 
-These four are the **only** commands `com.ring.r08remote` (小猪 v2) implements. Verified by:
-the published 小猪 app works on R08 hardware in the wild → these bytes are what real R08 firmware
-honours.
+The full list lives in [`../refs/qring-new-version-protocol-2026-05-15.md`](../refs/qring-new-version-protocol-2026-05-15.md);
+below are the ones Halo Ring would actually use, ordered by phase-0 stage.
 
-| Name | Hex (16 bytes) | Checksum | Purpose | 小猪 source |
+### 4.1 Connect-time recipe (Stage 1)
+
+🟡 QRing writes these once after every (re)connect:
+
+| Hex | Name | Payload | Purpose | Verifier |
 |---|---|---|---|---|
-| `TOUCH_ENABLE` | `3B 01 00 01 01 00*10 3E` | 3B+01+00+01+01 = 3E ✓ | **Required after connecting + enabling notify.** Without this, the ring won't report touch/gesture events. | `ProtocolConstants.java:100` |
-| `TOUCH_MODE` | `3B 02 00 09 01 00*10 47` | 3B+02+00+09+01 = 47 ✓ | Send ~500 ms after `TOUCH_ENABLE`. Configures touch-report mode. | `ProtocolConstants.java:102` |
-| `TOUCH_DISABLE` | `3B 01 00 01 00 00*10 3D` | 3B+01+00+01+00 = 3D ✓ | Powers down the touch IC (the dominant ring drain). Send when the user takes off the glasses. | `ProtocolConstants.java:101` |
-| `BATTERY_QUERY` | `03 00*14 03` | 03 = 03 ✓ | Async; the ring replies with a `03 <level%>` notify frame. | `ProtocolConstants.java:103` |
+| `0x01` | `CMD_SET_DEVICE_TIME` | 7 bytes BCD `[yy-2000, MM, dd, hh, mm, ss, lang]` | Sync RTC. Required for history reads to have meaningful timestamps. | [`r08_01_qring_connect.py`](../phase0/r08_01_qring_connect.py) |
+| `0x3C` | `CMD_DEVICE_FUNCTION_SUPPORT` | (read-only) | 9-byte capability bitmap. Gates which features are available on this firmware. | `r08_01_qring_connect.py` |
 
-Notes:
-- 小猪 v2 polls `BATTERY_QUERY` every **10 minutes** (`BATTERY_QUERY_INTERVAL = 600000`), not 30 min
-  as earlier drafts of this doc claimed. Our current `AndroidR08BleClient` uses 30 min — phase-0 §A6
-  will tell us whether the more frequent 10-min poll matters.
+After the response from `0x3C`, we'd know which of the optional commands below are even meaningful
+to send.
 
-### 3.2 🟡 Family-known commands (QRing-discovered; need phase-0 to confirm on R08)
+### 4.2 One-shot active queries (Stage 2)
 
-QRing implements ~70 cmds. The handful below are the ones we'd actually want for Halo Ring — none
-verified on R08 yet. Cited paths refer to QRing decompile under
-`/tmp/qring-decompiled/sources/com/oudmon/...` (full report: [`../refs/qring-new-version-protocol-2026-05-15.md`](../refs/qring-new-version-protocol-2026-05-15.md)).
+🟡 Three single-write commands with response notifications:
 
-| Hex | Name | Purpose | Phase-0 test | QRing source |
+| Hex | Name | Response | Purpose | Verifier |
 |---|---|---|---|---|
-| `0x01` | `CMD_SET_DEVICE_TIME` | Sync ring's RTC. Payload = 7 bytes BCD `[yy-2000, MM, dd, hh, mm, ss, lang]`. Required for any history read to return useful timestamps. | §B "phase B" in `r08_verify_qring.py` — write once, observe ACK frame `01 …`. | `SetTimeReq.java`, `Constants.java:9` |
-| `0x03` battery RSP | (response, not write) | QRing parses `03 <level> <charging>` — the charging byte. 小猪 ignores byte [2]. | §A passive observation: does the battery frame carry 3 bytes or 2? | `BatteryRsp.java:8-13` |
-| `0x08 01` | `CMD_RE_BOOT` | Soft reboot. Used in QRing `SystemSettingActivity.java:60`. | §B with explicit confirmation gate (ring disconnects briefly). | `Constants.java:78`, `SimpleKeyPowerOffReq.java:6` |
-| `0x16` | `CMD_HR_TIMING_MONITOR_SWITCH` | Read/write auto-HR-monitor cadence. Payload: `{1}` to read, `{2, enable, intervalMin, startHr, low, high, switch}` to write. **The ring is cadence master, not the phone.** | Not in `r08_verify_qring.py` yet — add later when we have a use case for background HR. | `HeartRateSettingReq.java` |
-| `0x3C` | `CMD_DEVICE_FUNCTION_SUPPORT` | Read-only. Response = 9-byte capability bitmap exposing 28+ feature flags (touch, gesture, real-time HR, ECG, sleep, etc.). **Should be called once per connect** to gate UI on what firmware actually supports. | §B in `r08_verify_qring.py` — write `3C …`, observe `3C <9 bytes>` response. | `DeviceSupportReq.java`, `DeviceSupportFunctionRsp.java:60-136` |
-| `0x48` | `CMD_GET_STEP_TODAY` | Canonical today-totals query. Response = 14 bytes BE: `[steps, running-steps, calories, distance(m), duration(min)]`. **More authoritative than waiting for `73 12` push** (which is just a sync hint). | §B in `r08_verify_qring.py` — write `48 …`, observe `48 <14 bytes>`. | `TodaySportDataRsp.java:7-22` |
-| `0x50 AA AA` | `CMD_ANTI_LOST_RATE` | **QRing's actual find-device command.** Triggers vibration + LED blink. (QRing uses `MineFragment.java:3872`.) | §B in `r08_verify_qring.py` — does the ring vibrate / LED blink? | `FindDeviceReq.java:11` |
-| `0x69 <kind> 01` | `CMD_START_HEART_RATE` (universal) | **Universal real-time vitals start.** `kind`: 1=HR, 2=BP, 3=SpO2, 4=Fatigue, 5=HealthCheck, 6=RealtimeHR, 7=ECG, 8=Pressure/stress, 9=BloodSugar, 10=HRV, 11=Temp. **All measurement screens run 25 s, not 3 s** as our [R08Protocol.kt](../app-project/core/src/main/kotlin/com/halo/ring/core/ble/R08Protocol.kt) currently assumes. Tick = 500 ms. | `r08_health_probe.py` (new) — start HR, log every notify for 30 s, see when ring goes quiet on its own vs. when we issue stop. | `StartHeartRateReq.java:1-46`, timing per `HeartActivity.java:415-481` |
-| `0x6A <kind> <last> <opt>` | `CMD_STOP_HEART_RATE` | Stop the stream. Payload carries the last sampled value (for HR: `[kind, value, 0]`; for BP: `[kind, sbp, dbp]`). | Same as above. | `StopHeartRateReq.java:1-56` |
+| `0x48` | `CMD_GET_STEP_TODAY` | 14 bytes BE: `[steps, running-steps, calories, distance(m), duration(min)]` | Canonical today's totals query (more authoritative than waiting for the `73 12` push hint). | [`r08_02_qring_oneshot.py`](../phase0/r08_02_qring_oneshot.py) |
+| `0x50 AA AA` | `CMD_ANTI_LOST_RATE` | (vibration + LED) | QRing's "find device" — should vibrate + LED-blink the ring. | `r08_02_qring_oneshot.py` |
+| `0x08 01` | `CMD_RE_BOOT` | (disconnect+reconnect) | Soft reboot. | `r08_02_qring_oneshot.py` (gated) |
 
-### 3.3 🔴 Conflicting opcodes — 小猪 has these constants, QRing has different meanings
+### 4.3 Passive sync triggers — the `0x73 <sub>` namespace (Stage 3)
 
-`R08Protocol.kt` defines three more commands inherited from the original `R08-Dev.md` handoff doc.
-**Neither 小猪 v2 source nor QRing source supports the names we gave them**, but they may still
-work the way our doc claims if R08's firmware happens to interpret them that way. Phase-0 §C in
-[`r08_verify_qring.py`](../phase0/r08_verify_qring.py) tests each one carefully (with the
-dangerous one — `0x0F` — gated behind a `YES` confirmation since it may trigger OTA bootloader
-mode that requires the web flasher to recover from).
+🟡 QRing's `HealthyFragment.java:367-705` dispatches on `data[1]` for sync-trigger frames the ring
+pushes spontaneously. R08 emits a subset of these depending on firmware + user settings — phase-0
+Stage 3 (60 s × 3 conditions of passive observation) catalogues which subset.
 
-| Hex | Halo Ring assumption (R08-Dev.md heritage) | QRing's name | Risk | Phase-0 test |
-|---|---|---|---|---|
-| `0x06` | `FIND_DEVICE` — blink LED ~10 s | `CMD_MUTE` (DnD) | Low: ring goes mute instead of blinking, no damage. | §C in `r08_verify_qring.py` — watch for LED blink for 12 s after send. |
-| `0x10` | `BLINK_TWICE` — quick 2-blink LED | `CMD_BIND_SUCCESS` (first-bind ACK only) | Low: silent / no visible action. | §C — watch for 2 blinks within 2 s. |
-| `0x0F` | `SHUTDOWN` — power off | `TO_OTA` — switch to firmware-flasher bootloader | **HIGH** — if QRing is right, the ring enters OTA mode and needs https://atc1441.github.io/ATC_RF03_Writer.html to recover. | §C gated behind explicit `YES` confirmation; can be skipped. Test alongside QRing's `0x08 01` (which IS a real soft reboot). |
+| `data[1]` | Meaning | Decode | Importance to Halo Ring |
+|---|---|---|---|
+| `0x01` | New manual-HR record | (pull HR history via `0x15`) | Low |
+| `0x04` | New step detail | (pull step history via `0x43`) | Low |
+| `0x0C` (12) | **Battery low warning** | (auto-query battery via `0x03`) | High — replaces polling with push |
+| `0x10` (16) | Daily target reached | (re-read goal via `0x21`) | Low |
+| `0x11` (17) | Step increment | `data[2]` = increment | Medium — finer than `73 12` |
+| `0x12` (18) | Activity total sync hint | (re-query via `0x48` for authoritative) | Confirmed via 小猪; also re-listed here for completeness |
+| `0x2B` (43) | New HRV record | (pull HRV via `0x39`) | Low |
+| `0x2C` (44) | New stress record | (pull via `0x37`) | Low |
+| `0x30` (48) | **"Lover double-tap"** | (no payload) | **HIGH** — if R08 emits this on a physical double-tap, the app-side combo window (~280 ms latency) becomes redundant for that one gesture |
+| `0x31` (49) | "Current HR is X" reminder | `data[1] (sub-byte +1)` = bpm | Medium — passive HR readout without burning PPG |
+| `0x34` (52) | Alarm-ring event | (app shows alarm dialog) | Low |
+| `0x3D` (61) | Temperature alarm | `((data[2]<<8)\|data[1])/10.0` °C | Low |
+| `0x3E` (62) | **G-sensor still-time tick** | (no payload?) | **HIGH** — likely "ring not moving" signal → use as wear-state / power-gate input |
+| `0x3F` (63) | ECG connect state | `data[1]` = state | Skip (no ECG UI) |
 
-Working hypothesis: 小猪 was originally based on a 2022-era predecessor of QRing where these
-opcodes did mean what our `R08Protocol.kt` claims; QRing has since refactored. Or: the original
-R08-Dev.md handoff doc was simply wrong and 小猪 inherited the error without consequence (since
-nobody clicks "Shutdown ring" in a remote-control app). Phase-0 will tell us.
+### 4.4 Real-time vitals (Stage 5)
 
-## 4. Notify frames (ring → central)
+🟡 Universal `0x69 / 0x6A` protocol per QRing `StartHeartRateReq.java` + `HeartActivity.java:415-481`.
+All measurement screens use **25 s** countdown with 500 ms tick — not 3 s as
+[`R08Protocol.kt`](../app-project/core/src/main/kotlin/com/halo/ring/core/ble/R08Protocol.kt)
+currently assumes.
 
-The ring pushes events over the notify char. Length varies (2–16 bytes typically). Disambiguate
-by `data[0]` (and sometimes `data[1]`). High bit of `data[0]` = error flag (mask before dispatch).
-
-### 4.1 🟢 R08-confirmed frame catalogue (from 小猪 v2)
-
-These frames are what 小猪 v2 actively parses (`DataParser.java`, `GestureParser.java`):
-
-| `data[0]` | `data[1]` | Length | Meaning | Payload decode |
-|---|---|---|---|---|
-| `0x73` ('s') | `0x2D` ('-') | ≥ 3 | **Control gesture** (R08-specific touch IC firmware path; not seen in QRing decompile) | `data[2]`: `0x01`=swipe up, `0x02`=swipe down, `0x03`=single touch, `0x04`=long press |
-| `0x73` | `0x2A` ('*') | ≥ 3 | Touch enable/disable echo | `data[2] == 0` → touch IC enabled (`DataParser.java:36-37`) |
-| `0x73` | `0x12` | ≥ 11 | Activity counters | `[2..4]` steps BE 24-bit, `[5..7] / 1000` calories, `[8..10] / 1000` distance (raw int is metres; divided value is km despite the historical `distanceMeters` field name — `DataParser.java:50-53`). **🟡 byte-order verification needed**: 小猪 source confirms steps & calories are BE, distance is also BE (data[8]=MSB, data[10]=LSB). |
-| `0xA1` (161) | — | 16 (fixed) | Accelerometer raw | 6 payload bytes at `data[2..7]`. **小猪 reads them but does not decode** (`DataParser.java:58-69`). **QRing does not decode either**. Likely `(x_lo, x_hi, y_lo, y_hi, z_lo, z_hi)` signed-16 pairs from STK8321; phase-0 §A2 will calibrate by physical motion. |
-| `0x03` | — | ≥ 2 | Battery percentage | `data[1]` = battery %. 🟡 QRing extends: `data[2]` = isCharging (0/1). 小猪 ignores byte [2]. Phase-0 §A confirms whether R08 firmware actually populates [2]. |
-| `0x69` ('i') | `1` / `3` / `8` | ≥ 4 | Real-time health reading | `data[3]` = value: kind 1 = HR (bpm), 3 = SpO2, 8 = stress. Only valid if value > 0. 🟡 QRing adds: `data[2]` = errCode where 1 = "not worn properly" (`StartHeartRateRsp.java:18-22`). 小猪 doesn't check this. Phase-0 §D probes by removing the ring during a vitals stream. |
-| `0x51` (81) | — | ≥ 3 | Steps only | `data[1] \| (data[2] << 8)` (little-endian 16-bit) per 小猪 `DataParser.java:92`. ⚠ Note: QRing repurposes `0x51` as `CMD_LOVER_EVENT`. 小猪's interpretation is what we trust on R08 since it's an inbound R08 frame. |
-
-### 4.2 🟡 QRing-only frames (family-broad; presence on R08 needs phase-0 confirmation)
-
-QRing decodes ~30 more `0x73 <sub>` "sync trigger" frames the ring pushes when an internally-stored
-measurement is ready. None of these are in 小猪 because 小猪 is a touch-remote app and doesn't
-care about health. Whether the R08 firmware actually emits these depends on the auto-monitor
-settings (`0x16` / `0x2C` / `0x36` / `0x38`) — most are factory-default OFF.
-
-Common subset (full catalogue in [`../refs/qring-new-version-protocol-2026-05-15.md`](../refs/qring-new-version-protocol-2026-05-15.md)):
-
-| `data[1]` | Meaning | Decode |
+| Hex | Action | Payload |
 |---|---|---|
-| `0x01` | New manual-HR record stored | (sync trigger — pull HR history via `0x15`) |
-| `0x0C` (12) | **Battery low warning** | (we'd auto-query battery in response) |
-| `0x10` (16) | Daily target reached | (re-read goal via `0x21`) |
-| `0x11` (17) | Step increment | `data[2]` = inc count |
-| `0x12` (18) | Activity total sync hint | Same as the 0x73 0x12 we already decode |
-| `0x30` (48) | "Lover double-tap" event | ⚠ R08-specific firmware MIGHT emit this for double-touch on the touch IC; phase-0 §A check |
-| `0x31` (49) | "Current HR is X" reminder | `data[1]` (after sub-byte) = bpm |
-| `0x34` (52) | Alarm-ring event | (app shows alarm dialog) |
-| `0x3D` (61) | Temperature alarm | `((data[2] << 8) \| data[1]) / 10.0` °C |
-| `0x3E` (62) | **G-sensor still-time tick** | Possibly the closest signal to "ring sitting still / wearer not moving" — relevant for power gating. Phase-0 §A check for presence. |
+| `0x69 <kind> 01` | Start streaming | kind: 1=HR, 2=BP, 3=SpO2, 4=Fatigue, 5=HealthCheck, 7=ECG, 8=Pressure/stress, 9=BloodSugar, 10=HRV, 11=Temp. (Action constants: 1=START, 2=PAUSE, 3=CONTINUE, 4=STOP.) |
+| `0x6A <kind> <last> <opt>` | Stop streaming | `last` = last sampled value (for HR/SpO2/stress); for BP, `(sbp, dbp)` |
 
-Phase-0 §A passive observation will tabulate which of these the R08 firmware actually emits.
+🟡 Response frame `0x69 <kind> <err> <value>`:
+- `err = 0` → reading is valid; `data[3]` = bpm / % / index
+- `err = 1` → **"not worn properly"** → free wear-detection signal. Halo Ring can opportunistically
+  flip its WearStateProvider to off-finger when this fires mid-stream. Tested by
+  [`r08_05_vitals.py --wear-test`](../phase0/r08_05_vitals.py).
 
-### 4.3 No richer gestures from firmware
+⚠ Power: 25 s of PPG LED ≈ 0.02 mAh per snapshot. Sustainable ≤ 1 / hour. Continuous would dead the
+17 mAh battery in hours. See [06 §3.4](06-performance-and-power.md).
 
-`com.ring.r08remote` (小猪) synthesises double-tap, triple-tap, combos **entirely on the app
-side** — the ring firmware only ever reports the 4 raw gestures (TOUCH / LONG_PRESS / SWIPE_UP /
-SWIPE_DOWN). The original R08-Dev.md speculated about "swing"/in-air gestures being recognised in
-firmware; **they aren't**. The accelerometer at `0xA1` is being pushed continuously but the
-encoding hasn't been decoded by anyone publicly (small mystery; phase-0 §A2 action item).
+### 4.5 Auto-monitor cadence settings (Stage 6)
 
-**There MAY be a hardware double-tap path** via the QRing `0x73 0x30` ("lover double-tap") frame —
-if the R08 touch firmware emits this, our app could short-circuit double-tap recognition for a
-~200 ms latency improvement. Phase-0 §A check.
+🟡 **The ring is the cadence master**, not the phone. We tell it "measure HR every 30 min" via
+`0x16`; the ring measures internally, stores the result, and emits a `73 01` sync trigger to tell
+the phone to come read.
 
-## 5. Connection lifecycle (the recipe)
+| Hex | Subject | Read payload | Write payload | Source |
+|---|---|---|---|---|
+| `0x16` | HR auto-monitor | `{1}` | `{2, enable, intervalMin, startHr, low, high, mainSwitch}` | `HeartRateSettingReq.java` |
+| `0x2C` | SpO2 auto-monitor | `{1}` | `{2, enable[, intervalMin]}` | `BloodOxygenSettingReq.java` |
+| `0x36` | Stress auto-monitor | `{1}` | `{2, enable}` | `PressureSettingReq.java` |
+| `0x38` | HRV auto-monitor | `{1}` | `{2, enable}` | `HrvSettingReq.java` |
 
-This is what 小猪 v2 (`DeviceBindingRepository.java` — to be confirmed) does on every connect.
-Times in milliseconds after each step:
+### 4.6 History reads (Stage 8)
+
+🟡 Multi-packet streams. First response packet (`<cmd> 00 <pktCount> <range>`) is the header,
+subsequent are data, terminator is `<cmd> FF` (no data) or `<cmd> <pktCount-1>` (final).
+
+| Hex | Subject | Payload | Records | Source |
+|---|---|---|---|---|
+| `0x15` | HR history | 4-byte LE midnight unix-time | 288 samples/day (5-min bins) → ~24 packets | `ReadHeartRateReq.java`, `ReadHeartRateRsp.java:17-52` |
+| `0x39` | HRV history | 1 byte day index | 13 samples/packet, 30-min bins | `HRVRsp.java:13-50` |
+| `0x37` | Stress history | 4-byte LE time + `[0, 50]` | identical shape to HRV | `PressureRsp.java:13-50` |
+| `0x43` | Step history | `[dayOff, 0x0F, segLo, segHi, 0x01]` | 96 records/day (15-min bins) | `ReadDetailSportDataRsp.java:9-43` |
+| `0x44` | Sleep history | `[dayOff, segLo, segHi]` | Q-staged sleep records | `ReadSleepDetailsRsp.java:8-37` |
+
+## 5. 小猪-cross-check commands (🟢 R08-specific; small subset)
+
+These are the 4 write commands that 小猪 v2 implements (`ProtocolConstants.java` L100-103).
+Confirmed working on R08 by the existence of the 小猪 app. **But** 小猪's developer reverse-
+engineered an even older 2022-era QRing, so the byte interpretations may be coincidentally correct
+rather than authoritatively so. Phase-0 Stage 4 verifies each on R08 firmware against QRing's
+broader naming.
+
+| Name | Hex (16 bytes) | 小猪 source | Cross-check vs QRing |
+|---|---|---|---|
+| `TOUCH_ENABLE` | `3B 01 00 01 01 00*10 3E` | `ProtocolConstants.java:100` | QRing has `0x3B CMD_DEVICE_TOUCH` (`TouchControlReq.java`) but with a different payload schema — `{02, mode, appType, strength}`. **Phase-0 must check whether R08 even responds to QRing's schema**, or whether 小猪's R08-specific framing is mandatory. |
+| `TOUCH_MODE` | `3B 02 00 09 01 00*10 47` | `ProtocolConstants.java:102` | Likely R08-specific; QRing does not have this byte sequence. |
+| `TOUCH_DISABLE` | `3B 01 00 01 00 00*10 3D` | `ProtocolConstants.java:101` | Mirror of TOUCH_ENABLE. |
+| `BATTERY_QUERY` | `03 00*14 03` | `ProtocolConstants.java:103` | 🟢 confirmed both sources. QRing parses response as `03 <level> <charging>`; 小猪 only reads `<level>`. Phase-0 Stage 1 confirms whether the charging byte is present. |
+
+### 5.1 Notify frames 小猪 decodes (🟢; cross-checked with QRing)
+
+These five prefixes are what 小猪's `DataParser.java` actively decodes.
+
+| `data[0]` | Length | 小猪 interpretation | QRing interpretation | R08 verdict |
+|---|---|---|---|---|
+| `0x73 0x2A` | ≥3 | TouchStatus: `data[2]==0` → enabled | **Not in QRing's `0x73` sub-code list** — R08-specific to the touch IC | Trust 小猪; phase-0 Stage 4 confirms |
+| `0x73 0x2D` | ≥3 | Gesture: `data[2]` = swipe-up(1) / swipe-down(2) / touch(3) / long-press(4) | **Not in QRing's list** | Trust 小猪; phase-0 Stage 4 confirms |
+| `0x73 0x12` | ≥11 | Activity: steps[2..4] BE, calories[5..7] BE /1000, distance[8..10] BE /1000 | Same prefix, but QRing treats it as a sync-trigger only; canonical totals come from `0x48` | Trust 小猪 for the byte layout, but prefer `0x48` for queries |
+| `0x03` | ≥2 | Battery: `data[1]` = % | QRing adds: `data[2]` = isCharging | Trust QRing's extension; phase-0 Stage 1 confirms |
+| `0x69` | ≥4 | Health: `data[3]` = value (kind in `data[1]`) | QRing adds: `data[2]` = errCode (1 = "not worn") | Trust QRing's extension; phase-0 Stage 5 confirms |
+| `0x51` | ≥3 | Steps-only LE-16: `data[1] \| (data[2]<<8)` | QRing repurposes `0x51` as `CMD_LOVER_EVENT` | Trust 小猪 for R08 (R08 emits this as steps-only; QRing's interpretation is for a different model's firmware) |
+| `0xA1` | 16 fixed | Accelerometer raw — **reads but does not decode** (`DataParser.java:58-69`) | QRing also doesn't decode | ⚫ unknown by anyone publicly. Phase-0 Stage 7 characterises. |
+
+### 5.2 Timing constants from 小猪 (cross-check)
+
+- `BATTERY_QUERY_INTERVAL = 600_000 ms` (10 min) — `ProtocolConstants.java:18`. Our code uses 30 min;
+  phase-0 Stage 3 passive observation will tell us if the ring runs out of fresh battery readings
+  with the longer interval.
+- `DEDUP_INTERVAL = 100 ms` — `ProtocolConstants.java:25`. Phase-0 Stage 4 measures the actual
+  inter-tap floor and tightens / loosens.
+- `MULTI_TAP_TIMEOUT = 400 ms` — `ProtocolConstants.java:36`. Our gesture synthesiser uses 280 ms;
+  worth measuring real human distribution to choose properly.
+
+## 6. Contested opcodes (🔴; phase-0 Stage 9 judges)
+
+These three live in our `R08Protocol.kt` but appear in **neither** 小猪 nor QRing source. Inherited
+from the original R08-Dev.md handoff doc with no extant backing.
+
+| Hex | R08-Dev.md heritage | QRing's name | Risk | Status |
+|---|---|---|---|---|
+| `0x06` | `FIND_DEVICE` (blink LED ~10 s) | `CMD_MUTE` (DnD) | Low — recoverable | ☐ phase-0 Stage 9 tests via `r08_09_contested.py --probe 0x06` |
+| `0x10` | `BLINK_TWICE` (quick 2-blink) | `CMD_BIND_SUCCESS` (silent ACK) | Low — recoverable | ☐ phase-0 Stage 9 tests via `r08_09_contested.py --probe 0x10` |
+| `0x0F` | `SHUTDOWN` (power off) | `TO_OTA` (firmware-flasher mode) | 🛑 **DO NOT TEST** | **No known-good R08 firmware backup exists.** If QRing's interpretation is correct, sending `0x0F` puts the ring into OTA bootloader and we have nothing to flash back. Stage 9 deliberately does NOT include a `0x0F` probe. The opcode stays out of `R08Protocol.kt` regardless. |
+
+`0x06` and `0x10` are the only two contested opcodes phase-0 verifies. `0x0F` is treated as
+permanently-unresolved-by-design until either (a) a working R08-firmware OTA `.bin` is published,
+or (b) we sniff QRing-app traffic and observe what it sends — neither path is in scope right now.
+
+The phase-0 verdict for `0x06` / `0x10` is the final word; the heritage column gets deleted
+regardless of outcome.
+
+## 7. Connection lifecycle (post-verification target)
+
+Once phase-0 confirms which commands R08 honours, the connect recipe becomes:
 
 ```
 connectGatt(autoConnect = true)
-on STATE_CONNECTED →
-  discoverServices()
-
+on STATE_CONNECTED → discoverServices()
 on services discovered →
   setCharacteristicNotification(NOTIFY_CHAR, true)
   writeDescriptor(CCCD, ENABLE_NOTIFICATION_VALUE)
-+800 ms →
-  writeCharacteristic(WRITE_CHAR, TOUCH_ENABLE)
+
++800 ms (settle) →
+  writeCharacteristic(0x01 SetTime)             // 🟡 confirm Stage 1
++150 ms →
+  writeCharacteristic(0x3C DeviceFunctionSupport) // 🟡 confirm Stage 1
++300 ms (await capability response) →
+  writeCharacteristic(0x3B TOUCH_ENABLE)        // 🟢 R08-specific
 +500 ms →
-  writeCharacteristic(WRITE_CHAR, TOUCH_MODE)
+  writeCharacteristic(0x3B TOUCH_MODE)          // 🟢
 +1500 ms →
-  queryBattery()  (first sample)
-  startBatteryPoll(every 10 min per 小猪; we use 30 min — phase-0 §A6 to revisit)
-
-  startRssiPoll(every 5 s)  (for HUD signal indicator)
-
-  (optional) request a short connection interval (~15–30 ms) for low latency.
-  Relax to ~100–200 ms after N seconds idle. See 06-performance-and-power.md §3.
+  writeCharacteristic(0x03 BATTERY_QUERY)       // 🟢
+  startBatteryPoll(every 10 min per 小猪 / 30 min current code — phase-0 Stage 3 picks)
+  startRssiPoll(every 5 s)
+  request CONNECTION_PRIORITY_HIGH (~15-30 ms interval) → relax after 10 s idle
 ```
 
-QRing additionally writes `0x3C` (capability query) and `0x01` (set-time) on first connect.
-**If we adopt these, they should fire right after the touch init** so the rest of the connect
-flow has the capability bitmap available — phase-0 §B will tell us if R08 honours them at all
-(if it doesn't, we just skip the writes).
+Disconnect: rely on `autoConnect`. App-level continuous scanning is a power killer. On reconnect,
+arm `armWakeSwallow()` in the synthesiser (Doc/05 §3.4).
 
-On disconnect:
-- Don't actively re-scan; rely on `autoConnect`. App-level continuous scanning is a power killer.
-- On the next reconnect, arm the **wake-swallow** in the gesture synthesiser — the user's first
-  one or two TOUCH events may be the "double-tap to wake the ring from auto-sleep", not intent.
-  See [05-interaction-design.md](05-interaction-design.md) §3.4.
+## 8. De-duplication
 
-## 6. De-duplication (critical, easy to get wrong)
+🟢 Both decompiles agree on `DEDUP_INTERVAL = 100 ms` — but it's a guess. Phase-0 Stage 4 measures
+the actual minimum inter-tap interval (~30 fast taps in a row) and the byte-pattern of repeated
+frames (any counter byte?), then sets the dedup window to `min_observed − 10 ms` or "drop only on
+exact match within ~50 ms" if a counter byte exists.
 
-Because gestures are repeats of the same packet bytes (e.g. two real taps both look like
-`73 2D 03`), naïve "drop identical packet" de-duplication is dangerous: a fast human double-tap
-(say 150 ms apart) would have its second tap dropped, breaking the double-tap gesture.
+## 9. Errata against `R08-Dev.md` heritage
 
-🟢 小猪 v2 uses **`DEDUP_INTERVAL = 100`** ms (`ProtocolConstants.java:25`) — barely below the
-human double-tap minimum (~120–300 ms). Works **most** of the time. We do better:
+Discarded claims (all from the original handoff doc, no source backing):
+- ~~`0x06` = find-device~~ → see §6
+- ~~`0x10` = blink-twice~~ → see §6
+- ~~`0x0F` = shutdown~~ → see §6
+- ~~`0x08` = battery query~~ → actually soft-reboot per QRing
+- ~~Firmware-recognised double-tap~~ → app-side timing (but `0x73 0x30` may give us a true
+  firmware-side double-tap; phase-0 Stage 3 checks)
+- ~~Swing/in-air gestures in firmware~~ → no, those are 0xA1 accel push, encoding unknown
 
-1. Phase-0 §A1 measures the inter-tap interval distribution for real fast taps on your ring.
-2. We also check if the ring's notify packets contain any varying byte (counter / timestamp). If
-   yes, de-dup is trivial: drop only byte-for-byte identical packets within ~50 ms.
-3. If no varying byte, use a tight window — based on the measurement, probably 40–60 ms.
+## 10. Phase-0 verification map
 
-The dedup belongs in the BLE client layer (`AndroidR08BleClient`), not the gesture synthesiser.
-The synthesiser has an optional `minRawIntervalMs` defence-in-depth knob (default off).
+Every claim above resolves through one of the 10 phase-0 stages. See
+[Doc/16 — phase-0 test plan](16-phase0-test-plan.md) for the full stage-by-stage protocol and the
+matching scripts in [`../phase0/`](../phase0/).
 
-## 7. Errata vs `R08-Dev.md` (and now vs current `R08Protocol.kt`)
-
-The original `R08-Dev.md` handoff claimed several command bytes that turn out **not to be backed
-by either source we've decompiled**. They live in `R08Protocol.kt` as 🔵 *inherited speculation*.
-Documented in detail in [12-research-and-references.md](12-research-and-references.md) §4. Quick
-list:
-
-- Battery is `0x03`, not `0x08` (`0x08` is **soft reboot** per QRing `Constants.java:78`; the
-  original `R08-Dev.md` was wrong, and `R08Protocol.kt` reflects the corrected mapping).
-- Gesture command codes are `0x73 0x2D 0x01-04`, not the `0x70-7F` range.
-- Swing / in-air gestures **do not** exist in firmware; the original doc's "swing → camera" mapping
-  is recreated in the app as a double-tap + swipe combo.
-- "Double-tap is firmware-recognised" — also false (mostly). All multi-tap counting is app-side
-  timing. The QRing `0x73 0x30` "lover double-tap" frame is the one exception worth phase-0'ing.
-- 🔵 **`FIND_DEVICE = 0x06` / `BLINK_TWICE = 0x10` / `SHUTDOWN = 0x0F`** — not in 小猪 v2 source;
-  QRing names them mute / bind-success / OTA-switch instead. Phase-0 §C will adjudicate.
-
-## 8. Phase-0 verification map
-
-| Question | Phase-0 script + section | Resolves what |
+| Stage | Resolves | Script |
 |---|---|---|
-| Does the ring really advertise `R08_xxxx` over service `6E40FFF0`? | `r08_probe.py` opening lines | §2 |
-| Does the TOUCH_ENABLE / TOUCH_MODE / BATTERY init sequence work? | `r08_probe.py` (acceptance criteria) | §3.1, §5 |
-| What are the four raw gesture frames timed like for fast double-tap? | `r08_probe.py --record` then analyse CSV | §6 |
-| Does `0xA1` accelerometer appear, and what's the byte layout? | `r08_probe.py --record` motion patterns; planned `r08_health_probe.py --accel` | §4.1 |
-| Does battery `03` carry the QRing-claimed charging byte? | `r08_verify_qring.py` §A passive | §4.1 |
-| Does `0x73 0x3E` (G-sensor still-tick) appear? Other QRing-only `0x73` sub-codes? | `r08_verify_qring.py` §A | §4.2 |
-| Does `0x3C` capability query / `0x48` today-totals / `0x01` set-time work on R08? | `r08_verify_qring.py` §B | §3.2 |
-| Does `0x50 AA AA` actually blink + vibrate the ring? | `r08_verify_qring.py` §B | §3.2 |
-| What does our `0x06` / `0x10` / `0x0F` actually do on R08? | `r08_verify_qring.py` §C (with safety gates) | §3.3 |
-| Does `0x69 01 01` start a 25-s HR stream, with `errCode=1` when off-finger? | `r08_health_probe.py` (planned) | §3.2, §4.1 |
+| 0 — Sanity | §2 GATT, §3 frame format error flag | `r08_00_scan.py` |
+| 1 — QRing connect recipe | §4.1, §5.1 battery charging byte | `r08_01_qring_connect.py` |
+| 2 — QRing one-shots | §4.2 | `r08_02_qring_oneshot.py` |
+| 3 — Passive `0x73` | §4.3 sync-trigger fanout | `r08_03_passive.py` |
+| 4 — 小猪 touch + gestures | §5 + §8 dedup window | `r08_04_xiaozhu.py` |
+| 5 — Vitals stream | §4.4 timing + errCode wear | `r08_05_vitals.py` |
+| 6 — Auto-monitor settings | §4.5 ring-cadence-master verification | `r08_06_auto_monitor.py` |
+| 7 — Accelerometer | §5.1 `0xA1` layout | `r08_07_accel.py` |
+| 8 — History reads | §4.6 | `r08_08_history.py` |
+| 9 — Contested opcodes | §6 | `r08_09_contested.py` |
 
-After phase-0 closes, every 🟡 / 🔴 / 🔵 tag in this doc should resolve to ✓ / ✗, and the next
-audit pass updates `R08Protocol.kt` accordingly.
+When phase-0 closes, [Doc/17 community protocol spec](17-community-protocol-spec.md) gets filled
+in with the verified bytes, ready to ship as a community contribution to atc1441 / colmi_r02_client
+upstreams.

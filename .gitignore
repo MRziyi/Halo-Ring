@@ -52,6 +52,9 @@ keystore.properties
 __pycache__/
 *.pyc
 phase0/.venv/
+# Per-session phase-0 outputs (verdict blocks + recorded CSVs) — local-only
+phase0/verdicts/
+phase0/*.csv
 
 
 # ───────── Profiling / debug ─────────────────────────────────────────────────
@@ -73,3 +76,6 @@ research/
 
 # Claude per-project local settings (memory lives outside the repo, in ~/.claude/projects/).
 .claude/
+
+
+refs/sdks/rayneo/extracted

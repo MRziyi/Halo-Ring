@@ -10,9 +10,14 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.halo.ring.R
 import com.halo.ring.ui.FocusableRow
 import com.halo.ring.ui.HaloColors
@@ -23,7 +28,10 @@ import com.halo.ring.ui.SettingsCatalog
 import com.halo.ring.ui.hud.actionFriendlyText
 import com.halo.ring.ui.hud.gestureFriendlyText
 import com.halo.ring.core.action.GlassAction
+import com.halo.ring.core.device.GlassActionMapper
 import com.halo.ring.core.gesture.Gesture
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * Settings → Profiles → <Profile> → <Gesture>: pick a [GlassAction] (mockup §3 E action picker).
@@ -42,7 +50,23 @@ fun ActionPickerScreen(
     // Audit-pass 2026-05-13t: query the active GlassActionMapper to find actions that have no
     // device-side implementation (e.g. RayNeo X3 Pro has no known Visual-AI / Translate / Chat
     // package yet). Grey those out + "(coming soon)" so users don't bind a silent no-op.
-    val mapper = LocalAppGraph.current?.mapper
+    // Audit-pass-x+1: also surface BEST_EFFORT (verified-bindable but unverified to actually fire
+    // on this device) with a "(beta)" tag so the user knows it's exploratory.
+    val graph = LocalAppGraph.current
+    val mapper = graph?.mapper
+    // Doc/18 plugin actions, refreshed when the picker opens. Reading directly from
+    // pluginRegistry.plugins is reactive (StateFlow), so a refresh kicked off elsewhere updates
+    // this composition automatically. Off-graph (preview / tests) → empty.
+    val plugins: List<com.halo.ring.plugin.Plugin> =
+        if (graph != null) graph.pluginRegistry.plugins.collectAsState().value else emptyList()
+    LaunchedEffect(graph) {
+        graph?.pluginRegistry?.let { reg ->
+            // getOrRefresh is cheap if cache is fresh; otherwise re-scans. Do it on IO so the
+            // PackageManager calls don't block the Compose composition.
+            withContext(Dispatchers.IO) { reg.getOrRefresh() }
+        }
+    }
+
     Column(modifier = Modifier.fillMaxSize().padding(top = 4.dp)) {
         Text(
             text = "${gestureFriendlyText(gesture)} →",
@@ -63,14 +87,15 @@ fun ActionPickerScreen(
                 lastGroup = entry.group
             }
             val selected = entry.action == currentBinding
-            val supported = mapper?.supports(entry.action) ?: true
+            val level = mapper?.supportLevel(entry.action) ?: GlassActionMapper.SupportLevel.SUPPORTED
+            val bindable = level != GlassActionMapper.SupportLevel.UNSUPPORTED
             val entryText = actionFriendlyText(entry.action)
-            FocusableRow(onClick = { if (supported) onActionSelected(entry.action) }) {
+            FocusableRow(onClick = { if (bindable) onActionSelected(entry.action) }) {
                 Text(
                     text = (if (selected) "● " else "") + entryText,
                     style = HaloType.Body.copy(
                         color = when {
-                            !supported                                            -> HaloColors.Mute
+                            !bindable                                             -> HaloColors.Mute
                             selected                                              -> HaloColors.Accent
                             entry.group == SettingsCatalog.ActionGroup.SYSTEM     -> HaloColors.Mute
                             else                                                  -> HaloColors.Fg
@@ -78,11 +103,75 @@ fun ActionPickerScreen(
                     ),
                 )
                 when {
-                    !supported -> Text(stringResource(R.string.common_coming_soon), style = HaloType.Caption.copy(color = HaloColors.Mute))
-                    selected   -> Text(stringResource(R.string.action_picker_current), style = HaloType.Caption.copy(color = HaloColors.Mute))
+                    level == GlassActionMapper.SupportLevel.UNSUPPORTED ->
+                        Text(stringResource(R.string.common_coming_soon), style = HaloType.Caption.copy(color = HaloColors.Mute))
+                    level == GlassActionMapper.SupportLevel.BEST_EFFORT ->
+                        Text(stringResource(R.string.common_best_effort), style = HaloType.Caption.copy(color = HaloColors.Warn))
+                    selected ->
+                        Text(stringResource(R.string.action_picker_current), style = HaloType.Caption.copy(color = HaloColors.Mute))
                 }
             }
             Box(Modifier.fillMaxWidth().height(1.dp).background(HaloColors.Line))
+        }
+
+        // ── Doc/18 §8.1 — EXTERNAL APPS group ──────────────────────────────────────────────
+        // Always render the group header so the wearer learns the section exists even with no
+        // plugins installed (the empty-state message hints how plugins are surfaced).
+        Spacer(Modifier.height(12.dp))
+        Text(
+            text = stringResource(R.string.action_group_external).uppercase(),
+            style = HaloType.Caption.copy(color = HaloColors.Mute),
+            modifier = Modifier.padding(horizontal = ScreenPadding, vertical = 4.dp),
+        )
+        if (plugins.isEmpty()) {
+            Text(
+                text = stringResource(R.string.action_picker_external_empty),
+                style = HaloType.Caption.copy(color = HaloColors.Mute, fontSize = 14.sp),
+                modifier = Modifier.padding(horizontal = ScreenPadding, vertical = 8.dp),
+            )
+        } else {
+            for (plugin in plugins) {
+                // Plugin sub-heading (app name in small all-caps, like a group header).
+                Text(
+                    text = plugin.appName,
+                    style = HaloType.Caption.copy(color = HaloColors.Mute, fontSize = 14.sp, letterSpacing = 1.sp),
+                    modifier = Modifier.padding(horizontal = ScreenPadding, vertical = 4.dp),
+                )
+                if (plugin.actions.isEmpty()) {
+                    Text(
+                        text = stringResource(R.string.action_picker_external_no_actions),
+                        style = HaloType.Caption.copy(color = HaloColors.Mute),
+                        modifier = Modifier.padding(horizontal = ScreenPadding, vertical = 6.dp),
+                    )
+                    Box(Modifier.fillMaxWidth().height(1.dp).background(HaloColors.Line))
+                    continue
+                }
+                for (pluginAction in plugin.actions) {
+                    val bound = pluginAction.toBoundAction()
+                    val selected = currentBinding is GlassAction.PluginAction &&
+                        (currentBinding as GlassAction.PluginAction).pluginPackage == bound.pluginPackage &&
+                        (currentBinding as GlassAction.PluginAction).actionId == bound.actionId
+                    FocusableRow(onClick = { onActionSelected(bound) }) {
+                        Text(
+                            text = (if (selected) "● " else "") + pluginAction.label,
+                            style = HaloType.Body.copy(
+                                color = if (selected) HaloColors.Accent else HaloColors.Fg,
+                            ),
+                        )
+                        if (selected) {
+                            Text(stringResource(R.string.action_picker_current), style = HaloType.Caption.copy(color = HaloColors.Mute))
+                        } else if (pluginAction.description != null) {
+                            // Truncate softly — Body row already constrains; Caption right-aligned.
+                            Text(
+                                pluginAction.description,
+                                style = HaloType.Caption.copy(color = HaloColors.Mute, fontSize = 12.sp),
+                                maxLines = 1,
+                            )
+                        }
+                    }
+                    Box(Modifier.fillMaxWidth().height(1.dp).background(HaloColors.Line))
+                }
+            }
         }
 
         Spacer(Modifier.height(16.dp))
