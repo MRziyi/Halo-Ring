@@ -36,8 +36,8 @@ Three phase-0 scripts cover the matrix:
 
 | Script | Purpose |
 |---|---|
-| [`r08_probe.py`](../phase0/r08_probe.py) | The original 小猪-aligned probe. Confirms the 🟢 core (touch / battery / 4 raw gestures). |
-| [`r08_verify_qring.py`](../phase0/r08_verify_qring.py) | Phase A passive listen + Phase B additive QRing queries + Phase C contested-opcode adjudication. |
+| [`r08_probe.py`](02-hardware-and-protocol.md) | The original 小猪-aligned probe. Confirms the 🟢 core (touch / battery / 4 raw gestures). |
+| [`r08_verify_qring.py`](02-hardware-and-protocol.md) | Phase A passive listen + Phase B additive QRing queries + Phase C contested-opcode adjudication. |
 | `r08_health_probe.py` (new) | Vitals-stream timing (3 s vs 25 s), errCode=1 wear-detect probe, accelerometer characterisation. |
 
 Run them in that order. Each section below cites which script + sub-phase the test lives in.
@@ -154,7 +154,7 @@ python3 r08_probe.py --tutorial
 
 ### A9. Passive observation — what does R08 firmware push on its own?
 
-> Phase A of [`r08_verify_qring.py`](../phase0/r08_verify_qring.py). Wear the ring, listen for 15 s
+> Phase A of [`r08_verify_qring.py`](02-hardware-and-protocol.md). Wear the ring, listen for 15 s
 > without provoking anything.
 
 ```bash
@@ -387,7 +387,7 @@ debugging.
 
 #### B3.1 Phase-0 gesture tutorial on the glasses
 
-Re-run `phase0/r08_probe.py --tutorial` while wearing one of the glasses (the ring is paired
+Re-run `Doc/02-hardware-and-protocol.md` while wearing one of the glasses (the ring is paired
 with our app on those glasses). Verify our app sees the same events the Python probe does.
 
 - [ ] Through 1 hour of operation, no extraneous BLE disconnects.

@@ -27,7 +27,6 @@ R08-dev/                           ← repo root
       src/main/.../runtime/        ← AndroidScheduler (HandlerThread for the gesture pipeline)
       src/rokid/ + src/rayneo/     ← flavor-specific device strategies
     agent/                         ← the app_process injection agent (Main.kt is a stub)
-  phase0/                          ← Python protocol-verification probe
   refs/                            ← all external reference material (see refs/README.md for index)
     r08remote-decompiled-v2/         ← jadx output for 小猪遥控戒指 v2 (protocol source of truth)
     r08remote-apk-{v1,v1.1,v2}/      ← the three reference APK versions
@@ -46,7 +45,6 @@ R08-dev/                           ← repo root
 - **Java 17** (e.g. via Homebrew: `brew install openjdk@17`; or any JDK 17 distribution)
 - **Android Studio Iguana / Koala** or later, OR command-line Android SDK with API 34
   platform-tools + build-tools
-- For phase-0 Python work: **Python 3.10+**, `bleak` (`pip install -r phase0/requirements.txt`)
 - For ADB-on-device work (when hardware arrives): glasses-specific dev unlock (see
   [03](03-target-platforms.md))
 
@@ -231,8 +229,8 @@ the agent if it goes stale.
 
 ## 11. The phase-0 probe
 
-`phase0/r08_probe.py` is a Python (bleak) BLE probe for reverse-engineering and verifying the
-ring's protocol. See [`phase0/README.md`](../phase0/README.md) and [11](11-verification-checklists.md).
+`Doc/02-hardware-and-protocol.md` is a Python (bleak) BLE probe for reverse-engineering and verifying the
+ring's protocol. See [`Doc/02-hardware-and-protocol.md`](02-hardware-and-protocol.md) and [11](11-verification-checklists.md).
 
 It's intentionally **not** dependent on the Kotlin code — different language, different tool,
 different runtime. Lets you investigate the ring without needing the Android stack.

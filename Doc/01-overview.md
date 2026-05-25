@@ -68,7 +68,7 @@ Already done (no hardware required):
   - Per-flavor strategy implementations (Rokid + RayNeo)
   - Fully implemented runtime: `:agent`, `HaloRingService`, `AndroidR08BleClient`,
     `AppProcessAgentBackend`, `AccessibilityBackend`
-- Phase-0 verification probe with `--tutorial` mode at [`../phase0/r08_probe.py`](../phase0/r08_probe.py)
+- Phase-0 verification probe with `--tutorial` mode at [`../Doc/02-hardware-and-protocol.md`](02-hardware-and-protocol.md)
 - End-user manual ([09-user-manual.md](09-user-manual.md))
 - Developer guide ([10-developer-guide.md](10-developer-guide.md)) + verification checklists
   ([11-verification-checklists.md](11-verification-checklists.md)) + research provenance
@@ -106,7 +106,7 @@ If you are…
 ## Key links outside the Doc/
 
 - [`../app-project/`](../app-project/) — the Kotlin/Gradle skeleton project
-- [`../phase0/`](../phase0/) — the Python protocol-verification probe
+- the BLE protocol spec ([`Doc/02`](02-hardware-and-protocol.md)) — the Python protocol-verification probe
 - [`../research/`](../research/) — cloned reference repos (rokid-docs, colmi_r02_client, ATC_RF03_Ring, RayDesk, …)
 - [`../refs/r08remote-decompiled-v2/`](../refs/r08remote-decompiled-v2/) — jadx decompilation of `小猪遥控戒指` v2
 - [`../refs/r08remote-apk-{v1,v1.1,v2}/`](../refs/) — the three versions of the reference APK

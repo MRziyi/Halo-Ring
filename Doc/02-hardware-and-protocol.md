@@ -1,9 +1,10 @@
 # 02 — Ring Hardware & BLE Protocol
 
 The QRing R08 smart ring is the input device. This doc is the working spec for its BLE protocol.
-**Everything here is reverse-engineered**; phase-0 ([`../phase0/`](../phase0/), 10 stages, see also
-[Doc/16 — phase-0 test plan](16-phase0-test-plan.md)) turns every claim into a "✓ verified on R08
-firmware" or "✗ contradicted, here's what it actually does".
+**Everything here is reverse-engineered**; phase-0 (a 10-stage hardware-in-hand validation pass
+run in the private R08-dev research workspace) turns every claim into a "✓ verified on R08
+firmware" or "✗ contradicted, here's what it actually does". The verified bytes get published
+back into this document.
 
 ## 0. Source-of-truth hierarchy (revised 2026-05-15)
 
@@ -99,7 +100,7 @@ below are the ones Halo Ring would actually use, ordered by phase-0 stage.
 
 | Hex | Name | Payload | Purpose | Verifier |
 |---|---|---|---|---|
-| `0x01` | `CMD_SET_DEVICE_TIME` | 7 bytes BCD `[yy-2000, MM, dd, hh, mm, ss, lang]` | Sync RTC. Required for history reads to have meaningful timestamps. | [`r08_01_qring_connect.py`](../phase0/r08_01_qring_connect.py) |
+| `0x01` | `CMD_SET_DEVICE_TIME` | 7 bytes BCD `[yy-2000, MM, dd, hh, mm, ss, lang]` | Sync RTC. Required for history reads to have meaningful timestamps. | [`r08_01_qring_connect.py`](02-hardware-and-protocol.md) |
 | `0x3C` | `CMD_DEVICE_FUNCTION_SUPPORT` | (read-only) | 9-byte capability bitmap. Gates which features are available on this firmware. | `r08_01_qring_connect.py` |
 
 After the response from `0x3C`, we'd know which of the optional commands below are even meaningful
@@ -111,7 +112,7 @@ to send.
 
 | Hex | Name | Response | Purpose | Verifier |
 |---|---|---|---|---|
-| `0x48` | `CMD_GET_STEP_TODAY` | 14 bytes BE: `[steps, running-steps, calories, distance(m), duration(min)]` | Canonical today's totals query (more authoritative than waiting for the `73 12` push hint). | [`r08_02_qring_oneshot.py`](../phase0/r08_02_qring_oneshot.py) |
+| `0x48` | `CMD_GET_STEP_TODAY` | 14 bytes BE: `[steps, running-steps, calories, distance(m), duration(min)]` | Canonical today's totals query (more authoritative than waiting for the `73 12` push hint). | [`r08_02_qring_oneshot.py`](02-hardware-and-protocol.md) |
 | `0x50 AA AA` | `CMD_ANTI_LOST_RATE` | (vibration + LED) | QRing's "find device" — should vibrate + LED-blink the ring. | `r08_02_qring_oneshot.py` |
 | `0x08 01` | `CMD_RE_BOOT` | (disconnect+reconnect) | Soft reboot. | `r08_02_qring_oneshot.py` (gated) |
 
@@ -154,7 +155,7 @@ currently assumes.
 - `err = 0` → reading is valid; `data[3]` = bpm / % / index
 - `err = 1` → **"not worn properly"** → free wear-detection signal. Halo Ring can opportunistically
   flip its WearStateProvider to off-finger when this fires mid-stream. Tested by
-  [`r08_05_vitals.py --wear-test`](../phase0/r08_05_vitals.py).
+  [`r08_05_vitals.py --wear-test`](02-hardware-and-protocol.md).
 
 ⚠ Power: 25 s of PPG LED ≈ 0.02 mAh per snapshot. Sustainable ≤ 1 / hour. Continuous would dead the
 17 mAh battery in hours. See [06 §3.4](06-performance-and-power.md).
@@ -293,7 +294,7 @@ Discarded claims (all from the original handoff doc, no source backing):
 
 Every claim above resolves through one of the 10 phase-0 stages. See
 [Doc/16 — phase-0 test plan](16-phase0-test-plan.md) for the full stage-by-stage protocol and the
-matching scripts in [`../phase0/`](../phase0/).
+matching scripts in the BLE protocol spec ([`Doc/02`](02-hardware-and-protocol.md)).
 
 | Stage | Resolves | Script |
 |---|---|---|

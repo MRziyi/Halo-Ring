@@ -25,8 +25,8 @@ markdown links exist for context. Reading the docs in order also works.
 | **A new contributor onboarding** | [01 — Overview](01-overview.md), then **[13 — Handoff & TODO](13-handoff.md)**, then [04 — Architecture](04-architecture.md), then [05 — Interaction Design](05-interaction-design.md). |
 | **Taking the project handoff from the previous agent** | **[13 — Handoff & TODO](13-handoff.md)** first (covers state + priority-ordered TODO + recommended order). Then [04](04-architecture.md), [05](05-interaction-design.md), [08](08-ui-design.md). Then any doc as needed. |
 | **Building / extending the Android app** | [04 — Architecture](04-architecture.md), [05 — Interaction Design](05-interaction-design.md), [10 — Developer Guide](10-developer-guide.md). For the TODO list, [13](13-handoff.md). |
-| **Reverse-engineering or debugging the ring** | [02 — Hardware & Protocol](02-hardware-and-protocol.md), [16 — Phase-0 Test Plan](16-phase0-test-plan.md), [12 — Research & References](12-research-and-references.md). |
-| **About to test on real R08 hardware** | [16 — Phase-0 Test Plan](16-phase0-test-plan.md) first; print it. [`../phase0/README.md`](../phase0/README.md) for the 10 scripts. [17 — Community Spec](17-community-protocol-spec.md) is the publish target. |
+| **Reverse-engineering or debugging the ring** | [02 — Hardware & Protocol](02-hardware-and-protocol.md), [12 — Research & References](12-research-and-references.md). Hardware-validation scripts + test plan live in the private R08-dev research workspace; verified bytes get published back into Doc/02. |
+| **About to test on real R08 hardware** | [02 — Hardware & Protocol](02-hardware-and-protocol.md) is the validated spec. [17 — Community Spec](17-community-protocol-spec.md) is the cross-ring (Colmi family) publish target. |
 | **Bringing up a new pair of glasses** | [03 — Target Platforms](03-target-platforms.md) §2 or §3, [10 — Developer Guide](10-developer-guide.md) §7, [11 — Verification Checklists](11-verification-checklists.md) §B. |
 
 ---
@@ -50,8 +50,8 @@ markdown links exist for context. Reading the docs in order also works.
 | **[13](13-handoff.md)** | **Handoff & TODO** | Comprehensive status snapshot + priority-ordered TODO + recommended order for the next agent | ~12 min |
 | **[14](14-pre-hardware-testing.md)** | Pre-Hardware Testing Guide | What you can verify on a laptop + Android phone before the ring + glasses arrive | ~10 min |
 | **[15](15-A2-spake2-tls-guide.md)** | A-2 SPAKE2 + TLS Guide | Step-by-step guide for finishing the ADB-over-WiFi pairing flow when the glasses arrive | ~8 min |
-| **[16](16-phase0-test-plan.md)** | **Phase-0 Test Plan** | Stage-by-stage hardware test plan (10 stages, time + power budget per stage) for the QRing-first protocol verification session. Pair with [`phase0/`](../phase0/). | ~15 min |
-| **[17](17-community-protocol-spec.md)** | Community Protocol Spec (Draft) | The output target of phase-0 — gets filled in stage-by-stage; final form ships as a CC-BY 4.0 contribution to atc1441 / colmi_r02_client / community. | ~10 min |
+| **[17](17-community-protocol-spec.md)** | Community Protocol Spec (Draft) | The output target of phase-0 validation (run in private R08-dev workspace) — gets filled in stage-by-stage; final form ships as a CC-BY 4.0 contribution to atc1441 / colmi_r02_client / community. | ~10 min |
+| **[18](18-plugin-protocol.md)** | External-App Plugin Protocol | The wire format for any installed app to expose actions to Halo Ring's profile bindings (Constellation is the first client). | ~10 min |
 
 Total: ~2.5 hours of careful reading for an end-to-end handoff.
 
@@ -62,7 +62,7 @@ Total: ~2.5 hours of careful reading for an end-to-end handoff.
 | Path | What |
 |---|---|
 | [`../app-project/`](../app-project/) | The Android multi-module Kotlin project — `:core` (pure JVM), `:app` (Android, rokid/rayneo flavors), `:agent` (injection agent) |
-| [`../phase0/`](../phase0/) | Python BLE protocol-verification probe (bleak-based); includes `--tutorial` mode for end-user onboarding |
+| the BLE protocol spec ([`Doc/02`](02-hardware-and-protocol.md)) | Python BLE protocol-verification probe (bleak-based); includes `--tutorial` mode for end-user onboarding |
 | [`../research/`](../research/) | Cloned reference repositories — `rokid-docs`, `colmi_r02_client`, `ATC_RF03_Ring`, `RayDesk`, `moonlight-android-RayNeoX3` |
 | [`../refs/`](../refs/) | All external reference material — vendor SDKs, reference APKs, decompilations, tools. See [`refs/README.md`](../refs/README.md) for the index + SDK source URLs. |
 | [`../refs/r08remote-decompiled-v2/`](../refs/r08remote-decompiled-v2/) | jadx decompilation of `小猪遥控戒指` v2 — the source of truth for the BLE protocol |
@@ -86,7 +86,7 @@ When code changes invalidate something here, update the relevant doc(s):
 | New executor backend | [04](04-architecture.md) §5 |
 | UI screen | [08](08-ui-design.md) + [ui-mockup.html](ui-mockup.html) |
 | Build process | [10](10-developer-guide.md) §3, §10 |
-| Phase-0 probe | [11](11-verification-checklists.md) §A, [`phase0/README.md`](../phase0/README.md) |
+| Phase-0 probe | [11](11-verification-checklists.md) §A, [`Doc/02-hardware-and-protocol.md`](02-hardware-and-protocol.md) |
 | Finished or started a TODO | [13](13-handoff.md) §2 |
 | Project status changed | [01](01-overview.md) §"Project status" + [13](13-handoff.md) §1 |
 

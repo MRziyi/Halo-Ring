@@ -320,7 +320,7 @@ glasses are currently active.
 
 - `Doc/05-interaction-design.md` — the full design of gestures, profiles, modals
 - `Doc/02-hardware-and-protocol.md` — the ring itself: hardware, BLE protocol
-- `phase0/r08_probe.py --tutorial` — a guided walkthrough that confirms each gesture is being
+- `Doc/02-hardware-and-protocol.md` — a guided walkthrough that confirms each gesture is being
   detected correctly (good for first-time setup verification)
 
 ---

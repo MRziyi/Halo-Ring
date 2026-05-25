@@ -429,7 +429,7 @@ jar must then be d8'd into a dex and bundled as an asset for distribution):
   construction with the right `source` flag, swipe = DOWN+N×MOVE+UP at ~120 Hz, 5 s heartbeat
   file at `/data/local/tmp/r08agent.heartbeat`.
 
-**`phase0/`:**
+**`Doc/02`:**
 - `r08_probe.py` — fully implemented, includes `--tutorial` mode with a Python port of the
   GestureSynthesizer recognition logic
 - `README.md` + `requirements.txt`
@@ -789,7 +789,7 @@ hardware is in Priority C below.
 
 | # | Task | Refs |
 |---|---|---|
-| C1 | **Phase-0 protocol verification** on the actual ring. Run `phase0/r08_probe.py` and tick each item in [11-verification-checklists.md §A](11-verification-checklists.md). | 🔌 |
+| C1 | **Phase-0 protocol verification** on the actual ring. Run `Doc/02-hardware-and-protocol.md` and tick each item in [11-verification-checklists.md §A](11-verification-checklists.md). | 🔌 |
 | C2 | **De-dup window measurement** — count back-to-back tap intervals; pick the right dedup ms; check for varying byte (counter / timestamp). Update [`AndroidR08BleClient`](../app-project/app/src/main/kotlin/com/r08remote/app/ble/AndroidR08BleClient.kt) constants. | 🔌 [11 §A3, §A4](11-verification-checklists.md) |
 | C3 | **0xA1 accelerometer frame decode** — try to figure out the byte layout. If decodable, add an `R08Frame.parseAccel` and feed into a phase-3 spatial-mode pipeline. | 🔌 [11 §A2](11-verification-checklists.md) |
 | C4 | **Worn-on-finger frame search** — any new sub-frame correlating with wear/take-off? If found, plumb to `WearStateProvider` as an extra signal. | 🔌 [11 §A5](11-verification-checklists.md) |

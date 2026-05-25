@@ -41,9 +41,9 @@ Install with `adb install -r halo-ring-<glasses>-release.apk` after sideloading 
 ring pairs through the in-app first-run wizard — open the app once, follow the five steps, then
 the ring is your remote forever.
 
-> **No glasses yet?** You can still play with the ring. The Python probe in
-> [`phase0/`](phase0/) (`python3 r08_probe.py --tutorial`) walks you through all 12 gestures on
-> any laptop with Bluetooth, so you can confirm the ring works before sideloading anything.
+> **No glasses yet?** [`Doc/02-hardware-and-protocol.md`](Doc/02-hardware-and-protocol.md)
+> documents the reverse-engineered BLE protocol end-to-end — you can confirm the ring works
+> with any Python BLE library + the byte tables in that doc.
 
 ### What it looks like
 
@@ -125,8 +125,8 @@ bridge between a smart ring and AR glasses. Forks must stay open-source under AG
 proprietary / commercial use see [COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md). Especially
 welcome:
 
-- Phase-0 probe runs against your own R08 ring — every dedup-window or accel-frame variant
-  found in the wild is worth a PR to [`phase0/r08_probe.py`](phase0/r08_probe.py).
+- R08 protocol verification on your own ring — variants in dedup window, accel-frame layout,
+  or activity sub-frames are worth an issue (or a PR to [`Doc/02-hardware-and-protocol.md`](Doc/02-hardware-and-protocol.md)).
 - Additional `ExecutorBackend` implementations (Shizuku, fuller inotifyd-script fallback).
 - Per-platform feature-Intent maps as you discover them on real hardware
   (Doc/11 §B6 for the discovery recipe).
@@ -182,9 +182,9 @@ should use "based on Halo Ring" framing rather than claiming the name. See
 开启侧载后用 `adb install -r halo-ring-<眼镜>-release.apk` 安装。戒指通过 app 内首次启动向导
 配对——一次完成五步，戒指就一直是你的遥控。
 
-> **暂时没有眼镜？** 也能玩戒指。[`phase0/`](phase0/) 下的 Python 探针
-> （`python3 r08_probe.py --tutorial`）会在任何带蓝牙的笔记本上引导你走完 12 个手势，先验证
-> 戒指是好的再侧载 app。
+> **暂时没有眼镜？** [`Doc/02-hardware-and-protocol.md`](Doc/02-hardware-and-protocol.md)
+> 完整文档化了逆向出来的 BLE 协议——拿任何 Python BLE 库 + 文中的字节表就能在笔记本上验证
+> 戒指是好的。
 
 ### 界面预览
 
@@ -253,8 +253,8 @@ AAR 已直接提交在 [`app-project/app/libs/mercury-release.aar`](app-project/
 欢迎想做类似"智能戒指 ↔ AR 眼镜"桥接的人参考。Fork 必须仍以 AGPLv3 开源；商业 / 闭源用途
 请见 [COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md)。特别欢迎：
 
-- 用你的 R08 戒指跑 Phase-0 探针——发现的任何 dedup 窗口、加速度计帧格式的变体都欢迎 PR 到
-  [`phase0/r08_probe.py`](phase0/r08_probe.py)。
+- 用你的 R08 戒指验证协议——发现的任何 dedup 窗口、加速度计帧格式、活动子帧的变体都欢迎
+  issue（或对 [`Doc/02-hardware-and-protocol.md`](Doc/02-hardware-and-protocol.md) 开 PR）。
 - 更多 `ExecutorBackend` 实现（Shizuku、inotifyd-script 完整版）。
 - 实机上发现的 per-platform feature Intent map（探查方法见 Doc/11 §B6）。
 

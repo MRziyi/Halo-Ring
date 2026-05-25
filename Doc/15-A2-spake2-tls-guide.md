@@ -397,7 +397,7 @@ no human re-tapping required after returning from the system Settings deep-link.
 The "software side" of Halo Ring is complete. Remaining items in
 [Doc/13 §2 Priority C](13-handoff.md) are all on-device hardware-verification:
 
-- C1: phase-0 protocol check against the actual R08 ring (`python3 phase0/r08_probe.py`)
+- C1: phase-0 protocol check against the actual R08 ring (`python3 Doc/02-hardware-and-protocol.md`)
 - C2-C6: ring-specific tuning (dedup window, accel frames, LED behavior)
 - C7-C8: Rokid + RayNeo first-launch verification. Key questions on first glasses contact:
   - Does Wireless-debugging UI auto-close the pair dialog when our app comes to foreground? (If yes, overlay path is needed exactly as on OnePlus.)

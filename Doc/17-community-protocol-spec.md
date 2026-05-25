@@ -23,7 +23,7 @@ Sources combined:
   - 小猪遥控戒指 v2 (com.ring.r08remote)              — R08-specific addendum
   - Empirical verification on QRing R08 hardware     — final word
 Method:
-  - 10-stage phase-0 verification flow (see ../phase0/)
+  - 10-stage phase-0 verification flow (see Doc/02-hardware-and-protocol.md)
   - All scripts open-source, in Python via bleak
 Hardware tested:
   - QRing R08 (FCC ID 2AOM3-R08)
@@ -331,4 +331,4 @@ Continuous HR (1E channel):                    incompatible with 17 mAh battery
 ## 12. License
 
 This spec: CC-BY 4.0.  
-phase-0 scripts: MIT (see `phase0/` LICENSE).
+phase-0 scripts: MIT (see `Doc/02` LICENSE).
