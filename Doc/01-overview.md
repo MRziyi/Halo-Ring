@@ -15,10 +15,11 @@ swipe-MotionEvent injection on X3 Pro).
 
 ## Why this project exists
 
-`R08-Dev.md` in the repo root was the original community hand-off document. Its core open question
-was "the R08's touch/gesture BLE protocol is unknown — someone needs to reverse-engineer it." That
-turned out to be mostly already solved by a third-party app called `小猪遥控戒指` (`com.ring.r08remote`,
-WeChat `qq889538`); decompiling its v2 APK gave us the full protocol. See
+The original community hand-off document (`R08-Dev.md`, archived in the private R08-dev
+research workspace) posed the core open question: "the R08's touch/gesture BLE protocol is
+unknown — someone needs to reverse-engineer it." That turned out to be mostly already solved
+by a third-party app called `小猪遥控戒指` (`com.ring.r08remote`, WeChat `qq889538`); decompiling
+its v2 APK gave us the full protocol. See
 [12-research-and-references.md](12-research-and-references.md).
 
 But the third-party app has serious shortcomings (latency, power, fragility, only-Rokid, no
@@ -105,11 +106,12 @@ If you are…
 
 ## Key links outside the Doc/
 
-- [`../app-project/`](../app-project/) — the Kotlin/Gradle skeleton project
-- the BLE protocol spec ([`Doc/02`](02-hardware-and-protocol.md)) — the Python protocol-verification probe
-- [`../research/`](../research/) — cloned reference repos (rokid-docs, colmi_r02_client, ATC_RF03_Ring, RayDesk, …)
-- [`../refs/r08remote-decompiled-v2/`](../refs/r08remote-decompiled-v2/) — jadx decompilation of `小猪遥控戒指` v2
-- [`../refs/r08remote-apk-{v1,v1.1,v2}/`](../refs/) — the three versions of the reference APK
-- [`../R08-Dev.md`](../R08-Dev.md) — the original community hand-off doc (kept as-is for historical
-  reference; corrections live in [12](12-research-and-references.md))
+- [`../app-project/`](../app-project/) — the Kotlin/Gradle multi-module project
+- [`Doc/02-hardware-and-protocol.md`](02-hardware-and-protocol.md) — the BLE protocol spec
+- [`Doc/18-plugin-protocol.md`](18-plugin-protocol.md) — the external-app plugin protocol (Constellation
+  is the first client)
+- **Private research material** (separate `R08-Dev` repo) — vendor SDKs, jadx decompilation of
+  `小猪遥控戒指` v2, third-party reference clones (rokid-docs, colmi_r02_client, ATC_RF03_Ring,
+  RayDesk, …), the original community hand-off doc, plus Python BLE protocol-validation probes.
+  Public contributors don't need these — verified protocol details get published into Doc/02 above.
 - [`./_archive/`](./_archive/) — earlier monolithic versions of this design doc, preserved

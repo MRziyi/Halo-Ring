@@ -61,13 +61,9 @@ Total: ~2.5 hours of careful reading for an end-to-end handoff.
 
 | Path | What |
 |---|---|
-| [`../app-project/`](../app-project/) | The Android multi-module Kotlin project — `:core` (pure JVM), `:app` (Android, rokid/rayneo flavors), `:agent` (injection agent) |
-| the BLE protocol spec ([`Doc/02`](02-hardware-and-protocol.md)) | Python BLE protocol-verification probe (bleak-based); includes `--tutorial` mode for end-user onboarding |
-| [`../research/`](../research/) | Cloned reference repositories — `rokid-docs`, `colmi_r02_client`, `ATC_RF03_Ring`, `RayDesk`, `moonlight-android-RayNeoX3` |
-| [`../refs/`](../refs/) | All external reference material — vendor SDKs, reference APKs, decompilations, tools. See [`refs/README.md`](../refs/README.md) for the index + SDK source URLs. |
-| [`../refs/r08remote-decompiled-v2/`](../refs/r08remote-decompiled-v2/) | jadx decompilation of `小猪遥控戒指` v2 — the source of truth for the BLE protocol |
-| [`../refs/r08remote-apk-v1/`](../refs/r08remote-apk-v1/), [`v1.1`](../refs/r08remote-apk-v1.1/), [`v2`](../refs/r08remote-apk-v2/) | The three reference APK versions (`com.ring.r08remote`) |
-| [`../R08-Dev.md`](../R08-Dev.md) | Original community hand-off doc (historical; corrections in [12 §4](12-research-and-references.md)) |
+| [`../app-project/`](../app-project/) | The Android multi-module Kotlin project — `:core` (pure JVM, 250 tests), `:app` (rokid/rayneo flavors), `:agent` (injection agent), `:test-plugin` (Doc/18 reference plugin) |
+| [`../.github/`](../.github/) | CI workflows — `build-apks` (release pipeline) + `core-tests` |
+| **Private research workspace** (`R08-dev`, not this repo) | BLE protocol validation tools (`phase0/`), vendor SDKs + reference APKs + decompilations (`refs/`), third-party clones (`research/`), original community hand-off doc (`R08-Dev.md`). Verified protocol details get hand-published into [`Doc/02`](02-hardware-and-protocol.md). |
 | [`./_archive/`](./_archive/) | Pre-split monolithic design docs preserved for history |
 
 ---

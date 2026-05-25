@@ -8,37 +8,35 @@ How to build, test, and extend the codebase. For end users see
 ## 1. Repository layout
 
 ```
-R08-dev/                           ← repo root
-  R08-Dev.md                       ← original community hand-off doc (historical)
-  README.md                        ← top-level index
+Halo-Ring/                         ← repo root (this is the canonical Halo Ring repo)
+  README.md                        ← top-level public landing
   Doc/                             ← all design and developer docs (this)
   app-project/                     ← the Android multi-module Kotlin project
     settings.gradle.kts
     build.gradle.kts
     core/                          ← pure-JVM library; gesture state machine + protocol parser
-                                     + interfaces; ~25 JVM tests
+                                     + interfaces; 250 JVM tests
     app/                           ← Android app, with rokid + rayneo flavors
       src/main/.../ui/             ← Compose UI: theme, components, tabs, screens (Vitals,
                                      Settings root, Status, Feedback), HUD overlay,
-                                     InAppFocusController
+                                     InAppFocusController, ExternalPluginsScreen
       src/main/.../service/        ← HaloRingService — foreground service host
-      src/main/.../ble/            ← AndroidR08BleClient (stub) — Android BluetoothGatt impl
-      src/main/.../inject/         ← AppProcessAgentBackend (stub) + AccessibilityBackend (stub)
+      src/main/.../ble/            ← AndroidR08BleClient — Android BluetoothGatt impl
+      src/main/.../inject/         ← AppProcessAgentBackend + AccessibilityBackend
+      src/main/.../plugin/         ← Doc/18 plugin discovery + trigger + push/pop receiver
       src/main/.../runtime/        ← AndroidScheduler (HandlerThread for the gesture pipeline)
       src/rokid/ + src/rayneo/     ← flavor-specific device strategies
-    agent/                         ← the app_process injection agent (Main.kt is a stub)
-  refs/                            ← all external reference material (see refs/README.md for index)
-    r08remote-decompiled-v2/         ← jadx output for 小猪遥控戒指 v2 (protocol source of truth)
-    r08remote-apk-{v1,v1.1,v2}/      ← the three reference APK versions
-    sdks/{rayneo,rokid}/             ← pinned vendor SDK drops + HTML doc snapshots
-    tools/                           ← AndroidWatch_ADB_ToolBox.zip, etc.
-  research/
-    rokid-docs/                    ← buildwithfenna/rokid-docs (Rokid platform reverse-engineering)
-    colmi_r02_client/              ← tahnok/colmi_r02_client (broader R02 protocol)
-    ATC_RF03_Ring/                 ← atc1441/ATC_RF03_Ring (firmware, datasheets)
-    RayDesk/                       ← Quad-Labs/RayDesk (real X3 Pro app using Mercury SDK)
-    moonlight-android-RayNeoX3/    ← informalTechCode/moonlight-android-RayNeoX3
+    agent/                         ← the app_process injection agent
+    test-plugin/                   ← Doc/18 reference plugin (validation + plugin-author example)
+  .github/                         ← CI: build-apks (release pipeline) + core-tests
+  LICENSE / COPYRIGHT.md / COMMERCIAL-LICENSE.md / CONTRIBUTING.md
 ```
+
+A separate **private research workspace** (`R08-dev/`, remote `git@github.com:MRziyi/R08-Dev.git`)
+holds the BLE protocol validation tools (`phase0/`), vendor materials (`refs/`), and
+third-party clones (`research/`). It's where reverse-engineering happens; verified bytes get
+hand-published into `Doc/02-hardware-and-protocol.md` here. As a public contributor you don't
+need R08-dev — everything you need to build, test, and extend the project is in this repo.
 
 ## 2. Prerequisites
 

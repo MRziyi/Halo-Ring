@@ -3,9 +3,34 @@
 > **For the next agent picking up this project.** This document is the canonical "where we are,
 > what's left, and where to look" — keep it current as you work. If a TODO here is wrong, fix it.
 
-Last updated: 2026-05-24 (after **plugin-protocol-pass**: full Doc/18 implementation —
+Last updated: 2026-05-25 (after **workspace-restructure-pass**: Halo-Ring is now the canonical
+Ring code repo; R08-dev demoted to research companion holding phase0/ + refs/ + research/).
+Previously: 2026-05-24 (plugin-protocol-pass shipping v0.2.5).
+
+**Workspace restructure — Halo-Ring is now canonical.** Before today, Halo-Ring was a downstream
+rsync mirror of R08-dev via `scripts/sync-to-oss.sh` — every commit required editing in R08-dev
+then re-syncing. That model had two failure modes (cd-jumping into Halo-Ring for ad-hoc edits
+silently reverted on the next sync; README/Doc lived in two places via the RENAMED_FILES split).
+Reversed:
+- **Halo-Ring (this repo, public OSS)** — all `app-project/` code, `Doc/01-15, 17, 18`, `.github/`
+  CI, the top-level README + licence files. The canonical Ring codebase. Every code/doc/CI edit
+  happens directly here and pushes straight to origin.
+- **R08-dev (private)** — research companion. Holds `phase0/` (BLE protocol probes + test plan;
+  formerly Halo-Ring's `phase0/`), `refs/` (vendor SDKs + decompiles + reference APKs),
+  `research/` (gitignored third-party clones), and the original `R08-Dev.md` community handoff
+  doc. When a phase0 stage validates a byte sequence in private, the verified bytes get
+  hand-published into [`Doc/02-hardware-and-protocol.md`](02-hardware-and-protocol.md) here.
+
+The two repos are intentionally independent — they share copyright + dual licence (AGPLv3 +
+commercial) but no git linkage. There's no sync script any more.
+
+Doc/16 (the phase-0 test execution plan) moved to R08-dev as `phase0/TEST-PLAN.md` since it
+catalogues the private scripts. Doc/17 (the cross-ring-family community protocol spec) stays
+here as the publish target for what phase-0 verifies.
+
+Previously: **2026-05-24 — plugin-protocol-pass**: full Doc/18 implementation —
 External-App Plugin Protocol v1; new `:test-plugin` module; first cross-app integration shipping
-as v0.2.5). Previously: 2026-05-14 (audit-pass-w).
+as v0.2.5. Previously: 2026-05-14 (audit-pass-w).
 
 **Doc/18 plugin protocol shipped — v1.** Halo Ring can now discover other installed apps that
 declare `halo.ring.plugin_version=1` meta-data, query their `ContentProvider` for action lists,
