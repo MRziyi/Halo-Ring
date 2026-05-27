@@ -19,6 +19,9 @@ sealed interface SubScreen {
     object SystemGestures : SubScreen
     data class GesturePicker(val slot: SystemGestureSlot) : SubScreen
     object Ring : SubScreen
+    /** Pairing picker — scans for nearby R0x-family rings, user taps to commit. Reached from
+     *  RingScreen "PAIR" CTA or from the first-run wizard's pair step. (burn-in fix 2026-05-27) */
+    object RingPairing : SubScreen
     object Power : SubScreen
     object Advanced : SubScreen
     object About : SubScreen

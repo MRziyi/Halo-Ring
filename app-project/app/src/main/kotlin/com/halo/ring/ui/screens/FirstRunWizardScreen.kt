@@ -213,11 +213,19 @@ private fun BatteryStep(exempted: Boolean, onRequest: () -> Unit, onNext: () -> 
 
 @Composable
 private fun PairRingStep(onStartPairing: () -> Unit, onFinish: () -> Unit) {
-    Text(stringResource(R.string.wizard_pair_short_title), style = HaloType.Title)
+    // Burn-in fix 2026-05-27: previously this step just called `onStartPairing` which kicked off
+    // an unfiltered scan that auto-connected to the FIRST R0x-family name match — often picking
+    // up a stranger's ring or a stale phantom device. Now we embed the [RingPairingScreen] picker
+    // so the user explicitly selects which ring is theirs; the picker persists the MAC and
+    // triggers the connection on tap.
+    //
+    // Falls through to onFinish on the picker's `onPaired` so the wizard completes after a
+    // successful pair (or the user can tap SKIP to advance without pairing — e.g. on a dev rig).
+    com.halo.ring.ui.screens.RingPairingScreen(onPaired = onFinish)
     Spacer(Modifier.height(10.dp))
-    Text(stringResource(R.string.wizard_pair_short_body), style = HaloType.Body)
-    Spacer(Modifier.height(24.dp))
-    Cta(stringResource(R.string.wizard_pair_scan_cta), focused = true, onClick = onStartPairing)
-    Spacer(Modifier.height(10.dp))
+    // Keep a skip path so we don't strand users running the wizard without a ring nearby.
     Cta(stringResource(R.string.wizard_pair_done_cta), onClick = onFinish)
+    // The legacy `onStartPairing` callback is now redundant; kept in the function signature for
+    // forward-compat with anything that still passes it.
+    @Suppress("UNUSED_EXPRESSION") onStartPairing
 }

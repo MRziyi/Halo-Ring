@@ -48,13 +48,28 @@ data class VitalsSnapshot(
     val heartRateBpm: Int? = null,
     val spo2Pct: Int? = null,
     val stressIndex: Int? = null,
+    /** Healthcheck composite — SBP / DBP in mmHg. Populated when `0x69 type=0x05` converges. */
+    val systolic: Int? = null,
+    val diastolic: Int? = null,
+    /** Body / skin temperature in °C. Populated if the temp opcode ever converges (RT08: progress-only). */
+    val temperature: Float? = null,
     /** Monotonic clock (SystemClock.uptimeMillis) of the most-recent reading. */
     val capturedAtMs: Long = 0L,
     val measuring: Boolean = false,
-    /** P0-4: latest pedometer step count, populated when the ring's step sub-frame is decoded
-     *  (currently null pending C-vitals — Doc/07 §3). Plumbed to the HUD overlay via
-     *  [com.halo.ring.ui.hud.HudEvent.Peek] when the user has the activity-overlay pref on. */
+    /** True iff the most recent attempt finished with `err=0x02` wear-detect-fail. */
+    val wearDetectFail: Boolean = false,
+    /** Live activity counters from `0x73 sub=0x12 ACTIVITY_TOTAL` push (SPEC v3 §5.3).
+     *  - [activitySteps]: today's step total
+     *  - [activityKcal]: today's kcal (= mcal/1000; on RT08 = `steps × 36 mcal` exactly, not a
+     *    physiological estimate — caveat that to the user)
+     *  - [activityMeters]: integer meters (NOT km) */
     val activitySteps: Int? = null,
+    val activityKcal: Float? = null,
+    val activityMeters: Int? = null,
+    /** During a `0x77` sport session, the live duration the ring is reporting via `0x78` ticks. */
+    val sportDurationSec: Int? = null,
+    /** Most-recent accelerometer magnitude in g (1.0 = at rest, ≈0 = free-fall, >2 = impact). */
+    val lastAccelMagnitudeG: Float? = null,
 )
 
 /**

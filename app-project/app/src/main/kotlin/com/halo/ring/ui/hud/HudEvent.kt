@@ -33,6 +33,9 @@ sealed interface HudEvent {
     /** Ring battery dipped below 20%. Warn-coloured. 2 s; repeats every 5 min while low. */
     data class LowBattery(val ringId: String, val pct: Int) : HudEvent
 
+    /** Daily step target reached (`0x73 sub=0x10`). Celebratory 2 s HUD. */
+    data object TargetReached : HudEvent
+
     /** BLE connection lost. Renders at the user's [com.halo.ring.ui.screens.FeedbackPrefs.hudPosition]
      *  (audit-2026-05-13l: previously hard-coded centre + persistent — bad AR pattern). Auto-hides
      *  after 4 s; the foreground service re-displays on exponential backoff (P1-8: 60s → 5min →

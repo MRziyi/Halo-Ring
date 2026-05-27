@@ -31,6 +31,9 @@ class FakeR08BleClient(
     enum class Command {
         TOUCH_ENABLE, TOUCH_DISABLE, BATTERY_QUERY, BLINK_LED, SHUTDOWN_RING,
         INTERVAL_HIGH, INTERVAL_BALANCED, INTERVAL_SLOW, VITALS_SNAPSHOT,
+        FIND_RING, HR_AUTO_MONITOR_ON, HR_AUTO_MONITOR_OFF,
+        DAILY_TARGET, SPORT_START, SPORT_STOP,
+        ACCEL_ONE_SHOT, ACCEL_STREAM_START, ACCEL_STREAM_STOP,
     }
 
     override fun events(): RingEventSource = RingEventSource { onEvent ->
@@ -91,5 +94,68 @@ class FakeR08BleClient(
 
     override fun requestVitalsSnapshot() {
         sentCommands.add(Command.VITALS_SNAPSHOT)
+    }
+
+    override fun findRing() {
+        sentCommands.add(Command.FIND_RING)
+    }
+
+    override fun setHrAutoMonitor(enabled: Boolean, intervalMinutes: Int) {
+        sentCommands.add(if (enabled) Command.HR_AUTO_MONITOR_ON else Command.HR_AUTO_MONITOR_OFF)
+    }
+
+    /** Records the most recent target so tests can assert the values, not just that a write fired. */
+    @Volatile var lastDailyTarget: Triple<Int, Int, Int>? = null
+        private set
+
+    override fun setDailyTarget(steps: Int, kcal: Int, distanceMeters: Int) {
+        lastDailyTarget = Triple(steps.coerceAtLeast(100), kcal, distanceMeters)
+        sentCommands.add(Command.DAILY_TARGET)
+    }
+
+    override fun startSportSession(sportType: Int) { sentCommands.add(Command.SPORT_START) }
+    override fun stopSportSession(sportType: Int)  { sentCommands.add(Command.SPORT_STOP) }
+
+    override fun startAccelStream(continuous: Boolean) {
+        sentCommands.add(if (continuous) Command.ACCEL_STREAM_START else Command.ACCEL_ONE_SHOT)
+    }
+    override fun stopAccelStream() {
+        sentCommands.add(Command.ACCEL_STREAM_STOP)
+    }
+
+    // ── Pairing / discovery (burn-in fix 2026-05-27) ─────────────────────────────────────────
+
+    @Volatile var pairedMac: String? = null
+        private set
+    private val discoveredSubs = CopyOnWriteArrayList<(List<DiscoveredDevice>) -> Unit>()
+    private val discoveredCache = LinkedHashMap<String, DiscoveredDevice>()
+    @Volatile var inDiscoveryMode: Boolean = false
+        private set
+
+    override fun discoveredDevices(): DiscoveredDevicesSource = DiscoveredDevicesSource { onUpdate ->
+        discoveredSubs.add(onUpdate)
+        onUpdate(discoveredCache.values.toList())
+        Subscription { discoveredSubs.remove(onUpdate) }
+    }
+
+    override fun setPairedMac(mac: String?) {
+        pairedMac = mac?.uppercase()
+    }
+
+    override fun startDiscovery() {
+        inDiscoveryMode = true
+        setConnectionState(ConnectionState.SCANNING)
+    }
+
+    override fun stopDiscovery() {
+        inDiscoveryMode = false
+        setConnectionState(ConnectionState.DISCONNECTED)
+    }
+
+    /** Test driver: inject a discovered device into the picker stream. */
+    fun emitDiscovered(d: DiscoveredDevice) {
+        discoveredCache[d.macAddress.uppercase()] = d
+        val snap = discoveredCache.values.toList()
+        discoveredSubs.forEach { it(snap) }
     }
 }

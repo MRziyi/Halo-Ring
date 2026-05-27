@@ -21,6 +21,8 @@ import com.halo.ring.ui.LocalAppGraph
 import com.halo.ring.ui.HaloColors
 import com.halo.ring.ui.HaloType
 import com.halo.ring.ui.ScreenPadding
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 
 /**
  * Settings → Ring (mockup §3 G).
@@ -37,11 +39,13 @@ import com.halo.ring.ui.ScreenPadding
 @Composable
 fun RingScreen(
     info: RingInfo,
+    onOpenPairing: () -> Unit = {},
 ) {
     // A-4: read the BLE client directly off LocalAppGraph instead of taking three callback
     // parameters. The three actions always target the same singleton, so threading them through
     // HaloRingApp's SETTINGS_RING branch was pure ceremony.
     val graph = LocalAppGraph.current
+    val pairingScope = rememberCoroutineScope()
     val dash = stringResource(R.string.common_dash)
     Column(modifier = Modifier.fillMaxSize().padding(top = 4.dp)) {
         Text(
@@ -65,8 +69,19 @@ fun RingScreen(
                 valueColor = batteryColor(info.batteryPct))
 
         Spacer(Modifier.height(20.dp))
+        // Burn-in fix 2026-05-27: PAIR / RE-PAIR opens the picker so the user can choose which
+        // R0x ring on the airwaves is theirs. Without this CTA the service would never auto-scan
+        // (it gates on the persisted MAC), and the only way to recover was to wipe app data.
         Box(Modifier.padding(horizontal = ScreenPadding)) {
-            Cta(text = stringResource(R.string.ring_find_short), onClick = { graph.bleClient.blinkLed() })
+            Cta(text = stringResource(
+                if (info.macAddress == null) R.string.ring_pair_short else R.string.ring_repair_short
+            ), onClick = onOpenPairing)
+        }
+        Spacer(Modifier.height(8.dp))
+        Box(Modifier.padding(horizontal = ScreenPadding)) {
+            // SPEC v3 §4.9: 0x50 [0x55, 0xAA] — ring LED flashes briefly. Was previously wired to
+            // 0x10 (BindSuccess marker — no-op) and earlier 0x06 (DND, returns 0xEE on RT08).
+            Cta(text = stringResource(R.string.ring_find_short), onClick = { graph.bleClient.findRing() })
         }
         Spacer(Modifier.height(8.dp))
         // Audit-pass 2026-05-14w: ForceReconnect used to live on the DOUBLE_LONG_PRESS system slot,
@@ -80,18 +95,21 @@ fun RingScreen(
             })
         }
         Spacer(Modifier.height(8.dp))
+        // Audit-pass 2026-05-27z: Shutdown CTA removed. SPEC v3 §4.2 — `0x08 [0x01]` is destructive
+        // and was previously wired to `0x0F` which is OTA-mode entry (would brick the ring). R08
+        // has no display + auto-sleeps when idle; users power it down by physically docking it on
+        // the charging cradle. Keeping a destructive button in Settings was a misfeature.
         Box(Modifier.padding(horizontal = ScreenPadding)) {
-            Cta(text = stringResource(R.string.ring_shutdown_short), danger = true, onClick = { graph.bleClient.shutdownRing() })
-        }
-        Spacer(Modifier.height(8.dp))
-        Box(Modifier.padding(horizontal = ScreenPadding)) {
-            // Forget = drop current connection + start a fresh scan. The MAC whitelist that
-            // would normally pin to the previous ring is gated by the bonded device list in
-            // AndroidR08BleClient, which start() consults; a clean stop/start cycle is the
-            // simplest "release this ring" semantics.
+            // Burn-in fix 2026-05-27: Forget now also clears the persisted paired MAC. Without
+            // this, the service would still auto-scan + lock onto the old MAC on every restart.
+            // After Forget, the user must explicitly tap PAIR to choose a new ring.
             Cta(text = stringResource(R.string.ring_forget_short), danger = true, onClick = {
-                graph.bleClient.stop()
-                graph.bleClient.start()
+                pairingScope.launch {
+                    graph.bleClient.stop()
+                    graph.bleClient.setPairedMac(null)
+                    graph.ringPairingPrefs.clear()
+                }
+                onOpenPairing()   // drop user straight into the picker since the ring is now unset
             })
         }
 

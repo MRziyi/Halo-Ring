@@ -153,7 +153,19 @@
     <string name="ring_reconnect_short">重新连接</string>
     <string name="ring_shutdown_short">关机</string>
     <string name="ring_forget_short">忘记</string>
-    <string name="ring_screen_footer">关机会让戒指断电 — 之后需要短暂放回充电座唤醒它。\n忘记会清空 MAC 白名单，以便配对其它戒指。</string>
+    <string name="ring_pair_short">配对戒指</string>
+    <string name="ring_repair_short">重新配对</string>
+    <string name="ring_screen_footer">忘记会取消配对，点配对可换一个戒指。</string>
+    <string name="ring_pairing_title">选择你的戒指</string>
+    <string name="ring_pairing_subtitle">附近的 R0x 戒指会显示在这里，点一下完成配对。</string>
+    <string name="ring_pairing_scanning">扫描中…</string>
+    <string name="ring_pairing_unknown_device">（无名）</string>
+    <string name="ring_pairing_pick_first">先在上方点选一个</string>
+    <string name="ring_pairing_confirm">配对</string>
+    <string name="ring_pairing_scanning_paired">正在定位戒指…</string>
+    <string name="ring_pairing_connecting">连接中…</string>
+    <string name="ring_pairing_reading_info">读取设备信息…</string>
+    <string name="ring_pairing_done">配对完成 ✓</string>
 
     <!-- 功耗 &amp; 连接 -->
     <string name="power_title">功耗 &amp; 连接</string>
@@ -232,6 +244,10 @@
     <string name="vitals_prefs_csv_desc">把每次读数追加到内部 CSV（在 设置 → 高级 中导出）。</string>
     <string name="vitals_prefs_pause_offfinger_title">未佩戴时暂停</string>
     <string name="vitals_prefs_pause_offfinger_desc">未佩戴戒指时跳过自动测量。节省戒指电量。</string>
+    <string name="vitals_prefs_autonomous_ppg_title">戒指自主 PPG</string>
+    <string name="vitals_prefs_autonomous_ppg_desc">开启时戒指自己每 30 分钟测一次心率。关闭可省戒指电。</string>
+    <string name="vitals_prefs_step_target_title">每日步数目标</string>
+    <string name="vitals_prefs_step_target_desc">点击切换。达成时弹 HUD 提示。</string>
     <string name="vitals_prefs_footer">不支持持续心率 — PPG LED 会让戒指续航减半。</string>
     <string name="vitals_prefs_interval_manual">仅手动</string>
     <string name="vitals_prefs_interval_min">%1$d 分钟</string>
@@ -422,6 +438,7 @@
     <string name="hud_disconnected_hint">打开 app → 设置 → 戒指 → 重新连接</string>
     <string name="hud_profile_cycle">循环</string>
     <string name="hud_steps_value">%d 步</string>
+    <string name="hud_target_reached">达到今日目标</string>
 
     <!-- 手势名 -->
     <string name="gesture_tap">单击</string>

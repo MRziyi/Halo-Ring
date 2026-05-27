@@ -61,6 +61,13 @@ fun TestArenaScreen(
 
     // The set of gestures the wearer has practiced this session (lights up the chip grid).
     var practiced by remember { mutableStateOf(emptySet<Gesture>()) }
+    // Burn-in 2026-05-27: live atomic-gesture echo. The synthesizer waits ~280ms multi-tap
+    // window before committing TAP, which perceptibly lags Test Arena's feedback. Show what
+    // the firmware *just* reported (TOUCH / SWIPE_UP / SWIPE_DOWN / LONG_PRESS) immediately, so
+    // the user gets sub-50ms acknowledgement. The synthesized gesture below supersedes once
+    // it lands.
+    var lastAtomic by remember { mutableStateOf<com.halo.ring.core.gesture.RawGesture?>(null) }
+    var lastAtomicAtMs by remember { mutableStateOf(0L) }
     // Time of the previous DOUBLE_TAP (System.currentTimeMillis). Two in a row within
     // DOUBLE_DOUBLE_TAP_WINDOW_MS = exit.
     var lastDoubleTapMs by remember { mutableStateOf(0L) }
@@ -68,6 +75,15 @@ fun TestArenaScreen(
     // fades back to the "waiting" prompt — the chip grid below carries persistent state.
     var heroVisible by remember { mutableStateOf<com.halo.ring.di.RecognisedGesture?>(null) }
     val totalGestures = remember { Gesture.values().size }
+
+    // Subscribe to the raw atomic-gesture stream for immediate feedback.
+    LaunchedEffect(graph) {
+        if (graph == null) return@LaunchedEffect
+        graph.rawAtomicGestureFlow.collect { raw ->
+            lastAtomic = raw
+            lastAtomicAtMs = System.currentTimeMillis()
+        }
+    }
 
     LaunchedEffect(graph) {
         if (graph == null) return@LaunchedEffect
@@ -107,6 +123,20 @@ fun TestArenaScreen(
 
         // ── hero card: LAST GESTURE → Action · NN ms ────────────────────────────────────────
         HeroCard(heroVisible, modifier = Modifier.padding(horizontal = ScreenPadding))
+
+        // ── live atomic-gesture echo (burn-in 2026-05-27) ────────────────────────────────────
+        // Sub-50ms acknowledgement of what the firmware just reported. Fades after 1s; the hero
+        // card above will catch up with the synthesizer's verdict (TAP / DOUBLE_TAP / etc.).
+        val now = System.currentTimeMillis()
+        val atomicVisible = lastAtomic
+        if (atomicVisible != null && now - lastAtomicAtMs < 1000L) {
+            Spacer(Modifier.height(6.dp))
+            Text(
+                text = "raw: ${atomicVisible.name}",
+                style = HaloType.Caption.copy(color = HaloColors.Accent, fontSize = 12.sp),
+                modifier = Modifier.padding(horizontal = ScreenPadding),
+            )
+        }
 
         Spacer(Modifier.height(20.dp))
 

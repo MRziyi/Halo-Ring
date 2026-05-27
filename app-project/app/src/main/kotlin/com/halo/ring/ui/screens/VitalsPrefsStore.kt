@@ -31,6 +31,18 @@ data class VitalsPrefs(
     val autoSnapshotIntervalMin: Int = 0,
     val csvExportEnabled: Boolean = false,
     val wearDetectionEnabled: Boolean = true,
+    /**
+     * Whether the ring's own autonomous HR-every-30min PPG (`0x16 HR-auto`) is enabled.
+     * Default true — matches the ring's factory setting (per user's burn-in decision).
+     * Disable to save ring battery; we then write `0x16 [02, 00, …]` on every bootstrap.
+     * SPEC v3 §4.4 — observable as green→red LED briefly flashing on a worn ring every 30 min.
+     */
+    val ringAutonomousPpgEnabled: Boolean = true,
+    /**
+     * User's daily step target (SPEC v3 §4.9 `0x21 TargetSetting`). Firmware silently drops
+     * values < 100; we coerce. Default 5000.
+     */
+    val dailyStepTarget: Int = 5000,
 )
 
 /** The cycle of preset intervals for [VitalsPrefs.autoSnapshotIntervalMin] (0 = off). */
@@ -44,6 +56,8 @@ class VitalsPrefsStore(private val context: Context) {
         val AutoSnapshotInterval = intPreferencesKey("auto_snapshot_interval_min")
         val CsvExportEnabled    = booleanPreferencesKey("csv_export_enabled")
         val WearDetectionEnabled = booleanPreferencesKey("wear_detection_enabled")
+        val RingAutonomousPpg    = booleanPreferencesKey("ring_autonomous_ppg")
+        val DailyStepTarget      = intPreferencesKey("daily_step_target")
     }
 
     val flow: Flow<VitalsPrefs> = context.vitalsPrefsDataStore.data.map { p ->
@@ -53,6 +67,8 @@ class VitalsPrefsStore(private val context: Context) {
             autoSnapshotIntervalMin  = p[Keys.AutoSnapshotInterval] ?: 0,
             csvExportEnabled         = p[Keys.CsvExportEnabled]    ?: false,
             wearDetectionEnabled     = p[Keys.WearDetectionEnabled] ?: true,
+            ringAutonomousPpgEnabled = p[Keys.RingAutonomousPpg]   ?: true,
+            dailyStepTarget          = p[Keys.DailyStepTarget]     ?: 5000,
         )
     }
 
@@ -63,6 +79,8 @@ class VitalsPrefsStore(private val context: Context) {
             p[Keys.AutoSnapshotInterval] = prefs.autoSnapshotIntervalMin
             p[Keys.CsvExportEnabled]     = prefs.csvExportEnabled
             p[Keys.WearDetectionEnabled] = prefs.wearDetectionEnabled
+            p[Keys.RingAutonomousPpg]    = prefs.ringAutonomousPpgEnabled
+            p[Keys.DailyStepTarget]      = prefs.dailyStepTarget.coerceAtLeast(100)
         }
     }
 }

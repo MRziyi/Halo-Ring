@@ -7,6 +7,7 @@ import com.halo.ring.runtime.AndroidScheduler
 import com.halo.ring.ui.screens.AdvancedPrefsStore
 import com.halo.ring.ui.screens.FeedbackPrefsStore
 import com.halo.ring.ui.screens.ProfilesPrefsStore
+import com.halo.ring.ui.screens.RingPairingPrefsStore
 import com.halo.ring.ui.screens.VitalsPrefsStore
 import com.halo.ring.core.DeviceProfile
 import com.halo.ring.core.action.ActionRouter
@@ -51,6 +52,8 @@ class AppGraph private constructor(
     val profilesPrefs: ProfilesPrefsStore,
     val advancedPrefs: AdvancedPrefsStore,
     val vitalsPrefs: VitalsPrefsStore,
+    /** Paired-ring MAC persistence — set after the user picks one in the pairing picker. */
+    val ringPairingPrefs: RingPairingPrefsStore,
     /**
      * Live snapshot of the editable profile list. The settings UI mutates this; the foreground
      * service forwards updates into [modeManager] via [com.halo.ring.core.action.ModeManager.upsert]
@@ -106,6 +109,16 @@ class AppGraph private constructor(
      * GuidedTour shouldn't react to stale gestures on open).
      */
     val lastRecognisedFlow: MutableStateFlow<RecognisedGesture?>,
+    /** SPEC v3 §3: union of SetTime (14-byte) + 0x3C (9-byte) capability bitmaps the ring reports
+     *  during bootstrap. UI features can gate themselves off this set — e.g. only show "Stress"
+     *  in Vitals if `"pressure"` is present. Empty until the bootstrap completes. */
+    val ringCapabilitiesFlow: MutableStateFlow<Set<String>>,
+    /** Live stream of RAW atomic gestures from the ring (SWIPE_UP / SWIPE_DOWN / TOUCH / LONG_PRESS),
+     *  emitted by the service the moment the BLE notify arrives — no synthesis wait. Test Arena
+     *  uses this for instant feedback while the multi-tap window (~280 ms) waits for the synth
+     *  combo to resolve. (Burn-in fix 2026-05-27: previously Test Arena only saw post-synthesis
+     *  gestures, so a TAP appeared ~280 ms after the user tapped — perceptibly laggy.) */
+    val rawAtomicGestureFlow: MutableSharedFlow<com.halo.ring.core.gesture.RawGesture>,
 ) {
     /**
      * Best-effort detection of which input source the wearer is using right now. Drives the
@@ -149,6 +162,7 @@ class AppGraph private constructor(
                 profilesPrefs = ProfilesPrefsStore(context.applicationContext),
                 advancedPrefs = AdvancedPrefsStore(context.applicationContext),
                 vitalsPrefs   = VitalsPrefsStore(context.applicationContext),
+                ringPairingPrefs = RingPairingPrefsStore(context.applicationContext),
                 profilesFlow = MutableStateFlow(DefaultProfiles.ALL),
                 activeProfileIdFlow = MutableStateFlow(mm.active().id),
                 systemGesturesFlow = MutableStateFlow(SystemGestures()),
@@ -162,6 +176,8 @@ class AppGraph private constructor(
                 profileStack = com.halo.ring.core.plugin.ProfileStack(),
                 recognisedGestureFlow = MutableSharedFlow(extraBufferCapacity = 8),
                 lastRecognisedFlow = MutableStateFlow(null),
+                ringCapabilitiesFlow = MutableStateFlow(emptySet()),
+                rawAtomicGestureFlow = MutableSharedFlow(extraBufferCapacity = 16),
             )
         }
 

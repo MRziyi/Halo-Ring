@@ -76,8 +76,27 @@ GATT service    : 6E40FFF0-B5A3-F393-E0A9-E50E24DCCA9E
 ```
 
 🟢 Confirmed by both QRing (`Constants.java` L100-102) and 小猪 v2 (`ProtocolConstants.java` L87-99).
+**✓ Verified on real R08 hardware 2026-05-26** (phase-0 Stage 0): advertised name `R08_E600`,
+service UUID, write characteristic, notify characteristic, and CCCD descriptor are all present
+at the expected UUIDs on the first connect.
+
 Nordic-style "UART over BLE" service layout. No encryption, no pairing key — anyone can connect;
 multi-user defence is MAC whitelist on the central. One central at a time. Charging kills BLE.
+
+**Idle baseline finding (Stage 0)**: ✓ the ring emits **zero notify frames** in the 10 s after
+subscription without any writes. No spontaneous accelerometer push, no spontaneous battery push,
+no `0x73 <sub>` sync triggers. Out of the box the ring is in "quiet" mode — every reporting
+stream (gestures, vitals, auto-monitor sync) has to be explicitly enabled before the ring sends
+anything. **Good for our power budget**: the BLE-link cost is the only idle baseline draw; we
+don't have to dedup or discard a default-on stream.
+
+**macOS BLE quirk (phase-0 setup note)**: CoreBluetooth's default service discovery walks every
+characteristic + descriptor on every service the peripheral advertises (GAP, GATT-generic, etc.),
+which takes 1-2 s and trips R08's idle disconnect during the long discovery — `bleak.exc.BleakError:
+disconnected` mid-`discover_descriptors`. **Workaround**: construct the BleakClient with
+`services=[SERVICE_UUID]` so only `6e40fff0-…` is scanned. The phase-0 scripts wrap this in
+`r08_lib.make_client(addr)`; production Android code uses `discoverServices()` which doesn't
+have the same issue.
 
 ## 3. Frame format (write commands)
 

@@ -50,6 +50,7 @@ fun TabBar(
     // (Doc/08-ui-design.md §9.1.1 — the ring has no left/right swipes).
     var anyTabFocused by remember { mutableStateOf(false) }
     DisposableEffect(anyTabFocused) {
+        android.util.Log.i("HaloFocus", "focusOnTabStrip = $anyTabFocused")
         InAppFocusController.focusOnTabStrip = anyTabFocused
         onDispose { /* leave flag as-is; next focus event will clear it */ }
     }
@@ -63,6 +64,28 @@ fun TabBar(
     LaunchedEffect(selected, anyTabFocused) {
         if (anyTabFocused) {
             try { requesters[selected.ordinal].requestFocus() } catch (_: Exception) {}
+        }
+    }
+    // Burn-in 2026-05-27: anchor app's initial focus on the currently-selected tab. The wearer
+    // can't tap to grab focus on AR glasses, so we MUST guarantee focus lands somewhere on launch
+    // — otherwise SWIPE_UP/DOWN (NavPrev/NavNext) silently no-ops because there's no focused
+    // element to traverse from. Previous attempt used `focusManager.moveFocus(Down)` from a
+    // 80ms-delayed LaunchedEffect, but that was racy (sometimes the Compose tree wasn't ready in
+    // time). Direct FocusRequester.requestFocus() is reliable because Compose guarantees the
+    // requester is bound by the time LaunchedEffect runs.
+    LaunchedEffect(Unit) {
+        // Two-stage delay tolerates very fast launches AND first-frame layout costs.
+        kotlinx.coroutines.delay(120)
+        repeat(3) { attempt ->
+            try {
+                android.util.Log.i("HaloFocus", "TabBar initial requestFocus attempt=$attempt on tab=${selected.name}")
+                requesters[selected.ordinal].requestFocus()
+                android.util.Log.i("HaloFocus", "TabBar initial requestFocus completed (attempt=$attempt)")
+                return@LaunchedEffect
+            } catch (e: Exception) {
+                android.util.Log.w("HaloFocus", "TabBar initial requestFocus attempt=$attempt failed: ${e.message}")
+                kotlinx.coroutines.delay(100)
+            }
         }
     }
 

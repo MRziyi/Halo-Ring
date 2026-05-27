@@ -154,6 +154,11 @@ class MainActivity : AppCompatActivity() {
                             measuredMinutesAgo = vitalsSnapshot.capturedAtMs.takeIf { it > 0 }?.let {
                                 ((android.os.SystemClock.uptimeMillis() - it) / 60_000L).toInt()
                             },
+                            // SPEC v3 §5.3: live activity counters from `0x73 sub=0x12` push.
+                            // Empty (null) means no data this session; the screen treats 0 as "—".
+                            stepsToday = vitalsSnapshot.activitySteps ?: 0,
+                            caloriesToday = vitalsSnapshot.activityKcal ?: 0f,
+                            distanceKmToday = (vitalsSnapshot.activityMeters ?: 0) / 1000f,
                         ),
                         status = StatusState(activeBackend = "(none)"),
                         feedbackPrefs = prefs,

@@ -95,6 +95,42 @@ class FakeR08BleClientTest {
         )
     }
 
+    @Test fun `new spec-derived commands all record on the wire`() {
+        val client = FakeR08BleClient { 0L }
+        client.findRing()
+        client.setHrAutoMonitor(enabled = false)
+        client.setHrAutoMonitor(enabled = true, intervalMinutes = 15)
+        client.setDailyTarget(steps = 5000, kcal = 350, distanceMeters = 4000)
+        client.startSportSession(sportType = 1)
+        client.stopSportSession(sportType = 1)
+        client.startAccelStream(continuous = false)
+        client.startAccelStream(continuous = true)
+        client.stopAccelStream()
+
+        assertEquals(
+            listOf(
+                FakeR08BleClient.Command.FIND_RING,
+                FakeR08BleClient.Command.HR_AUTO_MONITOR_OFF,
+                FakeR08BleClient.Command.HR_AUTO_MONITOR_ON,
+                FakeR08BleClient.Command.DAILY_TARGET,
+                FakeR08BleClient.Command.SPORT_START,
+                FakeR08BleClient.Command.SPORT_STOP,
+                FakeR08BleClient.Command.ACCEL_ONE_SHOT,
+                FakeR08BleClient.Command.ACCEL_STREAM_START,
+                FakeR08BleClient.Command.ACCEL_STREAM_STOP,
+            ),
+            client.sentCommands,
+        )
+        assertEquals(Triple(5000, 350, 4000), client.lastDailyTarget)
+    }
+
+    @Test fun `setDailyTarget coerces sub-floor step values to the 100-step minimum`() {
+        // SPEC §4.9: firmware silently drops steps < 100. Fake mirrors this so tests catch the issue.
+        val client = FakeR08BleClient { 0L }
+        client.setDailyTarget(steps = 50, kcal = 100, distanceMeters = 500)
+        assertEquals(Triple(100, 100, 500), client.lastDailyTarget)
+    }
+
     @Test fun `emit uses provided timestamp`() {
         val client = FakeR08BleClient { 0L }
         val captured = mutableListOf<Long>()

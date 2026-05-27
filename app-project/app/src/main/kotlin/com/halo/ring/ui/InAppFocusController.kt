@@ -23,20 +23,33 @@ object InAppFocusController {
     private val focusManager = AtomicReference<FocusManager?>(null)
     private val backController = AtomicReference<BackController?>(null)
     private val tabController = AtomicReference<TabController?>(null)
+    /** Burn-in 2026-05-27: dispatcher into the activity's KeyEvent pipeline. Used by [route] when
+     *  Confirm needs to "click" the currently-focused composable WITHOUT requiring the ADB-injected
+     *  agent. Compose's `Modifier.clickable` fires on DPAD_CENTER for the focused element, so
+     *  routing TAP → Confirm → dispatchKeyEvent(DPAD_CENTER) gives the wearer immediate in-app
+     *  click semantics on glasses (where the agent may not be installed). */
+    private val keyDispatcher = AtomicReference<((Int) -> Boolean)?>(null)
     /** [route] is called from the gesture pipeline (scheduler thread). Compose's [FocusManager],
      *  [BackController], and [TabController] are all main-thread-only — post the actual mutation. */
     private val mainHandler = Handler(Looper.getMainLooper())
 
-    fun attach(focusManager: FocusManager, back: BackController, tabs: TabController) {
+    fun attach(
+        focusManager: FocusManager,
+        back: BackController,
+        tabs: TabController,
+        dispatchKey: ((Int) -> Boolean)? = null,
+    ) {
         this.focusManager.set(focusManager)
         this.backController.set(back)
         this.tabController.set(tabs)
+        this.keyDispatcher.set(dispatchKey)
     }
 
     fun detach() {
         focusManager.set(null)
         backController.set(null)
         tabController.set(null)
+        keyDispatcher.set(null)
         tone.getAndSet(null)?.let { try { it.release() } catch (_: Throwable) {} }
     }
 
@@ -94,12 +107,34 @@ object InAppFocusController {
      * cycles tabs right (since the ring has no left/right swipes — Doc/08-ui-design.md §9.1.1).
      */
     fun route(action: GlassAction): Boolean {
-        val fm = focusManager.get() ?: return false
+        val fm = focusManager.get() ?: run {
+            Log.i("HaloFocus", "route(${action::class.simpleName}) — fm null, returning false")
+            return false
+        }
+        Log.i("HaloFocus", "route(${action::class.simpleName}) focusOnTabStrip=$focusOnTabStrip")
         val back = backController.get()
         val tabs = tabController.get()
 
         // Decide synchronously what we'd accept; do the mutation on the main thread.
-        fun postFocus(direction: FocusDirection) = mainHandler.post { fm.moveFocus(direction) }
+        // Burn-in 2026-05-27: moveFocus(Direction) silently returns false when there's no
+        // current focused owner. On AR glasses the wearer can never grab focus by tap, so the
+        // FIRST NavPrev/NavNext gesture after launch would no-op even though the BLE pipeline
+        // delivered it correctly. Retry with `Enter` (focus into the tree) once if the directional
+        // move was rejected. (`Enter` lands focus on the first focusable descendant.)
+        fun postFocus(direction: FocusDirection) = mainHandler.post {
+            val moved = try { fm.moveFocus(direction) } catch (_: Throwable) { false }
+            if (!moved) {
+                // No current focus owner OR no neighbour in the requested direction. Try Down
+                // first (drops into the first focusable descendant when nothing is focused),
+                // then retry the original direction so the user's intent isn't lost.
+                // We avoid `FocusDirection.Enter` because it's @ExperimentalComposeUiApi in
+                // Compose 1.6.x — `Down` does the same anchoring in practice.
+                try {
+                    fm.moveFocus(FocusDirection.Down)
+                    if (direction != FocusDirection.Down) fm.moveFocus(direction)
+                } catch (_: Throwable) { /* swallow — second attempt is best-effort */ }
+            }
+        }
 
         return when (action) {
             GlassAction.NavPrev -> {
@@ -133,7 +168,17 @@ object InAppFocusController {
                     playClick()
                     true
                 } else {
-                    false
+                    // Burn-in 2026-05-27: try to dispatch DPAD_CENTER via the activity's key-event
+                    // pipeline. Compose's `Modifier.clickable` listens for DPAD_CENTER on the
+                    // focused element, so this yields a real "click" without needing the agent.
+                    // Falls through (returns false) if no dispatcher is registered — caller then
+                    // hits the executor backend (agent), matching the pre-burn-in behaviour.
+                    val dispatch = keyDispatcher.get()
+                    if (dispatch != null) {
+                        mainHandler.post { dispatch(android.view.KeyEvent.KEYCODE_DPAD_CENTER) }
+                        playClick()
+                        true
+                    } else false
                 }
             }
 

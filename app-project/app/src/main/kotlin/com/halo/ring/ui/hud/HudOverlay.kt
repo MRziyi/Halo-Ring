@@ -286,6 +286,7 @@ fun HudPill(event: HudEvent) {
         is HudEvent.Reconnected          -> HaloColors.Accent
         is HudEvent.GestureRecognised    -> HaloColors.Line
         is HudEvent.Peek                 -> HaloColors.Line
+        is HudEvent.TargetReached        -> HaloColors.Accent
     }
     // Disconnected gets slightly larger padding because it carries a two-line message (status +
     // reconnect hint); the rest are single-line pills. The variable's old name `centered` referred
@@ -304,6 +305,9 @@ fun HudPill(event: HudEvent) {
             is HudEvent.LowBattery    -> LowBatteryContent(event)
             is HudEvent.Disconnected  -> DisconnectedContent()
             is HudEvent.Reconnected   -> Text(androidx.compose.ui.res.stringResource(com.halo.ring.R.string.hud_reconnected), style = HaloType.RowVal.copy(
+                color = HaloColors.Accent, fontSize = 16.sp,
+            ))
+            is HudEvent.TargetReached -> Text(androidx.compose.ui.res.stringResource(com.halo.ring.R.string.hud_target_reached), style = HaloType.RowVal.copy(
                 color = HaloColors.Accent, fontSize = 16.sp,
             ))
             is HudEvent.GestureRecognised -> GestureRecognisedContent(event)

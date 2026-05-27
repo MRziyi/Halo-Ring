@@ -176,7 +176,20 @@
     <string name="ring_reconnect_short">RECONNECT</string>
     <string name="ring_shutdown_short">SHUTDOWN</string>
     <string name="ring_forget_short">FORGET</string>
-    <string name="ring_screen_footer">Shutdown powers the ring off — you\'ll need to put it on the cradle briefly to wake it.\nForget drops the MAC whitelist so a different ring can be paired.</string>
+    <string name="ring_pair_short">PAIR RING</string>
+    <string name="ring_repair_short">RE-PAIR</string>
+    <string name="ring_screen_footer">Forget unpairs the ring; tap PAIR to choose a different one.</string>
+    <!-- Ring pairing picker (burn-in fix 2026-05-27). -->
+    <string name="ring_pairing_title">Pick your ring</string>
+    <string name="ring_pairing_subtitle">Nearby R0x-family rings will appear here. Tap one to pair.</string>
+    <string name="ring_pairing_scanning">Scanning…</string>
+    <string name="ring_pairing_unknown_device">(unnamed)</string>
+    <string name="ring_pairing_pick_first">Tap a ring above</string>
+    <string name="ring_pairing_confirm">PAIR</string>
+    <string name="ring_pairing_scanning_paired">Locating the chosen ring…</string>
+    <string name="ring_pairing_connecting">Connecting…</string>
+    <string name="ring_pairing_reading_info">Reading device info…</string>
+    <string name="ring_pairing_done">Paired ✓</string>
 
     <!-- ════════════════════════════════════════════════════════════════════════
          Power &amp; Connection.
@@ -261,6 +274,10 @@
     <string name="vitals_prefs_csv_desc">Append every reading to an internal CSV (export from Settings → Advanced).</string>
     <string name="vitals_prefs_pause_offfinger_title">Pause when off-finger</string>
     <string name="vitals_prefs_pause_offfinger_desc">Skip auto-snapshots while the ring isn\'t worn. Saves ring battery.</string>
+    <string name="vitals_prefs_autonomous_ppg_title">Ring autonomous PPG</string>
+    <string name="vitals_prefs_autonomous_ppg_desc">When on, the ring runs HR every 30 min on its own. Disable to save ring battery.</string>
+    <string name="vitals_prefs_step_target_title">Daily step target</string>
+    <string name="vitals_prefs_step_target_desc">Tap to cycle. Triggers a HUD when reached.</string>
     <string name="vitals_prefs_footer">Continuous HR is intentionally not supported — the PPG LED would halve ring battery.</string>
     <string name="vitals_prefs_interval_manual">Manual only</string>
     <string name="vitals_prefs_interval_min">%1$d min</string>
@@ -468,6 +485,7 @@
     <string name="hud_disconnected_hint">Open app → Settings → Ring → Reconnect</string>
     <string name="hud_profile_cycle">cycle</string>
     <string name="hud_steps_value">%d steps</string>
+    <string name="hud_target_reached">Daily target reached</string>
 
     <!-- ════════════════════════════════════════════════════════════════════════
          Gesture names.

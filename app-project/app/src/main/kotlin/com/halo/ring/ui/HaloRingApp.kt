@@ -94,8 +94,45 @@ fun HaloRingApp(
 ) {
     HaloRingTheme {
         var state by remember { mutableStateOf(initial) }
+        // Burn-in 2026-05-27 fix: `initial` carries the externally-driven snapshots
+        // (StatusBarState / VitalsState / StatusState / feedbackPrefs) that MainActivity rebuilds
+        // every time ringInfoFlow / vitalsSnapshotFlow / feedbackPrefs flows emit. Without this
+        // sync, `state` was captured once on first composition and never refreshed — symptom: ring
+        // name in status bar permanently stuck on "R08_…" placeholder, vitals never updating, etc.
+        // The user-driven fields (tab, navStack) stay where they are.
+        androidx.compose.runtime.LaunchedEffect(
+            initial.statusBar, initial.vitals, initial.status, initial.feedbackPrefs,
+        ) {
+            state = state.copy(
+                statusBar = initial.statusBar,
+                vitals = initial.vitals,
+                status = initial.status,
+                feedbackPrefs = initial.feedbackPrefs,
+            )
+        }
 
         val focusManager = LocalFocusManager.current
+
+        // Burn-in 2026-05-27: on AR glasses there's no touchscreen — the wearer can't tap to
+        // grab focus on the first focusable element. Without an initial focus anchor, ring
+        // NavPrev/NavNext gestures fire focusManager.moveFocus(Up/Down) against a null active
+        // element, which Compose treats as a no-op. Result: the wearer's first few ring
+        // gestures appear to do nothing until they tap the screen (impossible on glasses).
+        //
+        // Fix: once the Compose tree settles, request focus on the first focusable in the
+        // current tab. moveFocus(Enter) walks down into the focusable hierarchy from the root.
+        // Re-fires when the user navigates between tabs or pushes a sub-screen.
+        androidx.compose.runtime.LaunchedEffect(state.tab, state.navStack.size) {
+            kotlinx.coroutines.delay(80)   // give the tab/subscreen one frame to compose
+            try {
+                // `Down` walks into the first focusable below the root and is non-experimental
+                // (Enter does the same but is annotated @ExperimentalComposeUiApi in 1.6.x).
+                focusManager.moveFocus(androidx.compose.ui.focus.FocusDirection.Down)
+            } catch (_: Throwable) {}
+        }
+
+        // Capture LocalView outside DisposableEffect (which is not a composable context).
+        val rootView = androidx.compose.ui.platform.LocalView.current
         DisposableEffect(focusManager) {
             val backController = object : BackController {
                 override fun pop(): Boolean {
@@ -112,20 +149,28 @@ fun HaloRingApp(
                 override fun select(tab: AppTab) { state = state.copy(tab = tab, navStack = emptyList()) }
                 override fun prev() {
                     val ords = AppTab.values()
-                    state = state.copy(
-                        tab = ords[(state.tab.ordinal - 1 + ords.size) % ords.size],
-                        navStack = emptyList(),
-                    )
+                    val newTab = ords[(state.tab.ordinal - 1 + ords.size) % ords.size]
+                    android.util.Log.i("HaloFocus", "tab prev: ${state.tab} → $newTab")
+                    state = state.copy(tab = newTab, navStack = emptyList())
                 }
                 override fun next() {
                     val ords = AppTab.values()
-                    state = state.copy(
-                        tab = ords[(state.tab.ordinal + 1) % ords.size],
-                        navStack = emptyList(),
-                    )
+                    val newTab = ords[(state.tab.ordinal + 1) % ords.size]
+                    android.util.Log.i("HaloFocus", "tab next: ${state.tab} → $newTab")
+                    state = state.copy(tab = newTab, navStack = emptyList())
                 }
             }
-            InAppFocusController.attach(focusManager, backController, tabController)
+            // Burn-in 2026-05-27: pass a dispatchKey hook so TAP→Confirm can fire a synthetic
+            // KEYCODE_DPAD_CENTER through the activity window. Compose's clickable() handles
+            // DPAD_CENTER as a click on the focused element, so this gives ring-driven TAPs a
+            // real in-app click semantics without needing the ADB-injected agent.
+            val dispatchKey: (Int) -> Boolean = { code ->
+                val now = android.os.SystemClock.uptimeMillis()
+                val down = android.view.KeyEvent(now, now, android.view.KeyEvent.ACTION_DOWN, code, 0)
+                val up   = android.view.KeyEvent(now, now, android.view.KeyEvent.ACTION_UP,   code, 0)
+                rootView.dispatchKeyEvent(down) || rootView.dispatchKeyEvent(up)
+            }
+            InAppFocusController.attach(focusManager, backController, tabController, dispatchKey)
             onDispose { InAppFocusController.detach() }
         }
 
@@ -280,7 +325,9 @@ fun HaloRingApp(
                         },
                     )
 
-                    SubScreen.Ring -> RingScreen(info = ringInfo)
+                    SubScreen.Ring -> RingScreen(info = ringInfo, onOpenPairing = { push(SubScreen.RingPairing) })
+
+                    SubScreen.RingPairing -> com.halo.ring.ui.screens.RingPairingScreen(onPaired = { pop() })
 
                     SubScreen.Power -> {
                         val active = profiles.firstOrNull { it.id == activeProfileId }

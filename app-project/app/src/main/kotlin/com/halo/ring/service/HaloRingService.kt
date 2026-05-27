@@ -24,6 +24,7 @@ import com.halo.ring.ui.hud.HudServiceHost
 import com.halo.ring.ui.screens.FeedbackPrefs
 import com.halo.ring.core.action.GlassAction
 import com.halo.ring.core.ble.ConnectionState
+import com.halo.ring.core.ble.HealthKind
 import com.halo.ring.core.ble.RingEvent
 import com.halo.ring.core.ble.Subscription
 import com.halo.ring.core.gesture.GestureSynthesizer
@@ -37,6 +38,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /**
@@ -104,6 +106,23 @@ class HaloRingService : Service() {
     /** P1-5: backends sorted by priority once at init (static set after AppGraph construction).
      *  Re-iterated on every gesture event for the active-backend probe; allocation-free that way. */
     private lateinit var backendsByPriority: List<com.halo.ring.core.inject.ExecutorBackend>
+    /** Phase B3-5: pure :core processor for AccelSample → spatial events (posture / free-fall /
+     *  wrist-shake). Stateful; runs on the scheduler thread alongside the rest of the pipeline. */
+    private val accelProcessor = com.halo.ring.core.sensor.AccelProcessor { spatial ->
+        when (spatial) {
+            is com.halo.ring.core.sensor.AccelProcessor.SpatialEvent.FreeFall -> {
+                Log.w(TAG, "ring in free-fall")
+                hud?.show(HudEvent.LowBattery(graph.ringInfoFlow.value.advertisedName ?: "Halo", 0))
+                // TODO Phase B5+: dedicated FreeFall HUD event with distinct visual instead of repurposing LowBattery
+            }
+            is com.halo.ring.core.sensor.AccelProcessor.SpatialEvent.Impact ->
+                Log.i(TAG, "ring impact ${"%.1f".format(spatial.peakG)} g")
+            is com.halo.ring.core.sensor.AccelProcessor.SpatialEvent.PostureChanged ->
+                Log.d(TAG, "ring posture: ${spatial.posture}")
+            is com.halo.ring.core.sensor.AccelProcessor.SpatialEvent.WristShake ->
+                Log.i(TAG, "wrist-shake (app-layer)")
+        }
+    }
     /** P1-5: when ringInfo derived fields (estimatedConnIntervalMs / intervalMode / activeBackendId)
      *  were last recomputed. The estimator's "running median over the last 16 samples" doesn't
      *  shift fast enough to need a per-event update; throttling to 1 Hz on the scheduler thread
@@ -249,7 +268,10 @@ class HaloRingService : Service() {
             // A6: foreground bypass. When MainActivity is in foreground AND the in-app focus
             // controller can route the action (Nav*/Back/Home), skip the executor backend.
             r.inAppShortCircuit = { action ->
-                MainActivity.isInForeground.get() && InAppFocusController.route(action)
+                val fg = MainActivity.isInForeground.get()
+                val handled = fg && InAppFocusController.route(action)
+                Log.i(TAG, "inAppShortCircuit(${action::class.simpleName}) fg=$fg handled=$handled")
+                handled
             }
             // Doc/18 §6 — pushed-profile stack lookup. The router consults this BEFORE the
             // wearer's active profile so overlay-app bindings win while their HUD is up.
@@ -307,6 +329,16 @@ class HaloRingService : Service() {
                             )
                         }
                     }
+                    // Emit the raw atomic gesture immediately for diagnostic UIs (Test Arena
+                    // shows it instantly, before the synthesizer's multi-tap window has fired).
+                    // No backpressure: tryEmit is fire-and-forget against an extraBufferCapacity=16
+                    // SharedFlow.
+                    graph.rawAtomicGestureFlow.tryEmit(event.raw)
+                    // Burn-in 2026-05-27: log every raw event so we can verify the ring is
+                    // actually emitting all four gesture codes (0x01 SWIPE_UP / 0x02 SWIPE_DOWN /
+                    // 0x03 TOUCH / 0x04 LONG_PRESS). User reported "only DOUBLE_TAP back works";
+                    // need to know whether SWIPE / LONG_PRESS frames are arriving at all.
+                    Log.i(TAG, "raw gesture: ${event.raw}")
                     if (!interactionRouter.screenOn) {
                         // Screen-off fast path: bypass synthesizer (LONG_PRESS = wake in ~50-80 ms).
                         serviceScope.launch { interactionRouter.onRawWhileScreenOff(event.raw) }
@@ -320,35 +352,87 @@ class HaloRingService : Service() {
                         hud?.show(HudEvent.LowBattery(graph.ringInfoFlow.value.advertisedName ?: "Halo", event.percent))
                     }
                 }
-                is RingEvent.TouchStatus -> Log.d(TAG, "ring touch IC enabled=${event.enabled}")
+                is RingEvent.TouchStatus -> {
+                    // SPEC v3 §4.10: byte 1 = 1 fires when the ring is inserted into the charging
+                    // dock OR removed from the user. We can use this as a real wear-state signal
+                    // (more reliable than the glasses-side ScreenWearProxy on its own). Push to
+                    // the wear-state collector so reconcilePower drops to SLOW band immediately.
+                    Log.d(TAG, "ring touch IC enabled=${event.enabled}")
+                    onRingWorn(event.enabled)
+                }
                 is RingEvent.Health -> {
-                    // B6: collect HR / SpO2 / stress into the vitals snapshot flow. The BLE client's
-                    // requestVitalsSnapshot() sequence pushes the start commands; the ring streams
-                    // values back as 0x69 notify frames, which R08Frame parses into Health events.
                     val prev = graph.vitalsSnapshotFlow.value
                     val updated = when (event.kind) {
-                        com.halo.ring.core.ble.HealthKind.HEART_RATE -> prev.copy(heartRateBpm = event.value, capturedAtMs = nowMs, measuring = true)
-                        com.halo.ring.core.ble.HealthKind.SPO2       -> prev.copy(spo2Pct = event.value, capturedAtMs = nowMs, measuring = true)
-                        com.halo.ring.core.ble.HealthKind.STRESS     -> prev.copy(stressIndex = event.value, capturedAtMs = nowMs, measuring = false)
+                        HealthKind.HEART_RATE  -> prev.copy(heartRateBpm = event.value, capturedAtMs = nowMs, measuring = true)
+                        HealthKind.SPO2        -> prev.copy(spo2Pct = event.value, capturedAtMs = nowMs, measuring = true)
+                        HealthKind.STRESS      -> prev.copy(stressIndex = event.value, capturedAtMs = nowMs, measuring = false)
+                        HealthKind.HEALTHCHECK -> prev.copy(
+                            heartRateBpm = event.value,
+                            systolic = event.systolic,
+                            diastolic = event.diastolic,
+                            capturedAtMs = nowMs,
+                            measuring = false,
+                        )
+                        HealthKind.BLOOD_PRESSURE -> prev.copy(systolic = event.systolic, diastolic = event.diastolic, capturedAtMs = nowMs)
+                        HealthKind.TEMPERATURE -> prev.copy(temperature = event.value.toFloat() / 10f, capturedAtMs = nowMs)
+                        HealthKind.HRV, HealthKind.FATIGUE, HealthKind.BLOOD_SUGAR -> prev  // progress-only on RT08
                     }
                     graph.vitalsSnapshotFlow.value = updated
-                    // P0-2: append to VitalsLogger when the user has CSV export enabled. enabled is
-                    // a @Volatile read; record() is a no-op when off (matches LatencyLogger pattern).
-                    graph.vitalsLogger.record(
-                        com.halo.ring.core.perf.VitalsLogger.Sample(
-                            kind = when (event.kind) {
-                                com.halo.ring.core.ble.HealthKind.HEART_RATE -> com.halo.ring.core.perf.VitalsLogger.Kind.HEART_RATE
-                                com.halo.ring.core.ble.HealthKind.SPO2       -> com.halo.ring.core.perf.VitalsLogger.Kind.SPO2
-                                com.halo.ring.core.ble.HealthKind.STRESS     -> com.halo.ring.core.perf.VitalsLogger.Kind.STRESS
-                            },
-                            value = event.value,
-                            capturedAtMs = nowMs,
+                    val loggerKind = when (event.kind) {
+                        HealthKind.HEART_RATE, HealthKind.HEALTHCHECK -> com.halo.ring.core.perf.VitalsLogger.Kind.HEART_RATE
+                        HealthKind.SPO2 -> com.halo.ring.core.perf.VitalsLogger.Kind.SPO2
+                        HealthKind.STRESS -> com.halo.ring.core.perf.VitalsLogger.Kind.STRESS
+                        else -> null
+                    }
+                    if (loggerKind != null) {
+                        graph.vitalsLogger.record(
+                            com.halo.ring.core.perf.VitalsLogger.Sample(loggerKind, event.value, nowMs)
                         )
+                    }
+                }
+                is RingEvent.WearDetectFail -> {
+                    Log.w(TAG, "vitals wear-detect fail (${event.kind})")
+                    // Surface to UI via the vitals snapshot's "measuring" flag flipping off + null.
+                    val prev = graph.vitalsSnapshotFlow.value
+                    graph.vitalsSnapshotFlow.value = prev.copy(measuring = false, wearDetectFail = true)
+                }
+                is RingEvent.Activity -> {
+                    // SPEC §5.3 wire-verified: cal=mcal/1000, dist=integer meters.
+                    val prev = graph.vitalsSnapshotFlow.value
+                    graph.vitalsSnapshotFlow.value = prev.copy(
+                        activitySteps = event.steps,
+                        activityKcal = event.calories,
+                        activityMeters = event.distanceMeters,
                     )
                 }
-                is RingEvent.Activity,
-                is RingEvent.Steps,
-                is RingEvent.AccelRaw,
+                is RingEvent.TargetReached -> {
+                    hud?.show(HudEvent.TargetReached)
+                }
+                is RingEvent.RingGameKey -> Log.i(TAG, "wrist-shake (RING_GAME_KEY)")
+                is RingEvent.SportTick -> {
+                    // Live HR + duration during a workout. Pushed into the sport-session flow.
+                    val prev = graph.vitalsSnapshotFlow.value
+                    graph.vitalsSnapshotFlow.value = prev.copy(
+                        heartRateBpm = event.hrEstimate.takeIf { it > 0 } ?: prev.heartRateBpm,
+                        sportDurationSec = event.durationSeconds,
+                    )
+                }
+                is RingEvent.AccelSample -> {
+                    // Phase B3-5: feed the pure :core AccelProcessor for posture / free-fall /
+                    // wrist-shake detection. SpatialEvents come back through the emit lambda set
+                    // up below.
+                    accelProcessor.onSample(event)
+                    val prev = graph.vitalsSnapshotFlow.value
+                    graph.vitalsSnapshotFlow.value = prev.copy(
+                        lastAccelMagnitudeG = event.magnitude,
+                    )
+                }
+                is RingEvent.AccelOpaque -> Unit
+                is RingEvent.Capability -> {
+                    Log.i(TAG, "ring capabilities: ${event.flags.size} flags — ${event.flags.sorted().joinToString(",")}")
+                    graph.ringCapabilitiesFlow.value = event.flags
+                }
+                is RingEvent.UnsupportedOp -> Log.w(TAG, "ring refused opcode 0x${event.opcode.toString(16)}")
                 is RingEvent.Unknown -> Unit
             }
         }
@@ -358,7 +442,19 @@ class HaloRingService : Service() {
             Log.i(TAG, "BLE connection state: $state")
             when (state) {
                 ConnectionState.READY -> {
-                    graph.ringInfoFlow.value = graph.ringInfoFlow.value.copy(connected = true)
+                    val client = graph.bleClient as? com.halo.ring.ble.AndroidR08BleClient
+                    graph.ringInfoFlow.value = graph.ringInfoFlow.value.copy(
+                        connected = true,
+                        // SPEC v3 §1.1: HW + FW revisions are read during bootstrap before this
+                        // READY transition fires. If they're null here, the device-info service
+                        // was missing on this firmware (rare).
+                        firmwareVersion = client?.fwRevisionString() ?: graph.ringInfoFlow.value.firmwareVersion,
+                        // Burn-in 2026-05-27 (user feedback): status bar showed "R08_…" placeholder
+                        // because we never propagated the scan's advertisedName/MAC. Capture from
+                        // the BLE client (which snapshots them in onScanResult) on every READY.
+                        advertisedName = client?.connectedDeviceName() ?: graph.ringInfoFlow.value.advertisedName,
+                        macAddress = client?.connectedDeviceAddress() ?: graph.ringInfoFlow.value.macAddress,
+                    )
                     disconnectReminderTimer?.cancel(); disconnectReminderTimer = null
                     hud?.show(HudEvent.Reconnected)
                     synthesizer.armWakeSwallow()
@@ -372,6 +468,19 @@ class HaloRingService : Service() {
                     if (feedbackPrefs.autoHintAfterPairing) {
                         serviceScope.launch { graph.feedbackPrefs.armAutoHintAfterPairing() }
                     }
+                    // SPEC v3 §4.4 / §4.9: apply user's VitalsPrefs to the ring — autonomous-HR
+                    // monitoring + daily-step target. Done after a brief delay so the bootstrap
+                    // command-channel writes complete first; otherwise the writes can collide.
+                    graph.scheduler.postDelayed(2_500L) {
+                        val vp = graph.vitalsPrefsFlow.value
+                        graph.bleClient.setHrAutoMonitor(vp.ringAutonomousPpgEnabled, intervalMinutes = 30)
+                        // SPEC §4.9: firmware silently drops steps < 100; the client coerces.
+                        graph.bleClient.setDailyTarget(
+                            steps = vp.dailyStepTarget,
+                            kcal = (vp.dailyStepTarget * 36 / 1000).coerceAtLeast(50),  // 36 mcal/step on RT08
+                            distanceMeters = (vp.dailyStepTarget * 8 / 10),               // ~0.8 m/step stride
+                        )
+                    }
                 }
                 ConnectionState.DISCONNECTED -> {
                     graph.ringInfoFlow.value = graph.ringInfoFlow.value.copy(connected = false)
@@ -381,6 +490,9 @@ class HaloRingService : Service() {
                     // fires stretch out.
                     disconnectReminderDelayMs = DISCONNECT_REMINDER_INITIAL_MS
                     scheduleDisconnectReminder()
+                    // Clear AccelProcessor state so a fresh connection doesn't fire stale spatial
+                    // events from buffered samples.
+                    accelProcessor.reset()
                 }
                 else -> Unit
             }
@@ -587,9 +699,21 @@ class HaloRingService : Service() {
         }
         cleanup += { try { unregisterReceiver(pluginBroadcast) } catch (_: IllegalArgumentException) {} }
 
-        // ── 10. foreground notification + start BLE ───────────────────────────────────────────
+        // ── 10. foreground notification + start BLE (gated on paired-MAC presence) ────────────
+        // Burn-in fix 2026-05-27: ONLY scan on service start if the user has previously paired a
+        // ring (persisted MAC in [RingPairingPrefsStore]). Otherwise wait — the user opens the
+        // pairing picker from the wizard / RingScreen, which calls startDiscovery() + setPairedMac().
         startInForeground()
-        graph.bleClient.start()
+        serviceScope.launch {
+            val pairedMac = graph.ringPairingPrefs.pairedMacFlow.first()
+            if (pairedMac != null) {
+                Log.i(TAG, "auto-start BLE for paired ring $pairedMac")
+                graph.bleClient.setPairedMac(pairedMac)
+                graph.bleClient.start()
+            } else {
+                Log.i(TAG, "no paired ring — service idle until user opens pairing picker")
+            }
+        }
 
         // ── 11. headless boot-recovery: re-spawn the agent if it died on reboot ────────────────
         // The `app_process` agent doesn't survive reboot — nothing keeps it alive after the
@@ -638,6 +762,19 @@ class HaloRingService : Service() {
      * so [PowerPolicy.Decision.intervalMode] drops from HIGH to BALANCED (or to SLOW if the screen
      * also turned off).
      */
+    /**
+     * SPEC v3 §4.10: `0x73 sub=0x2A` byte 1 = 1 fires when the ring is removed from finger OR
+     * inserted into the charging dock. Both are "not worn" semantically; use as a fast-acting
+     * wear-state signal that doesn't depend on the eye-side ScreenWearProxy.
+     */
+    private fun onRingWorn(worn: Boolean) {
+        if (this.worn == worn) return
+        this.worn = worn
+        if (worn) lastWornMs = graph.scheduler.nowMs()
+        Log.i(TAG, "wear state from ring touch-IC: worn=$worn")
+        reconcilePower()
+    }
+
     private fun reconcilePower() {
         val now = graph.scheduler.nowMs()
         val decision = PowerPolicy.decide(

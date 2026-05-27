@@ -98,6 +98,28 @@ fun VitalsPrefsScreen(
             onToggle = { onUpdated(prefs.copy(wearDetectionEnabled = !prefs.wearDetectionEnabled)) },
         )
 
+        // SPEC v3 §4.4 `0x16 HR-auto`: ring's own autonomous PPG every 30 min. Default ON
+        // (matches factory). Disabling saves ring battery (LED stays dark).
+        ToggleRow(
+            title = stringResource(R.string.vitals_prefs_autonomous_ppg_title),
+            description = stringResource(R.string.vitals_prefs_autonomous_ppg_desc),
+            on = prefs.ringAutonomousPpgEnabled,
+            onToggle = { onUpdated(prefs.copy(ringAutonomousPpgEnabled = !prefs.ringAutonomousPpgEnabled)) },
+        )
+
+        // SPEC v3 §4.9 `0x21 TargetSetting`: tap to cycle through preset targets. Firmware drops
+        // values < 100; cycle starts at 1000 to stay clear of that floor.
+        FocusableRow(onClick = {
+            onUpdated(prefs.copy(dailyStepTarget = cycleNextStepTarget(prefs.dailyStepTarget)))
+        }) {
+            Column(Modifier.padding(end = 8.dp).weight(1f)) {
+                Text(stringResource(R.string.vitals_prefs_step_target_title), style = HaloType.Body)
+                Text(stringResource(R.string.vitals_prefs_step_target_desc), style = HaloType.Caption.copy(fontSize = 11.sp))
+            }
+            Text("%,d".format(prefs.dailyStepTarget), style = HaloType.Body.copy(color = HaloColors.Accent))
+        }
+        Divider()
+
         Spacer(Modifier.height(12.dp))
         Text(
             stringResource(R.string.vitals_prefs_footer),
@@ -134,6 +156,14 @@ private fun cycleNextInterval(currentMin: Int): Int {
     val i = AUTO_SNAPSHOT_INTERVALS.indexOf(currentMin)
     return if (i < 0) AUTO_SNAPSHOT_INTERVALS.first()
     else AUTO_SNAPSHOT_INTERVALS[(i + 1) % AUTO_SNAPSHOT_INTERVALS.size]
+}
+
+/** SPEC v3 §4.9: target cycle. Firmware silently drops < 100; we keep the floor well above. */
+private val STEP_TARGETS = intArrayOf(1000, 3000, 5000, 8000, 10000, 15000, 20000)
+private fun cycleNextStepTarget(current: Int): Int {
+    val i = STEP_TARGETS.indexOf(current)
+    return if (i < 0) STEP_TARGETS[2]   // default 5000
+    else STEP_TARGETS[(i + 1) % STEP_TARGETS.size]
 }
 
 @Composable
