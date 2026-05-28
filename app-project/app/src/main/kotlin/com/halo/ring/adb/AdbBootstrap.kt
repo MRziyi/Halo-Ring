@@ -36,6 +36,10 @@ class AdbBootstrap(private val context: Context) {
     /** Set by [connect]; reused by push / grant / startAgent within the same bootstrap session. */
     @Volatile private var connection: AdbConnection? = null
 
+    /** Port [connectTo] last connected on. Lets the wizard tell whether we came up on the
+     *  Wi-Fi-independent persistent TCP port ([PERSISTENT_TCP_PORT]) or the transient wireless one. */
+    @Volatile private var lastConnectedPort = 0
+
     /** Single-flight guard for [bootRecoverAgent]. The service fires recovery from two places
      *  (onCreate + the Wi-Fi onAvailable callback); without this they ran concurrently on
      *  separate instances and raced on the dex push, crashing one agent with ClassNotFoundException
@@ -127,19 +131,24 @@ class AdbBootstrap(private val context: Context) {
         // Agent is down → drop any stale connection a previous (now-dead) recovery left held,
         // so connect() re-establishes a fresh loopback session instead of reusing a dead socket.
         disconnect()
-        ensureWifiEnabled()
-        ensureWirelessDebugEnabled()
 
-        // Give adbd time to bind its TLS port after ensureWirelessDebugEnabled() flips
-        // adb_wifi_enabled=1. On Rokid YodaOS this takes 3-4 s after the sysprop is written.
-        kotlinx.coroutines.delay(4_000)
-
-        when (val r = connect()) {
-            is Result.Failure -> {
-                Log.w(TAG, "bootRecover: connect failed: ${r.message}")
-                return@withContext r
+        // Preferred path: the persistent Wi-Fi-independent TCP port. Once provisioned it's up on
+        // every boot with NO Wi-Fi, so try it first and don't touch the radio.
+        var connected = connect() is Result.Success
+        if (!connected) {
+            // Not provisioned yet (or port not up) → fall back to wireless, which needs Wi-Fi.
+            Log.i(TAG, "bootRecover: persistent tcp unavailable, falling back to wireless (needs Wi-Fi)")
+            ensureWifiEnabled()
+            ensureWirelessDebugEnabled()
+            // Give adbd time to bind its TLS port after adb_wifi_enabled flips. ~3-4 s on Rokid.
+            kotlinx.coroutines.delay(4_000)
+            when (val r = connect()) {
+                is Result.Failure -> {
+                    Log.w(TAG, "bootRecover: connect failed: ${r.message}")
+                    return@withContext r
+                }
+                else -> Unit
             }
-            else -> Unit
         }
 
         // The dex is in app assets; pushing is idempotent (sync.SEND overwrites).
@@ -275,31 +284,71 @@ class AdbBootstrap(private val context: Context) {
     }
 
     /**
-     * Connect to the device's TLS-wrapped ADB service. Must be called before [pushAgentDex] /
+     * Connect to the device's ADB service over loopback. Must be called before [pushAgentDex] /
      * [grantWriteSecureSettings] / [startAgent]. Idempotent.
      *
-     * Primary path — Settings.Secure.adb_wifi_port: adbd writes the connect port here on Android
-     * 11+ when wireless debugging is enabled. Connecting to 127.0.0.1:<port> is far more reliable
-     * than mDNS on Rokid YodaOS, which does not advertise _adb-tls-connect._tcp.
-     *
-     * Fallback — mDNS discovery: used when the Secure setting is absent (some AOSP builds store
-     * the port differently) or returns 0.
+     * Transport preference:
+     *  1. **Persistent TCP port ([PERSISTENT_TCP_PORT])** — once [migrateToPersistentTcp] has run,
+     *     adbd listens here on every boot (driven by `persist.adb.tcp.port`) and it is **independent
+     *     of Wi-Fi**: the radio can be off and the user can be miles from any AP. This is the
+     *     steady-state path and needs no Wi-Fi.
+     *  2. **Wireless TLS port** (`service.adb.tls.port` sysprop / `adb_wifi_port` setting) — only
+     *     used during first-run pairing, before we've migrated. Dies when Wi-Fi disconnects.
+     *  3. **mDNS** — last-ditch discovery for AOSP builds that store the port elsewhere.
      */
     suspend fun connect(): Result = withContext(Dispatchers.IO) {
         if (connection != null) return@withContext Result.Success
 
-        // Try reading the port directly — avoids mDNS entirely when on the same device.
+        // 1. Persistent, Wi-Fi-independent loopback port (preferred once provisioned).
+        val tcp = connectTo("127.0.0.1", PERSISTENT_TCP_PORT)
+        if (tcp is Result.Success) {
+            Log.i(TAG, "connect: via persistent tcp $PERSISTENT_TCP_PORT (Wi-Fi-independent)")
+            return@withContext tcp
+        }
+        Log.i(TAG, "connect: persistent tcp $PERSISTENT_TCP_PORT unavailable, trying wireless TLS port")
+
+        // 2. Wireless TLS port — first-run only (before migration), needs Wi-Fi.
         val localPort = readAdbWifiPort()
         if (localPort > 0) {
-            Log.i(TAG, "connect: Settings adb_wifi_port=$localPort → 127.0.0.1")
-            return@withContext connectTo("127.0.0.1", localPort)
+            Log.i(TAG, "connect: adb_wifi_port=$localPort → 127.0.0.1 (wireless)")
+            val w = connectTo("127.0.0.1", localPort)
+            if (w is Result.Success) return@withContext w
         }
 
-        Log.i(TAG, "connect: adb_wifi_port not in Settings, trying mDNS")
+        // 3. mDNS fallback.
+        Log.i(TAG, "connect: no loopback port, trying mDNS")
         val endpoint = mdns.discover(AdbMdnsDiscovery.CONNECT_SERVICE_TYPE)
-            ?: return@withContext Result.Failure("mDNS: no _adb-tls-connect._tcp service found")
+            ?: return@withContext Result.Failure("no ADB transport (tcp $PERSISTENT_TCP_PORT closed, no wireless port, no mDNS)")
         connectTo(endpoint.host, endpoint.port)
     }
+
+    /**
+     * First-run migration: switch adbd onto a **Wi-Fi-independent** loopback TCP port that persists
+     * across reboots, then reconnect to it. After this, [connect] uses [PERSISTENT_TCP_PORT] and the
+     * agent no longer depends on Wi-Fi or Wireless Debugging (which Android tears down the moment
+     * Wi-Fi disconnects / on reboot).
+     *
+     *  - `persist.adb.tcp.port` → adbd opens the port on every boot (verified: Rokid's init honours
+     *    it even on a `user` build, with no Wi-Fi and no agent).
+     *  - `service.adb.tcp.port` + `ctl.restart adbd` → opens it right now for the current session.
+     *
+     * Assumes an active connection with shell access (the wireless one from pairing). That
+     * connection is dropped by the adbd restart; we reconnect via [connect] (which now prefers the
+     * persistent port). Both setprops are `shell_prop`-writable — no root needed.
+     */
+    suspend fun migrateToPersistentTcp(): Result = withContext(Dispatchers.IO) {
+        val conn = connection ?: return@withContext Result.Failure("not connected")
+        Log.i(TAG, "migrateToPersistentTcp: persist.adb.tcp.port=$PERSISTENT_TCP_PORT + restart adbd")
+        conn.exec("setprop persist.adb.tcp.port $PERSISTENT_TCP_PORT", service = "shell")
+        conn.exec("setprop service.adb.tcp.port $PERSISTENT_TCP_PORT", service = "shell")
+        conn.exec("setprop ctl.restart adbd", service = "shell")  // drops `connection`
+        disconnect()
+        kotlinx.coroutines.delay(4_000)  // adbd takes ~3-4 s to rebind on Rokid YodaOS
+        connect()  // now prefers 127.0.0.1:$PERSISTENT_TCP_PORT
+    }
+
+    /** True if the current connection is on the Wi-Fi-independent persistent TCP port. */
+    fun isOnPersistentTcp(): Boolean = connection != null && lastConnectedPort == PERSISTENT_TCP_PORT
 
     private fun readAdbWifiPort(): Int {
         val cr = context.contentResolver
@@ -328,6 +377,7 @@ class AdbBootstrap(private val context: Context) {
         val conn = AdbConnection(host, port, keyPair())
         if (!conn.connect()) return@withContext Result.Failure("ADB connect $host:$port failed")
         connection = conn
+        lastConnectedPort = port
         Log.i(TAG, "ADB connected to $host:$port")
         Result.Success
     }
@@ -400,6 +450,7 @@ class AdbBootstrap(private val context: Context) {
     fun disconnect() {
         connection?.close()
         connection = null
+        lastConnectedPort = 0
     }
 
     companion object {
@@ -412,5 +463,9 @@ class AdbBootstrap(private val context: Context) {
         const val AGENT_START_SCRIPT = "/data/local/tmp/halo-start.sh"
         /** stdout+stderr from the agent process; should have JVM startup lines if healthy. */
         const val AGENT_LOG_PATH = "/data/local/tmp/halo-agent.log"
+        /** Wi-Fi-independent loopback ADB port. adbd binds it on every boot once
+         *  `persist.adb.tcp.port` is set (see [migrateToPersistentTcp]); 127.0.0.1 is always
+         *  routable, so the agent survives Wi-Fi off / leaving the AP / reboot. */
+        const val PERSISTENT_TCP_PORT = 5555
     }
 }

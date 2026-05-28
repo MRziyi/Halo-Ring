@@ -486,9 +486,11 @@
     <string name="wizard_wifi_title">Enable Wi-Fi</string>
     <string name="wizard_wifi_body">Wireless ADB needs the Wi-Fi radio on to bind its port. No internet connection required — just the switch. Once the agent is paired, Wi-Fi can be turned off.</string>
     <string name="wizard_wifi_cta">OPEN WI-FI SETTINGS</string>
-    <!-- Post-pairing success page. -->
-    <string name="wizard_wifi_off_title">Setup complete</string>
-    <string name="wizard_wifi_off_body">Keep Wi-Fi on — the agent needs it to restart after each reboot.</string>
+    <string name="wizard_wifi_off_title">Turn Wi-Fi off</string>
+    <string name="wizard_wifi_off_body">Setup is done. Control now runs over a local channel — Wi-Fi is no longer needed. Turn it off now; the ring keeps working with Wi-Fi off, away from any network, and across reboots.</string>
+    <string name="wizard_wifi_off_cta">TURN OFF WI-FI</string>
+    <string name="wizard_wifi_off_done">Confirmed — working with Wi-Fi off</string>
+    <string name="wizard_wifi_off_agent_lost">Control dropped when Wi-Fi turned off. Turn Wi-Fi back on and re-run setup.</string>
     <!-- Accessibility gate — shown before any other system-access gate. -->
     <string name="wizard_a11y_gate_body">Enable \"Halo Ring\" in Accessibility settings first — the pairing code panel runs through this service.</string>
     <string name="wizard_keepalive_step">Keep-alive</string>

@@ -552,14 +552,21 @@ class MainActivity : AppCompatActivity() {
             is AdbBootstrap.Result.Failure -> return report("✗ ${r.message}")
             else -> Unit
         }
-        report("Installing agent…")
-        when (val r = adb.pushAgentDex()) {
-            is AdbBootstrap.Result.Failure -> return report("✗ ${r.message}")
-            else -> Unit
-        }
         when (val r = adb.grantWriteSecureSettings()) {
             is AdbBootstrap.Result.Failure ->
                 Log.i("Halo", "pm grant skipped (vendor restriction): ${r.message}")
+            else -> Unit
+        }
+        if (!adb.isOnPersistentTcp()) {
+            report("Enabling offline control…")
+            when (val r = adb.migrateToPersistentTcp()) {
+                is AdbBootstrap.Result.Failure -> return report("✗ offline setup: ${r.message}")
+                else -> Unit
+            }
+        }
+        report("Installing agent…")
+        when (val r = adb.pushAgentDex()) {
+            is AdbBootstrap.Result.Failure -> return report("✗ ${r.message}")
             else -> Unit
         }
         report("Starting agent…")
@@ -682,14 +689,23 @@ class MainActivity : AppCompatActivity() {
             is AdbBootstrap.Result.Failure -> return done("✗ ${r.message}")
             else -> Unit
         }
-        progress("Installing agent…")
-        when (val r = adb.pushAgentDex()) {
-            is AdbBootstrap.Result.Failure -> return done("✗ ${r.message}")
-            else -> Unit
-        }
         when (val r = adb.grantWriteSecureSettings()) {
             is AdbBootstrap.Result.Failure ->
                 Log.i("Halo", "pm grant skipped (vendor restriction): ${r.message}")
+            else -> Unit
+        }
+        // Move off the Wi-Fi-bound wireless transport onto the persistent loopback port so the
+        // agent survives Wi-Fi off / leaving the AP / reboot. No-op if we already came up on it.
+        if (!adb.isOnPersistentTcp()) {
+            progress("Enabling offline control…")
+            when (val r = adb.migrateToPersistentTcp()) {
+                is AdbBootstrap.Result.Failure -> return done("✗ offline setup: ${r.message}")
+                else -> Unit
+            }
+        }
+        progress("Installing agent…")
+        when (val r = adb.pushAgentDex()) {
+            is AdbBootstrap.Result.Failure -> return done("✗ ${r.message}")
             else -> Unit
         }
         progress("Starting agent…")

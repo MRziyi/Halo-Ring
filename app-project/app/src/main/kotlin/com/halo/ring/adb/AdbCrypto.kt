@@ -90,6 +90,27 @@ object AdbCrypto {
     }
 
     /**
+     * ASN.1 DigestInfo prefix for SHA-1. adbd verifies the legacy AUTH signature with
+     * `RSA_verify(NID_sha1, token, 20, sig)`, which expects the signed blob to be
+     * `DigestInfo(SHA1) || token`. We reproduce that with raw PKCS#1 v1.5 RSA.
+     */
+    private val SHA1_DIGEST_INFO = byteArrayOf(
+        0x30, 0x21, 0x30, 0x09, 0x06, 0x05, 0x2b, 0x0e, 0x03, 0x02, 0x1a, 0x05, 0x00, 0x04, 0x14,
+    )
+
+    /**
+     * Sign the 20-byte AUTH token adbd sends during the **legacy (pre-TLS) RSA handshake** used by
+     * the plain `service.adb.tcp.port` transport (our Wi-Fi-independent loopback port). adbd checks
+     * the signature against the public keys in `/data/misc/adb/adb_keys`; our key is added there
+     * during wireless pairing, so a trusted connection needs no on-device prompt.
+     */
+    fun signAdbToken(keyPair: KeyPair, token: ByteArray): ByteArray {
+        val cipher = javax.crypto.Cipher.getInstance("RSA/ECB/PKCS1Padding")
+        cipher.init(javax.crypto.Cipher.ENCRYPT_MODE, keyPair.private)
+        return cipher.doFinal(SHA1_DIGEST_INFO + token)
+    }
+
+    /**
      * Big-endian → little-endian fixed-width byte array, taking only the last `bytes` bytes of
      * the BigInteger's two's-complement encoding. Java's [BigInteger.toByteArray] always emits a
      * leading sign byte for positive numbers whose high bit is set, so a 2048-bit modulus comes

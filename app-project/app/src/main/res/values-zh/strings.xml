@@ -453,8 +453,11 @@
     <string name="wizard_adb_running_title">配对中…</string>
     <string name="wizard_adb_paired_title">已配对</string>
     <string name="wizard_adb_continue_cta">继续</string>
-    <string name="wizard_wifi_off_title">配置完成</string>
-    <string name="wizard_wifi_off_body">请保持 Wi-Fi 开启——每次重启后 agent 需要 Wi-Fi 才能自动恢复。</string>
+    <string name="wizard_wifi_off_title">关掉 Wi-Fi</string>
+    <string name="wizard_wifi_off_body">配置完成。控制已切到本地通道，不再需要 Wi-Fi。现在请关掉 Wi-Fi——关掉后、离开网络、乃至重启，戒指都照常工作。</string>
+    <string name="wizard_wifi_off_cta">关掉 Wi-Fi</string>
+    <string name="wizard_wifi_off_done">已确认——无 Wi-Fi 下正常工作</string>
+    <string name="wizard_wifi_off_agent_lost">关掉 Wi-Fi 后控制断了。请重新打开 Wi-Fi 并重新设置。</string>
     <string name="wizard_a11y_gate_body">请先在系统辅助功能中启用「Halo Ring」——配对码浮窗依赖此服务运行。</string>
     <string name="wizard_adb_failed_title">配对失败</string>
     <string name="wizard_adb_try_again_cta">重试</string>

@@ -94,14 +94,8 @@ fun FirstRunWizardScreen(
             }
         }
 
-        // agentReady = heartbeat fresh from a previous session → skip SYSTEM_ACCESS entirely.
-        // Guard: do NOT fire while adbStatus is non-blank (pairing in progress or Wi-Fi-off page).
-        androidx.compose.runtime.LaunchedEffect(agentReady, adbStatus) {
-            if (step == WizardStep.SYSTEM_ACCESS && agentReady && adbStatus.isBlank()) {
-                kotlinx.coroutines.delay(1500)
-                if (step == WizardStep.SYSTEM_ACCESS && adbStatus.isBlank()) step = WizardStep.KEEP_ALIVE
-            }
-        }
+        // (SYSTEM_ACCESS auto-skip when the agent is already alive is handled inside
+        // SystemAccessStep — it advances immediately, with no standalone "paired" screen.)
 
         // Ring already paired AND connected → skip the final step entirely. If paired but
         // disconnected (common right after a reboot — the BLE link drops while the service
@@ -224,17 +218,28 @@ private fun SystemAccessStep(
     Text(stringResource(R.string.wizard_adb_intro_title), style = HaloType.Title)
     Spacer(Modifier.height(8.dp))
 
-    // Agent alive from a previous session → outer LaunchedEffect auto-advances in 1.5 s.
-    if (agentReady) {
-        Text(
-            stringResource(R.string.wizard_adb_paired_title),
-            style = HaloType.Body.copy(color = HaloColors.Accent),
-        )
+    // Active bootstrap just finished (✓) → final sub-step: have the user turn Wi-Fi OFF, proving
+    // the agent now runs on the Wi-Fi-independent loopback transport (migrated to the persistent
+    // tcp port during bootstrap). MUST be checked before the agentReady short-circuit below: the
+    // agent comes up the instant bootstrap succeeds, so agentReady flips true here too — checking
+    // it first stranded a fresh setup on a no-action "paired" screen (removed).
+    if (status.startsWith("✓")) {
+        if (wifiConnected) {
+            Text(stringResource(R.string.wizard_wifi_off_title), style = HaloType.Title)
+            Spacer(Modifier.height(8.dp))
+            Text(stringResource(R.string.wizard_wifi_off_body), style = HaloType.Caption)
+            Spacer(Modifier.height(16.dp))
+            Cta(stringResource(R.string.wizard_wifi_off_cta), onClick = onOpenWifiSettings)
+        } else {
+            // Wi-Fi off → agent keeps running on the persistent loopback port. Confirm + advance.
+            StatusLine(stringResource(R.string.wizard_wifi_off_done), ok = true)
+            androidx.compose.runtime.LaunchedEffect(Unit) { onNext() }
+        }
         return
     }
 
     // Pairing / reconnect in progress — show status text, no button.
-    if (status.isNotBlank() && !status.startsWith("✗") && !status.startsWith("✓")) {
+    if (status.isNotBlank() && !status.startsWith("✗")) {
         val runningTitle = if (isReRecovery) R.string.wizard_adb_reconnecting_title
                            else R.string.wizard_adb_running_title
         Text(stringResource(runningTitle), style = HaloType.Title)
@@ -257,8 +262,9 @@ private fun SystemAccessStep(
         return
     }
 
-    // Pairing / reconnect succeeded → advance automatically, no button needed.
-    if (status.startsWith("✓")) {
+    // Agent already alive from a previous session (re-entry; no bootstrap in flight) → advance
+    // straight through. No standalone "already paired" screen: it needed no action and just stalled.
+    if (agentReady) {
         androidx.compose.runtime.LaunchedEffect(Unit) { onNext() }
         return
     }
