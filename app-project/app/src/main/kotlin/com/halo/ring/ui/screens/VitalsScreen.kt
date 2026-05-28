@@ -36,7 +36,23 @@ data class VitalsState(
     val stepsToday: Int         = 0,
     val caloriesToday: Float    = 0f,
     val distanceKmToday: Float  = 0f,
+    /** v0.4 C5 — sport-session state surface for [VitalsScreen]. */
+    val sportActive: Boolean    = false,
+    val sportType: Int          = 1,
+    val sportDurationSec: Int?  = null,
 )
+
+/** v0.4 C5 — kick off a sport session and flip the UI-side `sportActive` flag immediately so the
+ *  user sees feedback before the first `0x78` tick arrives (a few seconds later). */
+private fun startSport(graph: com.halo.ring.di.AppGraph?, type: Int) {
+    if (graph == null) return
+    graph.vitalsSnapshotFlow.value = graph.vitalsSnapshotFlow.value.copy(
+        sportActive = true,
+        sportType = type,
+        sportDurationSec = 0,
+    )
+    graph.bleClient.startSportSession(type)
+}
 
 /**
  * Most-recent vitals snapshot the foreground service has collected from the BLE pipeline. Updated
@@ -66,6 +82,11 @@ data class VitalsSnapshot(
     val activitySteps: Int? = null,
     val activityKcal: Float? = null,
     val activityMeters: Int? = null,
+    /** v0.4 C5: true when a `0x77` workout session is active on the ring (between START and STOP). */
+    val sportActive: Boolean = false,
+    /** Sport type the user picked when starting the session (Walk=1 / Run=2 / Cycle=3 / Other=99
+     *  is the Halo Ring mapping; the ring just echoes whatever byte we sent). */
+    val sportType: Int = 1,
     /** During a `0x77` sport session, the live duration the ring is reporting via `0x78` ticks. */
     val sportDurationSec: Int? = null,
     /** Most-recent accelerometer magnitude in g (1.0 = at rest, ≈0 = free-fall, >2 = impact). */
@@ -83,7 +104,16 @@ data class VitalsSnapshot(
 fun VitalsScreen(
     state: VitalsState,
     focusedIndex: Int = 0,
+    /** v0.4 C4 (Doc/20 §8): SPEC v3 capability bitmap. Hides metric cells the ring's firmware
+     *  doesn't actually support. Empty set = show everything (back-compat for tests / dev rigs). */
+    capabilities: Set<String> = emptySet(),
+    /** v0.4 C5: live sport-session state. Source of truth = `vitalsSnapshotFlow`; threaded in
+     *  via [com.halo.ring.MainActivity]. */
+    sportActive: Boolean = false,
+    sportType: Int = 1,
+    sportDurationSec: Int? = null,
 ) {
+    val showStress = capabilities.isEmpty() || "hrv" in capabilities
     // Reads the BLE client directly off [LocalAppGraph] instead of taking a callback parameter
     // (A-4 refactor) — the screen always wants to talk to the same singleton, so threading the
     // callback through HaloRingApp → AppTab.VITALS branch was pure ceremony.
@@ -109,11 +139,17 @@ fun VitalsScreen(
                 label = stringResource(R.string.vitals_spo2_label),
                 modifier = Modifier.weight(1f),
             )
-            MetricCell(
-                value = state.stressIndex?.toString() ?: stringResource(R.string.common_dash),
-                label = stringResource(R.string.vitals_stress_label),
-                modifier = Modifier.weight(1f),
-            )
+            if (showStress) {
+                MetricCell(
+                    value = state.stressIndex?.toString() ?: stringResource(R.string.common_dash),
+                    label = stringResource(R.string.vitals_stress_label),
+                    modifier = Modifier.weight(1f),
+                )
+            } else {
+                // Reserve the column so HR / SpO2 don't expand to the full width when Stress is
+                // gated out — keeps the layout consistent across rings with and without HRV.
+                androidx.compose.foundation.layout.Spacer(modifier = Modifier.weight(1f))
+            }
         }
 
         Spacer(Modifier.height(6.dp))
@@ -138,6 +174,58 @@ fun VitalsScreen(
             focused = focusedIndex == 0,
             onClick = { graph.bleClient.requestVitalsSnapshot() },
         )
+
+        Spacer(Modifier.height(20.dp))
+
+        // ─── v0.4 C5 — workout (sport-session) sub-section ──────────────────────────────────
+        Text(
+            text = stringResource(R.string.vitals_sport_section).uppercase(),
+            style = HaloType.Caption.copy(color = HaloColors.Mute),
+            modifier = Modifier.padding(horizontal = ScreenPadding, vertical = 4.dp),
+        )
+        if (sportActive) {
+            val mins = (sportDurationSec ?: 0) / 60
+            val secs = (sportDurationSec ?: 0) % 60
+            Text(
+                text = stringResource(R.string.vitals_sport_active, "%02d:%02d".format(mins, secs)),
+                style = HaloType.Body.copy(color = HaloColors.Accent),
+                modifier = Modifier.padding(horizontal = ScreenPadding, vertical = 4.dp),
+            )
+            Cta(
+                text = stringResource(R.string.vitals_sport_stop),
+                modifier = Modifier.padding(horizontal = ScreenPadding, vertical = 4.dp),
+                onClick = {
+                    graph.bleClient.stopSportSession(sportType)
+                    if (graph != null) {
+                        graph.vitalsSnapshotFlow.value = graph.vitalsSnapshotFlow.value.copy(
+                            sportActive = false,
+                            sportDurationSec = null,
+                        )
+                    }
+                },
+                danger = true,
+            )
+        } else {
+            // Quick-start buttons — sport_type 1=walk, 2=run, 3=cycle per SPEC v3 §4.8 echo.
+            // Stacked VERTICALLY (not a Row): the ring only has up/down swipes (no left/right),
+            // so a horizontal row of buttons would be unreachable. On-glasses fix 2026-05-27.
+            Column(modifier = Modifier.fillMaxWidth().padding(horizontal = ScreenPadding)) {
+                Cta(
+                    text = stringResource(R.string.vitals_sport_start_walk),
+                    onClick = { startSport(graph, type = 1) },
+                )
+                Spacer(Modifier.height(6.dp))
+                Cta(
+                    text = stringResource(R.string.vitals_sport_start_run),
+                    onClick = { startSport(graph, type = 2) },
+                )
+                Spacer(Modifier.height(6.dp))
+                Cta(
+                    text = stringResource(R.string.vitals_sport_start_cycle),
+                    onClick = { startSport(graph, type = 3) },
+                )
+            }
+        }
 
         Spacer(Modifier.height(18.dp))
 

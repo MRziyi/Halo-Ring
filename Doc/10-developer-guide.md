@@ -17,9 +17,11 @@ Halo-Ring/                         ← repo root (this is the canonical Halo Rin
     core/                          ← pure-JVM library; gesture state machine + protocol parser
                                      + interfaces; 250 JVM tests
     app/                           ← Android app, with rokid + rayneo flavors
-      src/main/.../ui/             ← Compose UI: theme, components, tabs, screens (Vitals,
-                                     Settings root, Status, Feedback), HUD overlay,
-                                     InAppFocusController, ExternalPluginsScreen
+      src/main/.../ui/             ← Compose UI: theme, components, screens (Vitals,
+                                     Settings root + 5 groups, Profile editor / Action picker /
+                                     System gestures / Gesture picker / Test Arena, Pairing,
+                                     Ring, External Plugins), HUD overlay (the daily UX surface).
+                                     v0.4 removed: InAppFocusController, TempleFocusBridge, tabs.
       src/main/.../service/        ← HaloRingService — foreground service host
       src/main/.../ble/            ← AndroidR08BleClient — Android BluetoothGatt impl
       src/main/.../inject/         ← AppProcessAgentBackend + AccessibilityBackend
@@ -129,7 +131,7 @@ Suppose Glasses-C ships and we want to support it. The work:
 1. **Platform research**: Android version? Display? Input model (focus + DPAD keys, or focus +
    MotionEvent gestures, or something else)? System launcher package + key Activities? ADB
    bootstrap process? Wear detection mechanism? Write up the findings analogous to
-   [03-target-platforms.md](03-target-platforms.md).
+   [Doc/04 §8](04-architecture.md#8-target-platforms).
 2. **Add a Gradle product flavor**: in [`app/build.gradle.kts`](../app-project/app/build.gradle.kts) add `glasses-c` flavor.
 3. **Implement the four strategies** in `app/src/glassesC/...`:
    - `GlassesCDisplayAdapter`
@@ -139,7 +141,7 @@ Suppose Glasses-C ships and we want to support it. The work:
 4. Wire them in `app/src/glassesC/.../DeviceFlavorBindings.kt`.
 5. Extend [`DeviceProfile`](../app-project/core/src/main/kotlin/com/halo/ring/core/DeviceProfile.kt) and
    [`AppGraph.detectDeviceProfile()`](../app-project/app/src/main/kotlin/com/halo/ring/di/AppGraph.kt) with the new profile.
-6. Verify per [11-verification-checklists.md](11-verification-checklists.md) §B.
+6. Verify per the smoke-check sequence in [Doc/13 §1.4](13-handoff.md) (former verification checklists archived under `_archive/11-verification-checklists.md`).
 
 ## 8. Adding a new executor backend
 
@@ -225,15 +227,12 @@ app-startup hidden-API gate). Detail and reference: scrcpy's server code, Shizuk
 commands. It also watches a heartbeat file (`/data/local/tmp/halo.agent.heartbeat`) and re-spawns
 the agent if it goes stale.
 
-## 11. The phase-0 probe
+## 11. The phase-0 probes
 
-`Doc/02-hardware-and-protocol.md` is a Python (bleak) BLE probe for reverse-engineering and verifying the
-ring's protocol. See [`Doc/02-hardware-and-protocol.md`](02-hardware-and-protocol.md) and [11](11-verification-checklists.md).
-
-It's intentionally **not** dependent on the Kotlin code — different language, different tool,
-different runtime. Lets you investigate the ring without needing the Android stack.
-
-The `--tutorial` mode is also the user-onboarding tutorial — see [09](09-user-manual.md) §11.
+The Python (bleak) BLE probes that produced [`R08-dev/phase0/SPEC v3.md`](../../R08-dev/phase0/SPEC%20v3.md)
+live in `R08-dev/phase0/` (the private research workspace). They're not part of the Halo-Ring
+public repo — different language, different tool, different runtime. Run them when you need to
+re-verify a byte sequence against actual ring firmware.
 
 ## 12. Coding conventions
 
@@ -252,11 +251,10 @@ The `--tutorial` mode is also the user-onboarding tutorial — see [09](09-user-
 When you change something hot-path (BLE callback, scheduler, agent), confirm you didn't regress:
 
 - **Latency**: Enable Debug HUD → Latency measurement mode → do 20 of each gesture → check 95th
-  percentile against the targets in [06](06-performance-and-power.md) §1.1.
+  percentile against the targets in [Doc/04 §7.1](04-architecture.md#71-end-to-end-latency-budget).
 - **Power**: Run resident with ring connected, glasses worn, no interaction, for 30 min. Check
   glasses' battery stats and the ring's reported battery delta. Compare to baseline.
-- **Reliability**: 100 of each gesture, 60 cm distance, count drops + false positives. Target
-  per [06](06-performance-and-power.md) §5.
+- **Reliability**: 100 of each gesture, 60 cm distance, count drops + false positives.
 
 ## 14. Memory & references kept by the project
 

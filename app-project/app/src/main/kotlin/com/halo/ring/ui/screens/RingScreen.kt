@@ -40,6 +40,9 @@ import kotlinx.coroutines.launch
 fun RingScreen(
     info: RingInfo,
     onOpenPairing: () -> Unit = {},
+    /** v0.4 C4 (Doc/20 §8): SPEC v3 capability bitmap. Rendered as a "Capabilities" caption at
+     *  the bottom so users can see what their ring's firmware claims to support. */
+    capabilities: Set<String> = emptySet(),
 ) {
     // A-4: read the BLE client directly off LocalAppGraph instead of taking three callback
     // parameters. The three actions always target the same singleton, so threading them through
@@ -119,6 +122,22 @@ fun RingScreen(
             style = HaloType.Caption,
             modifier = Modifier.padding(horizontal = ScreenPadding),
         )
+
+        if (capabilities.isNotEmpty()) {
+            Spacer(Modifier.height(12.dp))
+            Box(Modifier.fillMaxWidth().height(1.dp).background(HaloColors.Line))
+            Spacer(Modifier.height(8.dp))
+            Text(
+                stringResource(R.string.ring_capabilities_header),
+                style = HaloType.RowKey,
+                modifier = Modifier.padding(horizontal = ScreenPadding),
+            )
+            Text(
+                text = capabilities.sorted().joinToString(", "),
+                style = HaloType.Caption,
+                modifier = Modifier.padding(horizontal = ScreenPadding, vertical = 4.dp),
+            )
+        }
     }
 }
 

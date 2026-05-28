@@ -8,11 +8,12 @@ class SystemGesturesTest {
 
     @Test fun `defaults match the design's recommended slots`() {
         val sg = SystemGestures()
-        assertEquals(Gesture.LONG_PRESS,            sg.wake)
-        assertEquals(Gesture.LONG_PRESS_SWIPE_DOWN, sg.sleep)
-        assertEquals(Gesture.TRIPLE_TAP,            sg.profileCycle)
-        assertEquals(Gesture.QUADRUPLE_TAP,         sg.peekHud)
-        assertEquals(Gesture.DOUBLE_LONG_PRESS,     sg.aiAssistant)
+        // v0.4: LONG_PRESS is BOTH wake (screen off) and sleep (screen on) — a screen-toggle.
+        assertEquals(Gesture.LONG_PRESS, sg.wake)
+        assertEquals(Gesture.LONG_PRESS, sg.sleep)
+        assertEquals(Gesture.TRIPLE_TAP,        sg.profileCycle)
+        assertEquals(Gesture.QUADRUPLE_TAP,     sg.peekHud)
+        assertEquals(Gesture.DOUBLE_LONG_PRESS, sg.aiAssistant)
     }
 
     @Test fun `withSlot rebinds the targeted slot, leaves the others`() {
@@ -60,12 +61,13 @@ class SystemGesturesTest {
     }
 
     @Test fun `conflict excludes the slot the user is rebinding`() {
-        // Self-conflict check: rebinding WAKE to its current value (LONG_PRESS) should NOT report
-        // a conflict, because the user hasn't actually changed anything.
+        // Self-conflict check: rebinding PROFILE_CYCLE to its current value (TRIPLE_TAP) should NOT
+        // report a conflict, because the user hasn't actually changed anything. (Uses TRIPLE_TAP
+        // rather than LONG_PRESS, since v0.4 intentionally binds LONG_PRESS to BOTH wake + sleep.)
         val sg = SystemGestures()
-        assertNull(sg.conflict(Gesture.LONG_PRESS, exclude = SystemGestures.Slot.WAKE))
-        // But asking "is LONG_PRESS bound to anything but WAKE?" should still say no.
-        assertEquals(SystemGestures.Slot.WAKE, sg.conflict(Gesture.LONG_PRESS))
+        assertNull(sg.conflict(Gesture.TRIPLE_TAP, exclude = SystemGestures.Slot.PROFILE_CYCLE))
+        // But asking "is TRIPLE_TAP bound to anything but PROFILE_CYCLE?" should still say no.
+        assertEquals(SystemGestures.Slot.PROFILE_CYCLE, sg.conflict(Gesture.TRIPLE_TAP))
     }
 
     @Test fun `conflict reports the FIRST matching slot in declaration order`() {

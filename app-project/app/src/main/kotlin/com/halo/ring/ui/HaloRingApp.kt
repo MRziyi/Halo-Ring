@@ -10,12 +10,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.focusGroup
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.unit.dp
 import com.halo.ring.di.RingInfo
@@ -25,7 +26,6 @@ import com.halo.ring.ui.screens.AdvancedAction
 import com.halo.ring.ui.screens.AdvancedPrefs
 import com.halo.ring.ui.screens.AdvancedScreen
 import com.halo.ring.ui.screens.AppLanguage
-import com.halo.ring.ui.screens.GuidedTour
 import com.halo.ring.ui.screens.LanguageScreen
 import com.halo.ring.ui.screens.FeedbackPrefField
 import com.halo.ring.ui.screens.FeedbackPrefs
@@ -36,6 +36,7 @@ import com.halo.ring.ui.screens.PowerConnectionScreen
 import com.halo.ring.ui.screens.ProfileEditorScreen
 import com.halo.ring.ui.screens.ProfilesListScreen
 import com.halo.ring.ui.screens.RingScreen
+import com.halo.ring.ui.screens.SettingsGroupScreen
 import com.halo.ring.ui.screens.SettingsRootScreen
 import com.halo.ring.ui.screens.SettingsSection
 import com.halo.ring.ui.screens.StatusScreen
@@ -51,11 +52,16 @@ import com.halo.ring.core.action.KeyMapProfile
 import com.halo.ring.core.gesture.SystemGestures
 
 /**
- * The root composable. Hosts the three tabs + a typed navigation stack ([SubScreen]) for
- * settings drilldown. Owns the [InAppFocusController] attachment lifecycle.
+ * The root composable.
  *
- * Navigation model: each tab has its own root (empty stack); pushing a [SubScreen] drills in,
- * popping returns to the parent. A tab change clears the stack.
+ * **v0.4 model** (Doc/20 §4-§6):
+ * - No top tab strip. Root = [SettingsRootScreen] (the config center).
+ * - Vitals dashboard + Status info are reachable as sub-screens from the Settings root.
+ * - HUD overlay (owned by HaloRingService) is the daily UX surface; the Activity is opened
+ *   occasionally for editing.
+ * - No InAppFocusController. The 4 base ring gestures dispatch via
+ *   [ActivitySystemKeyDispatcher] as system KeyEvents; Compose's standard FocusManager handles
+ *   DPAD navigation natively.
  */
 @Composable
 fun HaloRingApp(
@@ -64,6 +70,8 @@ fun HaloRingApp(
     activeProfileId: String = "",
     systemGestures: SystemGestures = SystemGestures(),
     ringInfo: RingInfo = RingInfo(),
+    /** v0.4 C4 — SPEC v3 capability bitmap; threads into Vitals + Ring sub-screens. */
+    ringCapabilities: Set<String> = emptySet(),
     advancedPrefs: AdvancedPrefs = AdvancedPrefs(),
     vitalsPrefs: VitalsPrefs = VitalsPrefs(),
     deviceProfile: DeviceProfile = DeviceProfile.GENERIC_ANDROID,
@@ -79,16 +87,7 @@ fun HaloRingApp(
     currentLanguage: AppLanguage = AppLanguage.SYSTEM,
     /** User picked a language from Settings → Language; caller persists + applies. */
     onLanguageSelected: (AppLanguage) -> Unit = {},
-    /** When true, an interactive coachmark tour ([GuidedTour]) is overlaid on top of the app —
-     *  drives navigation through every tab + key sub-screen with a dim layer + callout card.
-     *  Audit-2026-05-13p. */
-    tourActive: Boolean = false,
-    /** Tour fires this on SKIP or final DONE. Caller persists `guide_seen = true` + clears the
-     *  `tourActive` flag. */
-    onTourDismissed: () -> Unit = {},
-    /** Settings → About → "Show operation guide" — caller flips tourActive=true on this. */
-    onRequestTour: () -> Unit = {},
-    /** When the back stack is empty and the user does Back / Home, leave the app and return
+    /** When the back stack is empty and the user does Back, leave the app and return
      *  to the system launcher. Wired by [MainActivity] to `moveTaskToBack(true)`. */
     onExitToSystem: () -> Unit = {},
 ) {
@@ -97,9 +96,7 @@ fun HaloRingApp(
         // Burn-in 2026-05-27 fix: `initial` carries the externally-driven snapshots
         // (StatusBarState / VitalsState / StatusState / feedbackPrefs) that MainActivity rebuilds
         // every time ringInfoFlow / vitalsSnapshotFlow / feedbackPrefs flows emit. Without this
-        // sync, `state` was captured once on first composition and never refreshed — symptom: ring
-        // name in status bar permanently stuck on "R08_…" placeholder, vitals never updating, etc.
-        // The user-driven fields (tab, navStack) stay where they are.
+        // sync, `state` was captured once on first composition and never refreshed.
         androidx.compose.runtime.LaunchedEffect(
             initial.statusBar, initial.vitals, initial.status, initial.feedbackPrefs,
         ) {
@@ -113,72 +110,46 @@ fun HaloRingApp(
 
         val focusManager = LocalFocusManager.current
 
-        // Burn-in 2026-05-27: on AR glasses there's no touchscreen — the wearer can't tap to
-        // grab focus on the first focusable element. Without an initial focus anchor, ring
-        // NavPrev/NavNext gestures fire focusManager.moveFocus(Up/Down) against a null active
-        // element, which Compose treats as a no-op. Result: the wearer's first few ring
-        // gestures appear to do nothing until they tap the screen (impossible on glasses).
-        //
-        // Fix: once the Compose tree settles, request focus on the first focusable in the
-        // current tab. moveFocus(Enter) walks down into the focusable hierarchy from the root.
-        // Re-fires when the user navigates between tabs or pushes a sub-screen.
-        androidx.compose.runtime.LaunchedEffect(state.tab, state.navStack.size) {
-            kotlinx.coroutines.delay(80)   // give the tab/subscreen one frame to compose
-            try {
-                // `Down` walks into the first focusable below the root and is non-experimental
-                // (Enter does the same but is annotated @ExperimentalComposeUiApi in 1.6.x).
-                focusManager.moveFocus(androidx.compose.ui.focus.FocusDirection.Down)
-            } catch (_: Throwable) {}
-        }
-
-        // Capture LocalView outside DisposableEffect (which is not a composable context).
-        val rootView = androidx.compose.ui.platform.LocalView.current
-        DisposableEffect(focusManager) {
-            val backController = object : BackController {
-                override fun pop(): Boolean {
-                    if (state.navStack.isNotEmpty()) {
-                        state = state.copy(navStack = state.navStack.dropLast(1))
-                        return true
-                    }
-                    return false
-                }
-                override fun exit() { onExitToSystem() }
+        // On AR glasses there's no touchscreen — the wearer can't tap to grab focus on the first
+        // focusable element. Without an initial focus owner, the temple touchpad's KeyEvents
+        // (Rokid fires KEYCODE_ENTER on click + DPAD_* on swipe) have nothing to act on, so the
+        // UI appears frozen. We anchor focus into the content via a FocusRequester on a
+        // focusGroup() — requesting focus on a group delegates to its first focusable child.
+        // This is the reliable idiom; `focusManager.moveFocus(Down)` no-ops when there's no
+        // current focus owner (the exact "ring 点不出来" bug Doc/20 §2.1 calls out).
+        val contentFocus = remember { androidx.compose.ui.focus.FocusRequester() }
+        val topKey = state.navStack.lastOrNull()?.let { it::class.simpleName } ?: "root"
+        androidx.compose.runtime.LaunchedEffect(topKey) {
+            // Retry a few times — the focusable children may not be composed on the first frame.
+            repeat(5) {
+                kotlinx.coroutines.delay(100)
+                val ok = try { contentFocus.requestFocus(); true } catch (_: Throwable) { false }
+                if (ok) return@LaunchedEffect
             }
-            val tabController = object : TabController {
-                override val current get() = state.tab
-                override fun select(tab: AppTab) { state = state.copy(tab = tab, navStack = emptyList()) }
-                override fun prev() {
-                    val ords = AppTab.values()
-                    val newTab = ords[(state.tab.ordinal - 1 + ords.size) % ords.size]
-                    android.util.Log.i("HaloFocus", "tab prev: ${state.tab} → $newTab")
-                    state = state.copy(tab = newTab, navStack = emptyList())
-                }
-                override fun next() {
-                    val ords = AppTab.values()
-                    val newTab = ords[(state.tab.ordinal + 1) % ords.size]
-                    android.util.Log.i("HaloFocus", "tab next: ${state.tab} → $newTab")
-                    state = state.copy(tab = newTab, navStack = emptyList())
-                }
-            }
-            // Burn-in 2026-05-27: pass a dispatchKey hook so TAP→Confirm can fire a synthetic
-            // KEYCODE_DPAD_CENTER through the activity window. Compose's clickable() handles
-            // DPAD_CENTER as a click on the focused element, so this gives ring-driven TAPs a
-            // real in-app click semantics without needing the ADB-injected agent.
-            val dispatchKey: (Int) -> Boolean = { code ->
-                val now = android.os.SystemClock.uptimeMillis()
-                val down = android.view.KeyEvent(now, now, android.view.KeyEvent.ACTION_DOWN, code, 0)
-                val up   = android.view.KeyEvent(now, now, android.view.KeyEvent.ACTION_UP,   code, 0)
-                rootView.dispatchKeyEvent(down) || rootView.dispatchKeyEvent(up)
-            }
-            InAppFocusController.attach(focusManager, backController, tabController, dispatchKey)
-            onDispose { InAppFocusController.detach() }
         }
 
         fun push(s: SubScreen) { state = state.copy(navStack = state.navStack + s) }
         fun pop() { state = state.copy(navStack = state.navStack.dropLast(1)) }
-        fun popTo(s: SubScreen) {
-            val i = state.navStack.indexOf(s)
-            state = state.copy(navStack = if (i < 0) emptyList() else state.navStack.subList(0, i + 1))
+
+        // DOUBLE_TAP from the ring fires KEYCODE_BACK at the system level; Android dispatches it
+        // to the Activity's onBackPressed (and Compose has an onBackPressedDispatcher hook).
+        // We hook onto LocalOnBackPressedDispatcherOwner so the Compose stack can pop sub-screens
+        // before Android's default (= finish the Activity) takes effect.
+        val backDispatcher = androidx.activity.compose.LocalOnBackPressedDispatcherOwner.current
+            ?.onBackPressedDispatcher
+        androidx.compose.runtime.DisposableEffect(backDispatcher) {
+            val cb = object : androidx.activity.OnBackPressedCallback(true) {
+                override fun handleOnBackPressed() {
+                    if (state.navStack.isNotEmpty()) {
+                        state = state.copy(navStack = state.navStack.dropLast(1))
+                    } else {
+                        // Root level — leave the app (return to system launcher).
+                        onExitToSystem()
+                    }
+                }
+            }
+            backDispatcher?.addCallback(cb)
+            onDispose { cb.remove() }
         }
 
         Box(modifier = Modifier.fillMaxSize().background(HaloColors.Bg)) {
@@ -194,53 +165,68 @@ fun HaloRingApp(
                 batteryPct = state.statusBar.batteryPct,
                 currentMode = state.statusBar.currentMode,
             )
-            TabBar(
-                selected = state.tab,
-                onSelect = { state = state.copy(tab = it, navStack = emptyList()) },
-            )
             Spacer(Modifier.height(8.dp))
 
             Column(
                 modifier = Modifier
                     .fillMaxSize()
+                    .focusRequester(contentFocus)
+                    .focusGroup()
                     .verticalScroll(rememberScrollState()),
             ) {
                 val top = state.navStack.lastOrNull()
-                when (top) {
-                    null -> when (state.tab) {
-                        AppTab.VITALS -> VitalsScreen(state.vitals)
-                        AppTab.SETTINGS -> SettingsRootScreen(
-                            onSectionSelected = { section ->
-                                push(when (section) {
-                                    SettingsSection.FEEDBACK         -> SubScreen.Feedback
-                                    SettingsSection.PROFILES         -> SubScreen.Profiles
-                                    SettingsSection.SYSTEM_GESTURES  -> SubScreen.SystemGestures
-                                    SettingsSection.RING             -> SubScreen.Ring
-                                    SettingsSection.POWER            -> SubScreen.Power
-                                    SettingsSection.ADVANCED         -> SubScreen.Advanced
-                                    SettingsSection.ABOUT            -> SubScreen.About
-                                    SettingsSection.VITALS_PREFS     -> SubScreen.VitalsPrefs
-                                    SettingsSection.LANGUAGE         -> SubScreen.Language
-                                    SettingsSection.TEST_ARENA       -> SubScreen.TestArena
-                                    SettingsSection.EXTERNAL_PLUGINS -> SubScreen.ExternalPlugins
-                                })
-                            },
-                        )
-                        AppTab.STATUS -> StatusScreen(
-                            // Build the status snapshot freshly from the live `ringInfo` flow
-                            // each composition — the stale `state.status` (set at construction)
-                            // would never update otherwise.
-                            state.status.copy(
-                                connected = ringInfo.connected,
-                                rssiDbm = ringInfo.rssiDbm,
-                                connIntervalMs = ringInfo.estimatedConnIntervalMs,
-                                intervalMode = ringInfo.intervalMode,
-                                profileName = profiles.firstOrNull { it.id == activeProfileId }?.name
-                                    ?: state.status.profileName,
-                                activeBackend = ringInfo.activeBackendId,
-                            )
-                        )
+                // Map a [SettingsSection] to its target [SubScreen]. Used by both the root
+                // (when a group has only one item it could short-circuit, but for v0.4 simplicity
+                // we always go root → group → leaf) and by SettingsGroupScreen.
+                val sectionToSubScreen: (SettingsSection) -> SubScreen = { section ->
+                    when (section) {
+                        SettingsSection.VITALS           -> SubScreen.VitalsDashboard
+                        SettingsSection.STATUS           -> SubScreen.StatusInfo
+                        SettingsSection.FEEDBACK         -> SubScreen.Feedback
+                        SettingsSection.PROFILES         -> SubScreen.Profiles
+                        SettingsSection.SYSTEM_GESTURES  -> SubScreen.SystemGestures
+                        SettingsSection.RING             -> SubScreen.Ring
+                        SettingsSection.POWER            -> SubScreen.Power
+                        SettingsSection.ADVANCED         -> SubScreen.Advanced
+                        SettingsSection.ABOUT            -> SubScreen.About
+                        SettingsSection.VITALS_PREFS     -> SubScreen.VitalsPrefs
+                        SettingsSection.LANGUAGE         -> SubScreen.Language
+                        SettingsSection.TEST_ARENA       -> SubScreen.TestArena
+                        SettingsSection.EXTERNAL_PLUGINS -> SubScreen.ExternalPlugins
                     }
+                }
+
+                when (top) {
+                    null -> SettingsRootScreen(
+                        onGroupSelected = { group -> push(SubScreen.SettingsGroupSubScreen(group)) },
+                        // Legacy section-direct path kept as a fallback (no UI surfaces it for now).
+                        onSectionSelected = { section -> push(sectionToSubScreen(section)) },
+                    )
+
+                    is SubScreen.SettingsGroupSubScreen -> SettingsGroupScreen(
+                        group = top.group,
+                        onSectionSelected = { section -> push(sectionToSubScreen(section)) },
+                    )
+
+                    SubScreen.VitalsDashboard -> VitalsScreen(
+                        state = state.vitals,
+                        capabilities = ringCapabilities,
+                        sportActive = state.vitals.sportActive,
+                        sportType = state.vitals.sportType,
+                        sportDurationSec = state.vitals.sportDurationSec,
+                    )
+
+                    SubScreen.StatusInfo -> StatusScreen(
+                        state.status.copy(
+                            connected = ringInfo.connected,
+                            rssiDbm = ringInfo.rssiDbm,
+                            connIntervalMs = ringInfo.estimatedConnIntervalMs,
+                            intervalMode = ringInfo.intervalMode,
+                            profileName = profiles.firstOrNull { it.id == activeProfileId }?.name
+                                ?: state.status.profileName,
+                            activeBackend = ringInfo.activeBackendId,
+                        )
+                    )
 
                     is SubScreen.Feedback -> FeedbackScreen(
                         prefs = state.feedbackPrefs,
@@ -283,7 +269,6 @@ fun HaloRingApp(
                     is SubScreen.ProfileEditor -> {
                         val profile = profiles.firstOrNull { it.id == top.profileId }
                         if (profile == null) {
-                            // The profile vanished underneath us (e.g. user removed it). Drop back.
                             pop()
                         } else {
                             ProfileEditorScreen(
@@ -325,13 +310,17 @@ fun HaloRingApp(
                         },
                     )
 
-                    SubScreen.Ring -> RingScreen(info = ringInfo, onOpenPairing = { push(SubScreen.RingPairing) })
+                    SubScreen.Ring -> RingScreen(
+                        info = ringInfo,
+                        onOpenPairing = { push(SubScreen.RingPairing) },
+                        capabilities = ringCapabilities,
+                    )
 
                     SubScreen.RingPairing -> com.halo.ring.ui.screens.RingPairingScreen(onPaired = { pop() })
 
                     SubScreen.Power -> {
                         val active = profiles.firstOrNull { it.id == activeProfileId }
-                        if (active == null) pop()   // no active profile (shouldn't happen) → drop back
+                        if (active == null) pop()
                         else PowerConnectionScreen(
                             activeProfile = active,
                             onActiveProfileUpdated = onProfileUpdated,
@@ -350,10 +339,6 @@ fun HaloRingApp(
                         versionName = versionName,
                         versionCode = versionCode,
                         detectedProfile = deviceProfile,
-                        // Re-trigger the interactive tour. SubScreen.Guide is unused now (the
-                        // static cheatsheet was replaced by GuidedTour); the About row instead
-                        // tells the host to flip tourActive=true.
-                        onShowGuide = onRequestTour,
                     )
 
                     SubScreen.VitalsPrefs -> VitalsPrefsScreen(
@@ -374,20 +359,6 @@ fun HaloRingApp(
                 }
             }
         }
-
-        // Interactive coachmark tour overlay (audit-2026-05-13p). Drawn on top of the entire
-        // app when tourActive=true so it can dim the underlying UI + drive navigation through
-        // every key tab + sub-screen.
-        if (tourActive) {
-            GuidedTour(
-                onDismiss = onTourDismissed,
-                onSelectTab = { tab ->
-                    state = state.copy(tab = tab, navStack = emptyList())
-                },
-                onPush = { screen -> push(screen) },
-                onPopAll = { state = state.copy(navStack = emptyList()) },
-            )
-        }
         }   // close the outer Box
     }
 }
@@ -398,16 +369,15 @@ private fun SystemGestureSlot.toCore(): SystemGestures.Slot = when (this) {
     SystemGestureSlot.SLEEP           -> SystemGestures.Slot.SLEEP
     SystemGestureSlot.PROFILE_CYCLE   -> SystemGestures.Slot.PROFILE_CYCLE
     SystemGestureSlot.PEEK_HUD        -> SystemGestures.Slot.PEEK_HUD
-    SystemGestureSlot.AI_ASSISTANT -> SystemGestures.Slot.AI_ASSISTANT
+    SystemGestureSlot.AI_ASSISTANT    -> SystemGestures.Slot.AI_ASSISTANT
 }
 
 /**
  * Top-level app state. The settings UI mutates the [navStack]; settings data (profiles,
- * systemGestures) is owned by [com.halo.ring.di.AppGraph] and threaded through HaloRingApp's params
- * so changes flow back to the foreground service.
+ * systemGestures) is owned by [com.halo.ring.di.AppGraph] and threaded through HaloRingApp's
+ * params so changes flow back to the foreground service.
  */
 data class AppState(
-    val tab: AppTab = AppTab.VITALS,
     val navStack: List<SubScreen> = emptyList(),
     val statusBar: StatusBarState = StatusBarState(),
     val vitals: VitalsState = VitalsState(),

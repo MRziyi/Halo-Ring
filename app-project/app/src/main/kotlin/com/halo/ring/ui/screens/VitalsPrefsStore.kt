@@ -43,6 +43,12 @@ data class VitalsPrefs(
      * values < 100; we coerce. Default 5000.
      */
     val dailyStepTarget: Int = 5000,
+    /**
+     * v0.4 C6 (Doc/20 §9): subscribe to the ring's accelerometer `0xA1` telemetry stream so the
+     * AccelProcessor can detect free-fall / impact / wrist-shake. Adds ~64 B/s BLE traffic.
+     * Default OFF — opt-in.
+     */
+    val spatialFeaturesEnabled: Boolean = false,
 )
 
 /** The cycle of preset intervals for [VitalsPrefs.autoSnapshotIntervalMin] (0 = off). */
@@ -58,6 +64,7 @@ class VitalsPrefsStore(private val context: Context) {
         val WearDetectionEnabled = booleanPreferencesKey("wear_detection_enabled")
         val RingAutonomousPpg    = booleanPreferencesKey("ring_autonomous_ppg")
         val DailyStepTarget      = intPreferencesKey("daily_step_target")
+        val SpatialFeatures      = booleanPreferencesKey("spatial_features_enabled")
     }
 
     val flow: Flow<VitalsPrefs> = context.vitalsPrefsDataStore.data.map { p ->
@@ -69,6 +76,7 @@ class VitalsPrefsStore(private val context: Context) {
             wearDetectionEnabled     = p[Keys.WearDetectionEnabled] ?: true,
             ringAutonomousPpgEnabled = p[Keys.RingAutonomousPpg]   ?: true,
             dailyStepTarget          = p[Keys.DailyStepTarget]     ?: 5000,
+            spatialFeaturesEnabled   = p[Keys.SpatialFeatures]     ?: false,
         )
     }
 
@@ -81,6 +89,7 @@ class VitalsPrefsStore(private val context: Context) {
             p[Keys.WearDetectionEnabled] = prefs.wearDetectionEnabled
             p[Keys.RingAutonomousPpg]    = prefs.ringAutonomousPpgEnabled
             p[Keys.DailyStepTarget]      = prefs.dailyStepTarget.coerceAtLeast(100)
+            p[Keys.SpatialFeatures]      = prefs.spatialFeaturesEnabled
         }
     }
 }

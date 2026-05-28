@@ -37,12 +37,18 @@ import com.halo.ring.ui.screens.FirstRunWizardScreen
 import com.halo.ring.ui.screens.StatusState
 import com.halo.ring.ui.screens.VitalsPrefs
 import com.halo.ring.ui.screens.VitalsState
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * The app's main Activity. Hosts the Compose [HaloRingApp] root. Also exposes a public foreground flag
- * so the foreground service knows when to short-circuit GlassActions through [InAppFocusController].
+ * The app's main Activity. Hosts the Compose [HaloRingApp] root. Owns the Activity-scoped
+ * [com.halo.ring.ui.ActivitySystemKeyDispatcher] so the gesture pipeline's base-gesture
+ * passthrough (Doc/05 §3.8) can dispatch system KeyEvents into this window when foreground.
+ *
+ * v0.4: in-app foreground-bypass (InAppFocusController) deleted — Compose's standard FocusManager
+ * + system KeyEvents handle DPAD navigation natively. Mercury temple-touchpad bridge also deleted;
+ * RayNeo input handling is deferred (re-add via Doc/04 §11 if needed).
  */
 // Audit-2026-05-13s: switched ComponentActivity → AppCompatActivity. AppCompat-based per-app
 // locale (`AppCompatDelegate.setApplicationLocales`) needs the Activity to be AppCompat-aware
@@ -58,6 +64,17 @@ class MainActivity : AppCompatActivity() {
 
     private val accessibilityEnabledState = kotlinx.coroutines.flow.MutableStateFlow(false)
     private val batteryExemptedState = kotlinx.coroutines.flow.MutableStateFlow(false)
+    /** v0.4 — live status of Developer Options + Wireless Debugging, refreshed on every onResume so
+     *  the wizard shows ✓/✗ and gates "Start pairing" on wireless debug being ON. */
+    private val devOptionsEnabledState = kotlinx.coroutines.flow.MutableStateFlow(false)
+    private val wirelessDebugEnabledState = kotlinx.coroutines.flow.MutableStateFlow(false)
+    /** v0.4 — true when the injection agent is already alive (fresh heartbeat). Lets the wizard's
+     *  System-access step show "✓ already set up" instead of forcing the user to re-pair. */
+    private val agentReadyState = kotlinx.coroutines.flow.MutableStateFlow(false)
+    /** v0.4 — set true by Advanced → "Re-run ADB bootstrap" so the ADB setup wizard re-appears
+     *  even when a ring is already paired (the normal first-run guard skips the wizard once paired).
+     *  Cleared when the wizard completes. */
+    private val forceWizardState = kotlinx.coroutines.flow.MutableStateFlow(false)
 
     private val requestPermissions = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions(),
@@ -88,6 +105,37 @@ class MainActivity : AppCompatActivity() {
         // Service.startForeground() throws SecurityException. Request first; on grant, start.
         ensurePermissionsThenStartService()
 
+        // v0.4 — auto-request battery-optimisation exemption ONCE. It's the keep-alive linchpin:
+        // without it Android Doze kills our foreground service after a few hours, breaking the
+        // resident BLE link + agent. The system dialog only appears if not already exempted; we
+        // gate on a one-shot flag so a user who declines isn't nagged every launch. (User asked
+        // for this 2026-05-27 — "保活" concern.)
+        lifecycleScope.launch {
+            val asked = firstRunStore.batteryExemptionAskedFlow.first()
+            val pm = getSystemService(POWER_SERVICE) as PowerManager
+            if (!asked && !pm.isIgnoringBatteryOptimizations(packageName)) {
+                firstRunStore.markBatteryExemptionAsked()
+                requestBatteryExemption()
+            }
+        }
+
+        // v0.4 — auto-recovery: if setup was completed before but the injection agent is no longer
+        // alive on startup (WRITE_SECURE_SETTINGS revoked, wireless-debug off, bootRecoverAgent
+        // failed), drop the user straight back into the wizard to re-establish system access
+        // (user ask 2026-05-27 "启动发现掉权限了自动进 wizard"). We wait a grace window first so a
+        // healthy agent that's mid-revival (bootRecoverAgent runs async on service start) doesn't
+        // trigger a spurious wizard. If the agent comes up within the window, agentReadyState flips
+        // and we don't force it.
+        lifecycleScope.launch {
+            if (!firstRunStore.completedFlow.first()) return@launch  // never set up → normal first-run path
+            kotlinx.coroutines.delay(7000)  // give bootRecoverAgent time to revive the agent
+            refreshSetupState()              // refresh agentReadyState from the heartbeat
+            if (!agentReadyState.value) {
+                Log.w("Halo", "system access lost (agent not ready ${7}s after start) — re-entering wizard")
+                forceWizardState.value = true
+            }
+        }
+
         setContent {
             CompositionLocalProvider(LocalAppGraph provides graph) {
                 val prefs by graph.feedbackPrefs.flow.collectAsState(initial = FeedbackPrefs())
@@ -96,24 +144,37 @@ class MainActivity : AppCompatActivity() {
                 val sysGestures by graph.systemGesturesFlow.collectAsState()
                 val ringInfo by graph.ringInfoFlow.collectAsState()
                 val firstRunCompleted by firstRunStore.completedFlow.collectAsState(initial = true)
+                // On-glasses fix 2026-05-27: a ring that's already paired means setup is effectively
+                // done — show the main app, not the wizard. Without this, a connection that didn't
+                // mark first-run complete (e.g. a slow connect the user backed out of) re-showed the
+                // pairing wizard on every launch ("每次重装就需要重新配对").
+                val pairedMac by graph.ringPairingPrefs.pairedMacFlow.collectAsState(initial = null)
+                val forceWizard by forceWizardState.collectAsState()
                 val advancedPrefs by graph.advancedPrefsFlow.collectAsState()
                 val vitalsPrefs by graph.vitalsPrefsFlow.collectAsState()
                 val vitalsSnapshot by graph.vitalsSnapshotFlow.collectAsState()
-                // Audit-2026-05-13o: app-wide prefs — language override + post-wizard guide flag.
+                val ringCapabilities by graph.ringCapabilitiesFlow.collectAsState()
+                // Audit-2026-05-13o: app-wide prefs — language override only in v0.4 (GuidedTour deleted).
                 val appPrefs = (application as HaloRingApplication).appPrefs
-                val guideSeen by appPrefs.guideSeenFlow.collectAsState(initial = true)
                 val currentLanguage by appPrefs.languageFlow
                     .collectAsState(initial = com.halo.ring.ui.screens.AppLanguage.SYSTEM)
 
-                if (!firstRunCompleted) {
+                if ((!firstRunCompleted && pairedMac == null) || forceWizard) {
                     var adbStatus by remember { mutableStateOf("") }
                     // Refreshed on every onResume — when the user comes back from a settings
                     // deep-link, the wizard re-checks state so the "CONTINUE" CTA appears
                     // automatically once the system permission is granted.
                     val a11yEnabled by accessibilityEnabledState.collectAsState()
                     val batteryExempted by batteryExemptedState.collectAsState()
+                    val devOptionsEnabled by devOptionsEnabledState.collectAsState()
+                    val wirelessDebugEnabled by wirelessDebugEnabledState.collectAsState()
+                    val agentReady by agentReadyState.collectAsState()
                     FirstRunWizardScreen(
-                        onOpenDeveloperSettings = { openSettings(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS) },
+                        onOpenDeveloperSettings = { openWirelessDebuggingSettings() },
+                        onOpenBuildNumber = { openAboutForBuildNumber() },
+                        devOptionsEnabled = devOptionsEnabled,
+                        wirelessDebugEnabled = wirelessDebugEnabled,
+                        agentReady = agentReady,
                         onStartAdbPairing = {
                             startPairingFlow { adbStatus = it }
                         },
@@ -122,21 +183,15 @@ class MainActivity : AppCompatActivity() {
                         accessibilityEnabled = a11yEnabled,
                         onRequestBatteryExemption = ::requestBatteryExemption,
                         batteryExempted = batteryExempted,
+                        onOpenAutostartSettings = { openAppDetailsSettings() },
                         onStartRingPairing = { graph.bleClient.start() },
                         onCompleted = {
                             lifecycleScope.launch { firstRunStore.markCompleted() }
+                            forceWizardState.value = false   // clear the Advanced-triggered re-show
                         },
                     )
                     return@CompositionLocalProvider
                 }
-
-                // Post-wizard onboarding (audit-2026-05-13p). First-time users see the
-                // interactive coachmark tour once after finishing the wizard, AND the user can
-                // re-open it later from Settings → About → "Show operation guide". Both paths
-                // flow through the single `tourRequested` state below; `tourActive` is the
-                // disjunction of "haven't dismissed it yet" and "explicitly re-requested".
-                var tourRequested by remember { mutableStateOf(false) }
-                val tourActive = !guideSeen || tourRequested
 
                 HaloRingApp(
                     initial = AppState(
@@ -159,6 +214,9 @@ class MainActivity : AppCompatActivity() {
                             stepsToday = vitalsSnapshot.activitySteps ?: 0,
                             caloriesToday = vitalsSnapshot.activityKcal ?: 0f,
                             distanceKmToday = (vitalsSnapshot.activityMeters ?: 0) / 1000f,
+                            sportActive = vitalsSnapshot.sportActive,
+                            sportType = vitalsSnapshot.sportType,
+                            sportDurationSec = vitalsSnapshot.sportDurationSec,
                         ),
                         status = StatusState(activeBackend = "(none)"),
                         feedbackPrefs = prefs,
@@ -167,6 +225,7 @@ class MainActivity : AppCompatActivity() {
                     activeProfileId = activeProfileId,
                     systemGestures = sysGestures,
                     ringInfo = ringInfo,
+                    ringCapabilities = ringCapabilities,
                     advancedPrefs = advancedPrefs,
                     vitalsPrefs = vitalsPrefs,
                     deviceProfile = graph.deviceProfile,
@@ -189,14 +248,6 @@ class MainActivity : AppCompatActivity() {
                     onLanguageSelected = { lang ->
                         lifecycleScope.launch { appPrefs.setLanguage(lang) }
                     },
-                    tourActive = tourActive,
-                    onTourDismissed = {
-                        // Auto-show only happens the first time guide_seen=false; mark it now
-                        // so subsequent launches skip straight to the app.
-                        if (!guideSeen) lifecycleScope.launch { appPrefs.markGuideSeen() }
-                        tourRequested = false
-                    },
-                    onRequestTour = { tourRequested = true },
                     // Audit-2026-05-13s: when DOUBLE_TAP / Back fires at the app's root (no
                     // sub-screen to pop), drop the Activity to the back of the stack — which on
                     // the glasses lands the wearer back on the system launcher / whatever they
@@ -256,7 +307,7 @@ class MainActivity : AppCompatActivity() {
         when (action) {
             AdvancedAction.DEEP_LINK_ACCESSIBILITY      -> openSettings(Settings.ACTION_ACCESSIBILITY_SETTINGS)
             AdvancedAction.DEEP_LINK_BATTERY_EXEMPTION  -> requestBatteryExemption()
-            AdvancedAction.REOPEN_ADB_WIZARD            -> lifecycleScope.launch { firstRunStore.reset() }
+            AdvancedAction.REOPEN_ADB_WIZARD            -> forceWizardState.value = true
             AdvancedAction.EXPORT_LATENCY_LOG           -> {
                 val graph = (application as HaloRingApplication).graph
                 exportCsv(
@@ -347,6 +398,83 @@ class MainActivity : AppCompatActivity() {
     private fun openSettings(action: String) {
         try { startActivity(Intent(action).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
         catch (e: Exception) { Log.w("Halo", "openSettings($action) failed: ${e.message}") }
+    }
+
+    /** v0.4 — get the user to Wireless Debugging with as little friction as possible.
+     *
+     * If the app already holds `WRITE_SECURE_SETTINGS` (granted once the agent is bootstrapped),
+     * we **enable Developer Options + Wireless Debugging ourselves** via `Settings.Global` — no
+     * manual toggling needed — then deep-link to the screen so the user can confirm + start the
+     * pairing dialog.
+     *
+     * On a fresh device (no perm yet) we can't flip those toggles (Android security: Developer
+     * Options is gated behind tapping Build Number ×7, which no API can bypass), so we deep-link
+     * to the most specific screen reachable: Wireless Debugging → Developer Options → About
+     * (where Build Number lives). The wizard text explains the one-time manual enable.
+     */
+    private fun openWirelessDebuggingSettings() {
+        // Best-effort programmatic enable (silently no-ops without WRITE_SECURE_SETTINGS).
+        try {
+            android.provider.Settings.Global.putInt(
+                contentResolver, android.provider.Settings.Global.DEVELOPMENT_SETTINGS_ENABLED, 1)
+            android.provider.Settings.Global.putInt(contentResolver, "adb_wifi_enabled", 1)
+            Log.i("Halo", "enabled developer options + wireless debugging via WRITE_SECURE_SETTINGS")
+        } catch (e: SecurityException) {
+            Log.i("Halo", "no WRITE_SECURE_SETTINGS yet — user must enable dev options + wireless debug manually")
+        } catch (e: Exception) {
+            Log.w("Halo", "auto-enable wireless debug failed: ${e.message}")
+        }
+
+        val candidates = listOf(
+            "android.settings.ADB_WIFI_SETTINGS",
+            Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS,
+            Settings.ACTION_DEVICE_INFO_SETTINGS,   // About → Build number (×7 to unlock dev options)
+        )
+        for (action in candidates) {
+            try {
+                startActivity(Intent(action).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                return
+            } catch (_: Exception) { /* try next */ }
+        }
+        Log.w("Halo", "no wireless-debugging settings screen available")
+    }
+
+    /** v0.4 — jump to the About / Device-info screen where "Build number" lives (tap ×7 to unlock
+     *  Developer Options). We can't focus the row itself — Android forbids cross-app focus control
+     *  of the system Settings UI — but this lands the user one screen away. If we already hold
+     *  WRITE_SECURE_SETTINGS we enable Developer Options outright (no ×7 needed) before jumping. */
+    private fun openAboutForBuildNumber() {
+        try {
+            android.provider.Settings.Global.putInt(
+                contentResolver, android.provider.Settings.Global.DEVELOPMENT_SETTINGS_ENABLED, 1)
+            Log.i("Halo", "enabled developer options via WRITE_SECURE_SETTINGS")
+        } catch (_: Exception) { /* no perm yet — user does the ×7 manually */ }
+        val candidates = listOf(
+            Settings.ACTION_DEVICE_INFO_SETTINGS,   // About → Build number
+            "android.settings.DEVICE_INFO_SETTINGS",
+            Settings.ACTION_SETTINGS,
+        )
+        for (action in candidates) {
+            try {
+                startActivity(Intent(action).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                return
+            } catch (_: Exception) { /* try next */ }
+        }
+    }
+
+    /** v0.4 — open this app's details page, where the user enables auto-start / unrestricted
+     *  background (the per-OEM toggle that lets the service restart after reboot). Most reliable
+     *  cross-OEM entry point since there's no standard "autostart" Intent. */
+    private fun openAppDetailsSettings() {
+        try {
+            startActivity(
+                Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                    .setData(Uri.parse("package:$packageName"))
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            )
+        } catch (e: Exception) {
+            Log.w("Halo", "openAppDetailsSettings failed: ${e.message}")
+        }
     }
 
     /**
@@ -510,7 +638,10 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         isInForeground.set(true)
         refreshSetupState()
-        com.halo.ring.ui.TempleFocusBridgeHolder.current.attach(this)
+        // v0.3 P1 (Doc/19 §3.P1) / v0.4 (Doc/20 §3): publish our activity ref so the gesture
+        // pipeline can dispatch base-gesture KeyEvents into this window. Compose handles
+        // DPAD_CENTER / BACK / DPAD_LEFT/RIGHT natively on the focused element.
+        com.halo.ring.ui.ActivitySystemKeyDispatcher.attach(this)
     }
 
     /**
@@ -526,29 +657,32 @@ class MainActivity : AppCompatActivity() {
             contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
         ) ?: ""
         accessibilityEnabledState.value = enabledList.split(':').any { it == expectedSvc }
+
+        // v0.4 — Developer Options + Wireless Debugging live status (global settings are readable
+        // without WRITE_SECURE_SETTINGS). Drives the wizard's ✓/✗ + the pairing-step gate.
+        devOptionsEnabledState.value = try {
+            android.provider.Settings.Global.getInt(
+                contentResolver, android.provider.Settings.Global.DEVELOPMENT_SETTINGS_ENABLED, 0) == 1
+        } catch (_: Exception) { false }
+        wirelessDebugEnabledState.value = try {
+            android.provider.Settings.Global.getInt(contentResolver, "adb_wifi_enabled", 0) == 1
+        } catch (_: Exception) { false }
+
+        // Agent liveness: the heartbeat file is world-readable (-rw-rw-rw-) and the agent rewrites
+        // it every 5 s. Fresh (< 30 s) ⇒ agent up ⇒ system access already done.
+        agentReadyState.value = try {
+            val hb = java.io.File("/data/local/tmp/halo.agent.heartbeat")
+            hb.exists() && (System.currentTimeMillis() - hb.lastModified()) < 30_000L
+        } catch (_: Exception) { false }
     }
 
     override fun onPause() {
         super.onPause()
         isInForeground.set(false)
-        com.halo.ring.ui.TempleFocusBridgeHolder.current.detach(this)
-    }
-
-    /**
-     * Forward every touch event to the temple-focus bridge before letting the View tree see it.
-     * On the rayneo flavor this feeds Mercury SDK's `TouchDispatcher`, which decodes glasses
-     * temple-touchpad gestures into `TempleAction` and routes them through [InAppFocusController].
-     * On rokid (and the off-glass debug builds) the bridge is a no-op and this hook is free.
-     * Audit-2026-05-13s — see [com.halo.ring.ui.TempleFocusBridge].
-     */
-    override fun dispatchTouchEvent(ev: android.view.MotionEvent?): Boolean {
-        if (ev != null) {
-            // Result ignored: the bridge currently always returns false so on-screen widgets
-            // (Compose) also see the raw event, matching Mercury's "we see it AND the View tree
-            // sees it" contract.
-            com.halo.ring.ui.TempleFocusBridgeHolder.current.forwardMotionEvent(ev)
-        }
-        return super.dispatchTouchEvent(ev)
+        // v0.3 P1: clear the dispatcher's activity ref so the gesture pipeline falls back to
+        // the no-op dispatcher while we're backgrounded. Out-of-app gesture handling will go
+        // through the agent (Phase 1b — out of scope for v0.3 P1).
+        com.halo.ring.ui.ActivitySystemKeyDispatcher.detach()
     }
 
     override fun onDestroy() {

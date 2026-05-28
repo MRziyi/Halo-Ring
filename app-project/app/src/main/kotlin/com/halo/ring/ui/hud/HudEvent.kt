@@ -36,6 +36,13 @@ sealed interface HudEvent {
     /** Daily step target reached (`0x73 sub=0x10`). Celebratory 2 s HUD. */
     data object TargetReached : HudEvent
 
+    /** v0.4 C5: live sport-session tick. The ring pushes `0x78` once per second during a workout;
+     *  the service throttles these to ~one HUD render per 8 s so the pip doesn't dominate. */
+    data class SportTick(val durationSec: Int, val hrBpm: Int?) : HudEvent
+
+    /** v0.4 C6: ring accelerometer detected free-fall (potential drop). 2 s, bad-coloured. */
+    data class RingDropped(val ringId: String) : HudEvent
+
     /** BLE connection lost. Renders at the user's [com.halo.ring.ui.screens.FeedbackPrefs.hudPosition]
      *  (audit-2026-05-13l: previously hard-coded centre + persistent — bad AR pattern). Auto-hides
      *  after 4 s; the foreground service re-displays on exponential backoff (P1-8: 60s → 5min →
@@ -72,6 +79,7 @@ fun gestureFriendlyRes(g: Gesture): Int = when (g) {
     Gesture.LONG_PRESS_SWIPE_UP   -> com.halo.ring.R.string.gesture_long_press_swipe_up
     Gesture.LONG_PRESS_SWIPE_DOWN -> com.halo.ring.R.string.gesture_long_press_swipe_down
     Gesture.DOUBLE_LONG_PRESS     -> com.halo.ring.R.string.gesture_double_long_press
+    Gesture.WRIST_SHAKE           -> com.halo.ring.R.string.gesture_wrist_shake
 }
 
 /** String-resource id for an action's friendly localized name. `LaunchApp` gets a special

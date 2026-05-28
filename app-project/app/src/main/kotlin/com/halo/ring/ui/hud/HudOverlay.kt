@@ -65,13 +65,15 @@ class HudOverlay(
 
     private var view: ComposeView? = null
     private var currentEvent by mutableStateOf<HudEvent?>(null)
-    // P1-9: hide just clears the current event; the ComposeView stays installed in the
-    // WindowManager. With currentEvent=null the composable renders nothing (no Surface, no
-    // background, no draw pass), so the empty WRAP_CONTENT view occupies a window slot but
-    // doesn't consume drawing/layout budget. Saves the per-show wm.addView IPC + ComposeView
-    // teardown that was happening on every gesture-hint pulse during the post-pairing 5-min
-    // auto-hint window (~1 add/remove per second).
-    private val hideRunnable = Runnable { currentEvent = null }
+    // v0.4 on-glasses fix (2026-05-27): on the Rokid waveguide, leaving the ComposeView attached
+    // with currentEvent=null still left a faint residual surface ("HUD 消失得不全"). On an additive
+    // see-through panel an attached-but-empty window can still emit a backing-surface artefact.
+    // So the auto-hide now FULLY removes the view from the WindowManager; show() re-installs it.
+    // The per-gesture-hint add/remove cost is negligible vs a visible ghost pill.
+    private val hideRunnable = Runnable {
+        currentEvent = null
+        removeView()
+    }
 
     /** User-selected HUD anchor (Doc/08-ui-design.md §6). Default TopRight: off-axis on both
      *  Rokid (mono right-eye, ~480 px) and RayNeo (binocular 1280×480 — right peripheral). */
@@ -169,6 +171,8 @@ class HudOverlay(
         is HudEvent.GestureRecognised -> 800L           // §10: keep brief, don't chain
         is HudEvent.Reconnected       -> 1_000L         // §3: transient confirmation
         is HudEvent.Disconnected      -> 4_000L         // §3 (was: persistent — see kdoc)
+        is HudEvent.SportTick         -> 8_000L         // C5: long enough to glance at, ticks again
+        is HudEvent.RingDropped       -> 2_500L         // C6: short — usually a false positive
         else                          -> defaultDurationMs
     }
 
@@ -179,6 +183,7 @@ class HudOverlay(
         runOnMain {
             main.removeCallbacks(hideRunnable)
             currentEvent = null
+            removeView()
         }
     }
 
@@ -255,11 +260,16 @@ class HudOverlay(
         // On binocular when we re-anchored TopCenter → END, push it in from the right edge by
         // ~160 px so the HUD pill sits roughly mid-right-eye (right eye occupies x∈[640,1280];
         // pill width ~200–260 px; END+160 puts the pill's centre near x≈940 = right-eye centre).
+        //
+        // On-glasses fix (2026-05-27): on the Rokid 480×640 waveguide, x=16 was too tight — the
+        // pill's right border clipped against the panel edge ("漏一个边"). The waveguide's effective
+        // safe area trims the outer ~24-32 px. Bump the edge margin to SAFE_MARGIN so the whole
+        // bordered pill stays inside the visible region.
         val xInset = when {
             pos == HudPosition.Center && !isBinocular   -> 0
             pos == HudPosition.TopCenter && isBinocular -> 160
             pos == HudPosition.Center && isBinocular    -> 160
-            else                                        -> 16
+            else                                        -> SAFE_MARGIN_PX
         }
         return WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
@@ -268,8 +278,14 @@ class HudOverlay(
         ).apply {
             this.gravity = gravity
             x = xInset
-            y = 16
+            y = SAFE_MARGIN_PX
         }
+    }
+
+    private companion object {
+        /** Waveguide safe-area margin (px). The outer edge of the Rokid panel is trimmed by the
+         *  optics; keep the bordered HUD pill inside this inset so no edge clips. */
+        const val SAFE_MARGIN_PX = 32
     }
 }
 
@@ -287,6 +303,8 @@ fun HudPill(event: HudEvent) {
         is HudEvent.GestureRecognised    -> HaloColors.Line
         is HudEvent.Peek                 -> HaloColors.Line
         is HudEvent.TargetReached        -> HaloColors.Accent
+        is HudEvent.SportTick            -> HaloColors.Accent
+        is HudEvent.RingDropped          -> HaloColors.Bad
     }
     // Disconnected gets slightly larger padding because it carries a two-line message (status +
     // reconnect hint); the rest are single-line pills. The variable's old name `centered` referred
@@ -305,12 +323,26 @@ fun HudPill(event: HudEvent) {
             is HudEvent.LowBattery    -> LowBatteryContent(event)
             is HudEvent.Disconnected  -> DisconnectedContent()
             is HudEvent.Reconnected   -> Text(androidx.compose.ui.res.stringResource(com.halo.ring.R.string.hud_reconnected), style = HaloType.RowVal.copy(
-                color = HaloColors.Accent, fontSize = 16.sp,
+                color = HaloColors.Accent, fontSize = 11.sp,
             ))
             is HudEvent.TargetReached -> Text(androidx.compose.ui.res.stringResource(com.halo.ring.R.string.hud_target_reached), style = HaloType.RowVal.copy(
-                color = HaloColors.Accent, fontSize = 16.sp,
+                color = HaloColors.Accent, fontSize = 11.sp,
             ))
             is HudEvent.GestureRecognised -> GestureRecognisedContent(event)
+            is HudEvent.SportTick -> {
+                val mins = event.durationSec / 60
+                val secs = event.durationSec % 60
+                val durationText = "%02d:%02d".format(mins, secs)
+                val hrText = event.hrBpm?.let { " · ❤ $it" } ?: ""
+                Text(
+                    "🏃 $durationText$hrText",
+                    style = HaloType.RowVal.copy(color = HaloColors.Accent, fontSize = 11.sp),
+                )
+            }
+            is HudEvent.RingDropped -> Text(
+                androidx.compose.ui.res.stringResource(com.halo.ring.R.string.hud_ring_dropped, event.ringId),
+                style = HaloType.RowVal.copy(color = HaloColors.Bad, fontSize = 11.sp),
+            )
         }
     }
 }
@@ -322,25 +354,25 @@ private fun PeekContent(p: HudEvent.Peek) {
         Box(Modifier.size(7.dp).clip(CircleShape).background(
             if (p.connected) HaloColors.Accent else HaloColors.Bad))
         Text(profileFriendlyTextByName(p.mode), style = HaloType.Body.copy(
-            fontSize = 16.sp,
+            fontSize = 11.sp,
             color = HaloColors.Fg,
         ))
         p.batteryPct?.let {
             Text(androidx.compose.ui.res.stringResource(com.halo.ring.R.string.ring_battery_pct, it), style = HaloType.Caption.copy(
-                fontSize = 14.sp,
+                fontSize = 10.sp,
             ))
         }
         // P0-4: optional vitals fields. Service populates only when the matching pref is on AND a
         // recent reading exists. Both null in the common case → no extra glyphs.
         p.heartRateBpm?.let {
             Text("♥ $it", style = HaloType.Caption.copy(
-                fontSize = 14.sp,
+                fontSize = 10.sp,
                 color = HaloColors.Accent,
             ))
         }
         p.activitySteps?.let {
             Text(androidx.compose.ui.res.stringResource(com.halo.ring.R.string.hud_steps_value, it), style = HaloType.Caption.copy(
-                fontSize = 14.sp,
+                fontSize = 10.sp,
             ))
         }
     }
@@ -351,12 +383,12 @@ private fun ProfileSwitchedContent(p: HudEvent.ProfileSwitched) {
     Row(verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("↻ →", style = HaloType.Body.copy(color = HaloColors.Accent,
-            fontSize = 16.sp))
+            fontSize = 11.sp))
         Text(profileFriendlyTextByName(p.newMode), style = HaloType.Body.copy(
-            fontSize = 16.sp,
+            fontSize = 11.sp,
         ))
         Text(androidx.compose.ui.res.stringResource(com.halo.ring.R.string.hud_profile_cycle), style = HaloType.Caption.copy(
-            fontSize = 14.sp,
+            fontSize = 10.sp,
         ))
     }
 }
@@ -367,10 +399,10 @@ private fun LowBatteryContent(p: HudEvent.LowBattery) {
         horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         Box(Modifier.size(7.dp).clip(CircleShape).background(HaloColors.Warn))
         Text(p.ringId, style = HaloType.Body.copy(
-            fontSize = 16.sp,
+            fontSize = 11.sp,
         ))
         Text(androidx.compose.ui.res.stringResource(com.halo.ring.R.string.ring_battery_pct, p.pct), style = HaloType.Caption.copy(
-            fontSize = 14.sp,
+            fontSize = 10.sp,
             color = HaloColors.Warn,
         ))
     }
@@ -386,12 +418,12 @@ private fun DisconnectedContent() {
         Row(verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Box(Modifier.size(8.dp).clip(CircleShape).background(HaloColors.Bad))
-            Text(androidx.compose.ui.res.stringResource(com.halo.ring.R.string.hud_disconnected), style = HaloType.Body.copy(color = HaloColors.Fg, fontSize = 16.sp))
+            Text(androidx.compose.ui.res.stringResource(com.halo.ring.R.string.hud_disconnected), style = HaloType.Body.copy(color = HaloColors.Fg, fontSize = 11.sp))
         }
         Spacer(Modifier.height(2.dp))
         Text(
             androidx.compose.ui.res.stringResource(com.halo.ring.R.string.hud_disconnected_hint),
-            style = HaloType.Caption.copy(fontSize = 14.sp, color = HaloColors.Mute),
+            style = HaloType.Caption.copy(fontSize = 10.sp, color = HaloColors.Mute),
         )
     }
 }
@@ -406,13 +438,13 @@ private fun GestureRecognisedContent(g: HudEvent.GestureRecognised) {
         horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(gestureFriendlyText(g.gesture), style = HaloType.Caption.copy(
             color = HaloColors.Mute,
-            fontSize = 16.sp,
+            fontSize = 11.sp,
         ))
         Text("→", style = HaloType.Caption.copy(color = HaloColors.Mute,
-            fontSize = 16.sp))
+            fontSize = 11.sp))
         Text(actionFriendlyText(g.resolvedAction), style = HaloType.Body.copy(
             color = actionColor,
-            fontSize = 16.sp,
+            fontSize = 11.sp,
         ))
     }
 }

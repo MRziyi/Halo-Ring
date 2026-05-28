@@ -78,6 +78,13 @@ class InteractionRouter(
      * external plugins) — degrades to identical pre-Doc/18 behaviour.
      */
     var pushedProfileLookup: ((Gesture) -> GlassAction?)? = null,
+    /**
+     * v0.3 P1 (Doc/19 §3.P1): dispatches a system-level KeyEvent when the active profile's
+     * [GestureConfig.useSystemKeyEvents] is true and the gesture is one of the 4 BASE gestures
+     * (TAP / DOUBLE_TAP / SWIPE_UP / SWIPE_DOWN). The default [NoopSystemKeyDispatcher] is safe
+     * for tests; the foreground service wires a real Activity-window dispatcher.
+     */
+    var systemKeyDispatcher: SystemKeyDispatcher = NoopSystemKeyDispatcher,
 ) {
     /** Whether the glasses display is currently on. Set by the foreground service from
      *  ACTION_SCREEN_ON/OFF (or RayNeo ARSDK wear/screen state when available). */
@@ -159,6 +166,39 @@ class InteractionRouter(
             onGestureRecognized?.invoke(gesture, a)
             dispatch(a)
             return
+        }
+
+        // 2.5 v0.3 P1 (Doc/19 §3.P1) — base-gesture system-KeyEvent passthrough.
+        //   The 4 BASE gestures (TAP / DOUBLE_TAP / SWIPE_UP / SWIPE_DOWN) fire system KeyEvents
+        //   to mirror the Rokid temple touchpad. Inserted AFTER the modal layer (modals own their
+        //   gesture vocabulary while active) but BEFORE the pushed-profile and active-profile
+        //   layers — plugins/profiles only customise the *non-base* gestures (TRIPLE_TAP,
+        //   QUADRUPLE_TAP, LONG_PRESS, combos). The user's invariant: "ring = temple extension,
+        //   you can't remap the temple's core 4."
+        val activeConfig = modeManager.active().gestureConfig
+        if (activeConfig.useSystemKeyEvents) {
+            val keyCodes = SystemKeyMapping.forBaseGesture(gesture, activeConfig)
+            if (keyCodes.isNotEmpty()) {
+                // A swipe dispatches BOTH a vertical and a horizontal DPAD key (e.g. UP + LEFT) so
+                // it navigates regardless of whether the foreground UI is a vertical list (home,
+                // notifications, in-app) or a horizontal grid (the Sprite Launcher app list). Only
+                // the axis with a focusable neighbour actually moves; the other no-ops. This mirrors
+                // the Rokid temple swipe, which emits the same dual-axis sequence — fixing
+                // "在 APP 列表里不能滑动". TAP / DOUBLE_TAP are single-key.
+                keyCodes.forEach { systemKeyDispatcher.dispatch(it) }
+                // Synthetic GlassAction for HUD / Test Arena display — never actually dispatched
+                // through ActionRouter. Maps in temple semantics:
+                //   TAP → Confirm, DOUBLE_TAP → Back, SWIPE_UP/forward → NavNext, SWIPE_DOWN/back → NavPrev
+                val synthetic = when (gesture) {
+                    Gesture.TAP        -> GlassAction.Confirm
+                    Gesture.DOUBLE_TAP -> GlassAction.Back
+                    Gesture.SWIPE_UP   -> if (activeConfig.reverseSwipeSemantics) GlassAction.NavPrev else GlassAction.NavNext
+                    Gesture.SWIPE_DOWN -> if (activeConfig.reverseSwipeSemantics) GlassAction.NavNext else GlassAction.NavPrev
+                    else               -> GlassAction.None
+                }
+                onGestureRecognized?.invoke(gesture, synthetic)
+                return
+            }
         }
 
         // 3. pushed-profile stack (Doc/18 §6) — overlay-app bindings take precedence over the

@@ -108,6 +108,20 @@ class AppProcessAgentBackend(
         }
     }
 
+    /**
+     * v0.4 — direct raw-keycode injection for the **out-of-app base-gesture path**. Sends
+     * `KEY <code>` to the agent, which calls `InputManager.injectInputEvent` system-wide (reaches
+     * whatever app is foreground, not just ours). Used by [com.halo.ring.ui.CompositeSystemKeyDispatcher]
+     * when no Halo Ring Activity is foreground. Returns false if the agent isn't ready (not yet
+     * bootstrapped) — caller has no in-app fallback in that case, the gesture is simply dropped.
+     */
+    suspend fun injectKey(keyCode: Int): Boolean {
+        if (!isReady()) return false
+        return withContext(ioDispatcher) {
+            ioLock.withLock { sendWithRetry("KEY $keyCode") }
+        }
+    }
+
     /** Send one wire line and read the reply. Reconnects once on IOException. */
     private fun sendWithRetry(line: String): Boolean {
         repeat(2) { attempt ->

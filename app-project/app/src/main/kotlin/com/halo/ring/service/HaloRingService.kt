@@ -17,7 +17,6 @@ import com.halo.ring.HaloRingApplication
 import com.halo.ring.accessibility.HaloRingAccessibilityService
 import com.halo.ring.di.AppGraph
 import com.halo.ring.inject.AppProcessAgentBackend
-import com.halo.ring.ui.InAppFocusController
 import com.halo.ring.ui.hud.HudEvent
 import com.halo.ring.ui.hud.HudOverlay
 import com.halo.ring.ui.hud.HudServiceHost
@@ -112,15 +111,26 @@ class HaloRingService : Service() {
         when (spatial) {
             is com.halo.ring.core.sensor.AccelProcessor.SpatialEvent.FreeFall -> {
                 Log.w(TAG, "ring in free-fall")
-                hud?.show(HudEvent.LowBattery(graph.ringInfoFlow.value.advertisedName ?: "Halo", 0))
-                // TODO Phase B5+: dedicated FreeFall HUD event with distinct visual instead of repurposing LowBattery
+                // v0.4 C6: dedicated RingDropped HUD with throttling.
+                val now = graph.scheduler.nowMs()
+                if (now - lastDropHudMs >= 5_000L) {
+                    lastDropHudMs = now
+                    hud?.show(HudEvent.RingDropped(graph.ringInfoFlow.value.advertisedName ?: "Halo"))
+                }
             }
             is com.halo.ring.core.sensor.AccelProcessor.SpatialEvent.Impact ->
                 Log.i(TAG, "ring impact ${"%.1f".format(spatial.peakG)} g")
             is com.halo.ring.core.sensor.AccelProcessor.SpatialEvent.PostureChanged ->
                 Log.d(TAG, "ring posture: ${spatial.posture}")
-            is com.halo.ring.core.sensor.AccelProcessor.SpatialEvent.WristShake ->
-                Log.i(TAG, "wrist-shake (app-layer)")
+            is com.halo.ring.core.sensor.AccelProcessor.SpatialEvent.WristShake -> {
+                // v0.4: route the air-gesture into the gesture pipeline like a ring gesture. The
+                // emit lambda runs on the scheduler thread (AccelProcessor.onSample is called from
+                // the BLE-events subscriber), so calling onGesture directly is thread-safe.
+                Log.i(TAG, "wrist-shake → Gesture.WRIST_SHAKE")
+                serviceScope.launch(kotlinx.coroutines.Dispatchers.Unconfined) {
+                    interactionRouter.onGesture(com.halo.ring.core.gesture.Gesture.WRIST_SHAKE)
+                }
+            }
         }
     }
     /** P1-5: when ringInfo derived fields (estimatedConnIntervalMs / intervalMode / activeBackendId)
@@ -128,6 +138,18 @@ class HaloRingService : Service() {
      *  shift fast enough to need a per-event update; throttling to 1 Hz on the scheduler thread
      *  cuts ~33×/s sort + estimate work down to 1×/s during HIGH-band activity bursts. */
     private var lastRingInfoRefreshMs: Long = 0L
+
+    /** v0.4 C2 — Rokid temple system-broadcast receiver. Null on rayneo + generic-Android flavors
+     *  (the Rokid system broadcasts don't exist there). Lifetime-managed by [onCreate]/[onDestroy]. */
+    private var templeReceiver: RokidTempleBroadcastReceiver? = null
+
+    /** v0.4 C5 — throttle SportTick HUD pips to ~8 s. The ring pushes ticks once per second during
+     *  an active workout; rendering every tick would dominate the HUD. */
+    private var lastSportHudMs: Long = 0L
+
+    /** v0.4 C6 — throttle RingDropped HUD to ~5 s between FreeFall fires (the accel processor
+     *  may classify rapid hand-shakes as multiple free-fall events otherwise). */
+    private var lastDropHudMs: Long = 0L
 
     override fun onCreate() {
         super.onCreate()
@@ -227,11 +249,23 @@ class HaloRingService : Service() {
                 }
             },
         ).also { r ->
+            // v0.4 (Doc/20): base-gesture KeyEvent dispatch goes through the composite dispatcher —
+            // foreground → our Activity window (ActivitySystemKeyDispatcher), backgrounded → the
+            // agent's system-wide InputManager.injectInputEvent. This is what lets the ring drive
+            // OTHER apps on the glasses (not just Halo Ring's own UI), once the ADB agent is up.
+            r.systemKeyDispatcher = com.halo.ring.ui.CompositeSystemKeyDispatcher(
+                agentBackend = graph.backends.filterIsInstance<AppProcessAgentBackend>().firstOrNull(),
+                scope = serviceScope,
+            )
             // A5: HUD wiring for recognised gestures + system pseudo-actions.
             // A-5 (latency): also stash the action name for [LatencyLogger] to pull when the
             // gesture finishes dispatching.
             r.onGestureRecognized = { gesture, action ->
                 lastResolvedActionName = action::class.simpleName ?: "None"
+                // v0.4: distinct per-gesture audio feedback (eyes-off confirmation). Fired for
+                // every recognised gesture, even base/system ones, so the wearer hears *what* the
+                // ring understood. Gated by the "UI click sound" feedback pref.
+                com.halo.ring.ui.GestureSounds.play(gesture)
                 if (feedbackPrefs.gestureHintHud && action !is GlassAction.None) {
                     hud?.show(HudEvent.GestureRecognised(gesture, action))
                 }
@@ -265,14 +299,12 @@ class HaloRingService : Service() {
             // No HUD on screen-off wake — the display turning on is feedback enough, and the HUD
             // wouldn't be visible anyway until composition wakes back up.
             r.onScreenOffGesture = { _, _ -> /* no-op */ }
-            // A6: foreground bypass. When MainActivity is in foreground AND the in-app focus
-            // controller can route the action (Nav*/Back/Home), skip the executor backend.
-            r.inAppShortCircuit = { action ->
-                val fg = MainActivity.isInForeground.get()
-                val handled = fg && InAppFocusController.route(action)
-                Log.i(TAG, "inAppShortCircuit(${action::class.simpleName}) fg=$fg handled=$handled")
-                handled
-            }
+            // v0.4: InAppFocusController deleted. Base gestures (TAP / DOUBLE_TAP / SWIPE_UP /
+            // SWIPE_DOWN) flow through `r.systemKeyDispatcher` above as raw KeyEvents — Compose's
+            // standard FocusManager handles DPAD navigation when MainActivity is foreground;
+            // out-of-app it lands on whichever Activity is foreground via the temple-broadcast
+            // path (C2 / SystemBroadcastReceiver) or the agent. Custom gestures (TRIPLE_TAP etc.)
+            // continue to flow through profile → ActionRouter → executor backend below.
             // Doc/18 §6 — pushed-profile stack lookup. The router consults this BEFORE the
             // wearer's active profile so overlay-app bindings win while their HUD is up.
             r.pushedProfileLookup = { gesture -> graph.profileStack.lookup(gesture) }
@@ -412,10 +444,21 @@ class HaloRingService : Service() {
                 is RingEvent.SportTick -> {
                     // Live HR + duration during a workout. Pushed into the sport-session flow.
                     val prev = graph.vitalsSnapshotFlow.value
+                    val newHr = event.hrEstimate.takeIf { it > 0 } ?: prev.heartRateBpm
                     graph.vitalsSnapshotFlow.value = prev.copy(
-                        heartRateBpm = event.hrEstimate.takeIf { it > 0 } ?: prev.heartRateBpm,
+                        heartRateBpm = newHr,
                         sportDurationSec = event.durationSeconds,
+                        // First tick implicitly confirms the session is up — if the user started
+                        // via the UI we already set sportActive=true; this catches sessions started
+                        // out-of-band (e.g. via plugin or future remote launch).
+                        sportActive = true,
                     )
+                    // v0.4 C5: throttled HUD pip. 8 s between renders is comfortable.
+                    val now = graph.scheduler.nowMs()
+                    if (now - lastSportHudMs >= 8_000L) {
+                        lastSportHudMs = now
+                        hud?.show(HudEvent.SportTick(event.durationSeconds, newHr))
+                    }
                 }
                 is RingEvent.AccelSample -> {
                     // Phase B3-5: feed the pure :core AccelProcessor for posture / free-fall /
@@ -561,6 +604,40 @@ class HaloRingService : Service() {
             addAction(Intent.ACTION_SCREEN_ON); addAction(Intent.ACTION_SCREEN_OFF)
         })
         cleanup += { try { unregisterReceiver(screenReceiver) } catch (_: IllegalArgumentException) {} }
+
+        // v0.4 C2: Rokid temple touchpad → InteractionRouter (system ordered broadcasts).
+        // Rokid-only — RayNeo doesn't publish the `com.android.action.ACTION_SPRITE_*` constants
+        // (its temple input flows through Mercury SDK's TouchDispatcher, which we may re-wire in a
+        // future C-step). On generic Android, no glasses, also skipped.
+        if (graph.deviceProfile == com.halo.ring.core.DeviceProfile.ROKID_GLASSES) {
+            val rcv = RokidTempleBroadcastReceiver(
+                router = interactionRouter,
+                scope = serviceScope,
+                onOpenSettings = {
+                    // Two-finger long-press = "open Halo Ring config". Launch MainActivity into the
+                    // Settings root.
+                    try {
+                        startActivity(
+                            Intent(this, MainActivity::class.java)
+                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        )
+                    } catch (e: Exception) {
+                        Log.w(TAG, "open MainActivity from temple SETTINGS_KEY failed: ${e.message}")
+                    }
+                },
+            )
+            try {
+                registerReceiver(rcv, rcv.filter())
+                templeReceiver = rcv
+                cleanup += {
+                    try { unregisterReceiver(rcv) } catch (_: IllegalArgumentException) {}
+                    templeReceiver = null
+                }
+                Log.i(TAG, "Rokid temple broadcast receiver registered")
+            } catch (e: Exception) {
+                Log.w(TAG, "Rokid temple broadcast receiver registration failed: ${e.message}")
+            }
+        }
         // Seed initial state. Audit-2026-05-13j (P3): also pre-fetch wear state via the synchronous
         // [WearStateProvider.isWorn] (the observer fires on *changes* — may never fire if the user
         // is already wearing the glasses when our service starts), then trigger one reconcile so
@@ -589,9 +666,8 @@ class HaloRingService : Service() {
                     com.halo.ring.ui.screens.HudPosition.BOTTOM_RIGHT -> HudOverlay.HudPosition.BottomRight
                 })
                 hud?.setDefaultDuration(p.hudDurationMs.toLong())
-                // Audit-2026-05-13s: focus-move click sound. Mirrors Rokid Sprite Launcher's
-                // per-focus-move beep. Same pref drives mode-switch sound + UI focus sound.
-                com.halo.ring.ui.InAppFocusController.clickSoundEnabled = p.clickSoundOnModeSwitch
+                // v0.4: per-gesture audio feedback gated by the same "click sound" pref.
+                com.halo.ring.ui.GestureSounds.enabled = p.clickSoundOnModeSwitch
             }
         }
         cleanup += { prefsJob.cancel() }
@@ -618,6 +694,12 @@ class HaloRingService : Service() {
                 snapshotJob = if (p.autoSnapshotIntervalMin > 0) {
                     serviceScope.launch { runVitalsAutoSnapshot(p) }
                 } else null
+                // v0.4 C6 + energy fix 2: the spatial toggle is the master switch; the actual
+                // stream is additionally gated on worn+screenOn by reconcileAccelStream (the
+                // accel telemetry is ~64 B/s of CPU-waking BLE notifies — no point streaming it
+                // when the screen is off or the ring is off-finger and nobody's gesturing).
+                spatialPrefEnabled = p.spatialFeaturesEnabled
+                reconcileAccelStream()
             }
         }
         cleanup += { vitalsJob.cancel() }
@@ -747,6 +829,7 @@ class HaloRingService : Service() {
             graph.backends.filterIsInstance<AppProcessAgentBackend>().forEach { it.close() }
             hud?.destroy()
             hudHost?.destroy()
+            com.halo.ring.ui.GestureSounds.release()
         } finally {
             serviceScope.cancel()
             super.onDestroy()
@@ -792,6 +875,8 @@ class HaloRingService : Service() {
             Log.i(TAG, "PowerPolicy: not worn for ${PowerPolicy.NOT_WORN_DISCONNECT_MS} ms → disconnect")
             graph.bleClient.stop()
         }
+        // Energy fix 2: the accel stream (for spatial/wrist-shake) follows worn+screen state too.
+        reconcileAccelStream()
 
         // Schedule a re-eval at the active-window boundary so HIGH→BALANCED happens automatically
         // without needing another input event. SLOW and BALANCED are stable resting states — no
@@ -803,6 +888,27 @@ class HaloRingService : Service() {
         } else {
             idleRelaxTimer = null
         }
+    }
+
+    /** v0.4 — the user's spatial-features master toggle (mirrored from VitalsPrefs). */
+    @Volatile private var spatialPrefEnabled = false
+    /** Tracks whether the accel telemetry stream is currently subscribed (avoids redundant writes). */
+    private var accelStreamOn = false
+
+    /**
+     * Energy fix 2 (audit 2026-05-27): the accelerometer telemetry stream powers spatial / wrist-
+     * shake gestures but is ~64 B/s of CPU-waking BLE notifies. Stream it ONLY when the user has
+     * spatial features on AND the ring is worn AND the screen is on — i.e. when the wearer could
+     * actually be air-gesturing. Pauses automatically on screen-off / off-finger. Scheduler-thread
+     * only (called from [reconcilePower] + the VitalsPrefs collector).
+     */
+    private fun reconcileAccelStream() {
+        val desired = spatialPrefEnabled && worn && screenOnState
+        if (desired == accelStreamOn) return
+        accelStreamOn = desired
+        if (desired) graph.bleClient.startAccelStream(continuous = true)
+        else         graph.bleClient.stopAccelStream()
+        Log.i(TAG, "accel stream: ${if (desired) "ON" else "OFF"} (spatial=$spatialPrefEnabled worn=$worn screen=$screenOnState)")
     }
 
     /**

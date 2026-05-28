@@ -29,7 +29,11 @@ import com.halo.ring.core.action.GlassAction
  */
 data class SystemGestures(
     val wake: Gesture?            = Gesture.LONG_PRESS,
-    val sleep: Gesture?           = Gesture.LONG_PRESS_SWIPE_DOWN,
+    // v0.4 (user 2026-05-27): LONG_PRESS is BOTH wake (screen off) and sleep (screen on) — one easy
+    // screen-toggle. Sleep is very common and LONG_PRESS_SWIPE_DOWN was too fiddly; LONG_PRESS→Menu
+    // was a no-op on Rokid anyway. The system layer runs before the profile, so this SHADOWS any
+    // per-profile LONG_PRESS binding while the screen is on (rebind the SLEEP slot to restore it).
+    val sleep: Gesture?           = Gesture.LONG_PRESS,
     val profileCycle: Gesture?    = Gesture.TRIPLE_TAP,
     val peekHud: Gesture?         = Gesture.QUADRUPLE_TAP,
     val aiAssistant: Gesture?     = Gesture.DOUBLE_LONG_PRESS,

@@ -2,9 +2,25 @@
 
 The complete specification of **what the user can do**, **what each thing means**, and **how the
 state machines work**. This is the most carefully-thought-out part of the project — read it in
-full before changing any gesture or mapping.
+full before changing any gesture or mapping. It is **the gem** of the design — the v0.4 doc
+prune left it intact.
 
-For the end-user-facing summary of the same content, see [09-user-manual.md](09-user-manual.md).
+For the end-user-facing summary, see [09-user-manual.md](09-user-manual.md).
+
+## 0. The mental model — two layers
+
+The ring presents to the user as **two layers** stacked on top of each other:
+
+1. **Base layer (4 gestures, hard-locked, mirrors temple touchpad)** — TAP / DOUBLE_TAP /
+   SWIPE_UP / SWIPE_DOWN fire system KeyEvents identically to how the Rokid temple touchpad
+   does. The wearer should think of the ring as a wireless extension of the temple, not as a
+   separate app with its own conventions. **Not editable; not exposed in Settings.** See §3.8.
+
+2. **Custom layer (8 gestures + 5 system slots, fully programmable)** — TRIPLE_TAP /
+   QUADRUPLE_TAP / LONG_PRESS + 4 combos + DOUBLE_LONG_PRESS go through the per-profile
+   `KeyMapProfile` (or get bound to the 5 system slots: ScreenWake / ScreenSleep / ProfileCycle /
+   PeekHUD / AI_assistant). **This IS the product** — the project's headline value-add over a
+   plain temple touchpad. See §4-§5 and [Doc/18 Plugin Protocol](18-plugin-protocol.md).
 
 ---
 
@@ -23,24 +39,34 @@ The firmware does no multi-event counting; it doesn't recognise double-taps, swi
 gestures, or anything else. **Everything richer than these four is synthesised on our side by the
 `GestureSynthesizer` state machine.**
 
-## 2. The 12-gesture vocabulary
+## 2. The gesture vocabulary (12 touch + 1 sensor)
 
-The synthesiser produces these:
+Twelve are synthesised from the 4 raw touch events by [GestureSynthesizer]; the 13th
+(`WRIST_SHAKE`) comes from the accelerometer via [AccelProcessor] (v0.4), not the synthesiser.
 
 | # | Gesture | How synthesised | When it commits |
 |---|---|---|---|
-| 1 | `TAP` | one TOUCH, no follow-up within multi-tap window | immediate (optimistic mode) or window-expiry (~280 ms) |
-| 2 | `DOUBLE_TAP` | two TOUCHes within multi-tap window | window-expiry of the combo window (~300 ms) — see §4 |
-| 3 | `TRIPLE_TAP` | three TOUCHes | tap window expiry after the 3rd (~280 ms) |
+| 1 | `TAP` | one TOUCH, no follow-up within multi-tap window | immediate (optimistic mode) or window-expiry (~300 ms) |
+| 2 | `DOUBLE_TAP` | two TOUCHes within multi-tap window | window-expiry of the combo window (~400 ms) — see §4 |
+| 3 | `TRIPLE_TAP` | three TOUCHes | tap window expiry after the 3rd (~300 ms) |
 | 4 | `QUADRUPLE_TAP` | four TOUCHes | tap window expiry after the 4th |
 | 5 | `SWIPE_UP` | one SWIPE_UP (not in a combo window) | immediate |
 | 6 | `SWIPE_DOWN` | one SWIPE_DOWN | immediate |
-| 7 | `LONG_PRESS` | one LONG_PRESS, no follow-up within follow-up window | immediate (if `awaitLongPressCombos=false`) or follow-up window expiry (~400 ms) |
+| 7 | `LONG_PRESS` | one LONG_PRESS, no follow-up within follow-up window | follow-up window expiry (~60 ms in v0.4 — near-instant) |
 | 8 | `DOUBLE_TAP_SWIPE_UP` | DOUBLE_TAP + SWIPE_UP within combo window | immediate on the swipe |
 | 9 | `DOUBLE_TAP_SWIPE_DOWN` | DOUBLE_TAP + SWIPE_DOWN | immediate on the swipe |
 | 10 | `LONG_PRESS_SWIPE_UP` | LONG_PRESS + SWIPE_UP within follow-up window | immediate on the swipe |
 | 11 | `LONG_PRESS_SWIPE_DOWN` | LONG_PRESS + SWIPE_DOWN | immediate on the swipe |
 | 12 | `DOUBLE_LONG_PRESS` | LONG_PRESS + LONG_PRESS within follow-up window | immediate on the 2nd LP |
+| 13 | **`WRIST_SHAKE`** (v0.4) | accelerometer (`0xA1` ch3) → `AccelProcessor.WristShake` → `InteractionRouter.onGesture` | on shake detection; needs the accel stream ON (Settings → Vitals → Spatial features) |
+
+**v0.4 window tuning (from on-glasses iteration):** `multiTapWindowMs=300`, `comboWindowMs=400`
+(DOUBLE_TAP_SWIPE combos confirmed trainable at 400), `longPressFollowupWindowMs=60` (bare
+LONG_PRESS near-instant — the user found 280 ms "deathly slow"; the ring firmware's ~600 ms
+hold-to-register is the remaining floor and is not ours to change). At the 60 ms window the
+LONG_PRESS_SWIPE / DOUBLE_LONG_PRESS combos are effectively off; DOUBLE_TAP_SWIPE is unaffected
+(separate `comboWindowMs`). The `Fast` profile was **dropped** in v0.4 — base gestures are already
+instant system KeyEvents, so its low-latency niche became the default.
 
 ## 3. The state machine
 
@@ -77,7 +103,7 @@ private var lpFollowupTimer: Cancellable    // alive while a long-press awaits a
 | `false` (precise) | ~280 ms | None — double-tap is clean |
 | `true` (optimistic) | **~0 ms** | TAP fires immediately, then DOUBLE_TAP fires after the combo window — the action is fired *twice* (e.g. "select item, then back") |
 
-Profile-bindable. Default `false` for Navigation (precise menus), `true` for Media / Reader / Fast.
+Profile-bindable. Default `false` for Navigation (precise menus), `true` for Media / Reader.
 
 ### 3.3 Await-combos (for the `DOUBLE_TAP_SWIPE_*` and `LONG_PRESS_SWIPE_*`)
 
@@ -121,15 +147,55 @@ Two real-world cases that look subtle:
 
 Defence-in-depth. The synthesiser has an optional `minRawIntervalMs` to drop TOUCHes that arrive
 within (default 0 = disabled) of the previous. The **real** de-duplication is in the BLE layer
-(see [02-hardware-and-protocol.md](02-hardware-and-protocol.md) §6) where we measure the actual
-inter-tap distribution and pick a safe threshold.
+(see [02-hardware-and-protocol.md](02-hardware-and-protocol.md) §7 — 50 ms window calibrated
+on R08_E600 burn-in).
 
 ### 3.7 Test coverage
 
-The state machine is exercised by ~25 JVM tests in
-[`core/src/test/.../GestureSynthesizerTest.kt`](../app-project/core/src/test/kotlin/com/halo/ring/core/gesture/GestureSynthesizerTest.kt).
-Every documented behaviour is asserted; if you change the state machine, the tests will catch
-behavioural regressions. To run: `cd app-project && ./gradlew :core:test`.
+The state machine is exercised by ~28 JVM tests in
+[`core/src/test/.../GestureSynthesizerTest.kt`](../app-project/core/src/test/kotlin/com/halo/ring/core/gesture/GestureSynthesizerTest.kt)
++ 9 boundary tests in `GestureSynthesizerBoundaryTest.kt`. Every documented behaviour is asserted;
+if you change the state machine, the tests will catch behavioural regressions. To run:
+`cd app-project && ./gradlew :core:test`.
+
+### 3.8 Base-gesture passthrough (v0.4)
+
+When `GestureConfig.useSystemKeyEvents = true` (the default), the 4 base gestures are intercepted
+**immediately after synthesis** by the `InteractionRouter` and dispatched as system `KeyEvent`s
+instead of being looked up in the active profile:
+
+| Gesture | KeyCode(s) (default) | KeyCode(s) (`reverseSwipeSemantics = true`) |
+|---|---|---|
+| `TAP` | `KEYCODE_DPAD_CENTER` (23) | (unchanged) |
+| `DOUBLE_TAP` | `KEYCODE_BACK` (4) | (unchanged) |
+| `SWIPE_UP` | `DPAD_UP` (19) **+** `DPAD_LEFT` (21) | `DPAD_DOWN` + `DPAD_RIGHT` |
+| `SWIPE_DOWN` | `DPAD_DOWN` (20) **+** `DPAD_RIGHT` (22) | `DPAD_UP` + `DPAD_LEFT` |
+
+Why: the wearer's mental model is "ring = wireless extension of the temple touchpad" — so the
+ring's 4 base gestures must trigger the SAME system behaviour the temple does.
+
+**On-glasses fix (2026-05-27): a swipe dispatches BOTH a vertical and a horizontal DPAD key.**
+The Rokid Sprite Launcher **app list is laid out horizontally** (needs `DPAD_LEFT/RIGHT`), while
+home / notifications / in-app are vertical (`DPAD_UP/DOWN`). Sending one vertical + one horizontal
+"previous"/"next" key per swipe navigates either orientation — only the axis with a focusable
+neighbour moves; the other no-ops. This mirrors the temple swipe (the bare-metal doc: "forward →
+DPAD_RIGHT + DPAD_DOWN"). Without the horizontal key, the ring couldn't move in the app list.
+Also note: the Rokid temple **click fires `KEYCODE_ENTER`, not `DPAD_CENTER`** as the older doc
+claimed — Compose's `clickable` handles ENTER so taps still work.
+
+**Implications:**
+- The 4 base gestures **are not editable** in v0.4. The Profile Editor shows them as `(system)`.
+- Custom gestures (TRIPLE_TAP, QUADRUPLE_TAP, LONG_PRESS, all 4 combos, DOUBLE_LONG_PRESS,
+  WRIST_SHAKE) continue through the profile system unchanged.
+- The router's "screen-off fast path" (§5.1) is checked **first** — wake-via-LONG_PRESS still
+  bypasses the synthesiser entirely.
+- **Out-of-app dispatch** (v0.4): `CompositeSystemKeyDispatcher` sends base-gesture KeyEvents to
+  the foreground Activity window when Halo Ring is foreground, else routes them through the agent's
+  `InputManager.injectInputEvent` system-wide — so the ring drives *other* apps too (needs the
+  agent bootstrapped).
+
+Implementation: `:core/gesture/SystemKeyDispatcher.kt` interface + `:app/.../ui/ActivitySystemKeyDispatcher.kt`
+production impl that calls `Activity.dispatchKeyEvent` on the main thread. Wired by `MainActivity.onResume/onPause`.
 
 ---
 
@@ -148,10 +214,10 @@ data class KeyMapProfile(
 )
 ```
 
-### 4.1 The four built-in profiles
+### 4.1 The three built-in profiles (v0.4 — Fast dropped)
 
-Each profile fills all 12 gesture slots. Slots reserved for the system layer (TripleTap,
-QuadrupleTap, LongPressSwipeDown, DoubleLongPress — see §5) are explicitly `GlassAction.None` so
+Each profile fills all 13 gesture slots. Slots reserved for the system layer (TripleTap,
+QuadrupleTap, LongPress, DoubleLongPress — see §5) are effectively overridden by it so
 they show as "(system)" in the mapping UI and can't be double-bound.
 
 #### Navigation (default — for browsing menus and the system launcher)
@@ -208,25 +274,18 @@ config: optimistic single-tap ON
 
 Auto-triggered by: Translate / WordTips Activities (Rokid Sprite Launcher).
 
-#### Fast (minimum latency, fewest gestures)
+#### ~~Fast~~ — **dropped in v0.4 (on-glasses iteration)**
 
-```
-TAP                     → Confirm          (instant)
-DOUBLE_TAP              → None             (disabled so TAP fires immediately)
-SWIPE_UP                → NavPrev
-SWIPE_DOWN              → NavNext
-LONG_PRESS              → Back             (instant — no follow-up window)
-DOUBLE_TAP_SWIPE_*      → None
-LONG_PRESS_SWIPE_UP     → None
+The Fast profile existed to give "instant TAP + instant LONG_PRESS, no combos". Post-v0.4 that's
+the *default* behaviour: the 4 base gestures are instant system KeyEvents (§3.8) and LONG_PRESS is
+the near-instant screen-toggle (§5). So Fast was redundant and is no longer in
+`DefaultProfiles.ALL` (now **Navigation / Media / Reader**). The definition is kept in source for
+easy restore.
 
-config: optimistic single-tap ON
-        awaitCombos       OFF
-        awaitLP combos    OFF           ← LONG_PRESS = Back, immediate
-```
-
-Trade-off: no combos, no double-tap → can't get DOUBLE_TAP_SWIPE_* / LONG_PRESS_SWIPE_*
-gestures, but TAP/LONG_PRESS are both instantaneous and the screen-sleep system gesture still
-works (see §5).
+> **v0.4 profile notes (on-glasses):** the per-profile `LONG_PRESS` binding above (Menu / VolumeUp /
+> Home) is **shadowed while the screen is on** by the system SLEEP slot (LONG_PRESS → ScreenSleep) —
+> rebind the SLEEP slot in System Gestures to get the profile's LONG_PRESS back. Every profile also
+> binds the new **`WRIST_SHAKE`** air-gesture: Navigation/Media → AI assistant, Reader → AI chat.
 
 ### 4.2 ModeManager: switching between profiles
 
@@ -252,6 +311,11 @@ On every profile change:
 
 The redundant audio + ring-LED feedback is deliberate — AR display content is often outside the
 user's focus, so eyes-off confirmation matters.
+
+**v0.4 — distinct per-gesture sounds:** beyond profile-switch feedback, every recognised gesture
+now plays its own `ToneGenerator` tone (`GestureSounds`) — TAP a crisp blip, DOUBLE_TAP a
+double-blip, swipes high/low, LONG_PRESS sustained, WRIST_SHAKE distinctive — so the wearer can
+tell *what* the ring understood without looking. Gated by the "UI click sound" feedback pref.
 
 ---
 
@@ -320,53 +384,20 @@ Navigation's `LONG_PRESS → Menu`).
 
 ---
 
-## 6. The modal layer (interface stubbed; full implementation deferred)
+## 6. The modal layer
 
 A **modal** is a transient interaction state opened by one gesture, where subsequent gestures
-have special meaning until it exits. Useful for continuous adjustments (volume / brightness) and
-multi-step interactions (recent task switcher / AI dictation), without burning gesture vocabulary
-on each granular action.
+have special meaning until it exits. Implemented in `:core/modal/` (4 modal state machines —
+`VolumeModal`, `BrightnessModal`, `RecentsModal`, `AIDictateModal`; 17 tests in `ModalsTest.kt`).
 
-### 6.1 Interface
+The router checks `activeModal != null` between the system-gesture layer and the profile layer;
+when set, `activeModal.handle(gesture)` takes over. Sentinels exit the modal: `ModalSentinel.Exit`
+(confirmed), `ModalSentinel.Cancel`, `ModalSentinel.FireAndExit(payload)` (dispatch one final
+action + close). LED feedback: slow double-flash (~1 Hz) while active; two quick flashes on
+confirm; nothing on cancel/timeout.
 
-```kotlin
-interface Modal {
-    val timeoutMs: Long
-    fun handle(gesture: Gesture): GlassAction
-    fun onEnter(): GlassAction = GlassAction.None
-    fun onExit(reason: ModalExitReason): GlassAction = GlassAction.None
-}
-
-enum class ModalExitReason { CONFIRMED, CANCELLED, TIMEOUT }
-
-sealed class ModalSentinel : GlassAction {
-    object Exit : ModalSentinel()        // confirmed
-    object Cancel : ModalSentinel()
-}
-```
-
-Modals are entered by `Enter*Modal` actions (which a profile binds a gesture to). The router
-checks `activeModal != null` before falling through to the profile.
-
-### 6.2 Default modals (planned)
-
-| Modal | Entry gesture (default) | While active | Exits |
-|---|---|---|---|
-| `VolumeModal` | Media profile's `LONG_PRESS_SWIPE_UP` | SwipeUp = vol +1, SwipeDown = vol −1, Tap = confirm exit, DoubleTap = cancel | Tap / DoubleTap / 3 s timeout |
-| `BrightnessModal` | (no default binding, user must assign) | SwipeUp = bright +, SwipeDown = bright −, Tap = exit | Tap / 3 s timeout |
-| `RecentsModal` | (no default) | SwipeUp/Down = next/prev recent task, Tap = switch to it | Tap / 5 s timeout |
-| `AIDictateModal` | (no default; "continuous AI conversation") | Tap = say a sentence, DoubleTap = end, SwipeUp = cancel | DoubleTap / 30 s timeout |
-
-### 6.3 Ring LED feedback for modals
-
-While a modal is active, the ring's LED slowly double-flashes (~1 Hz) so the user always knows
-they're "in" something. On exit, two quick flashes (confirmed) or no flash (cancelled/timeout).
-
-### 6.4 Status: not yet implemented
-
-The interfaces and the routing-layer plumbing exist; the modal state machines (volume, etc.)
-ship in a later iteration. The `Enter*Modal` actions are listed in the GlassAction vocabulary so
-the mapping UI shows them.
+Default entry gestures: `VolumeModal` ← Media profile's `LONG_PRESS_SWIPE_UP`. Others are
+unbound by default and rely on the user assigning them via the Profile Editor.
 
 ---
 
@@ -388,7 +419,7 @@ This is described in user-facing terms in [09-user-manual.md](09-user-manual.md)
 
 ---
 
-## 7b. External plugin actions (Doc/18 protocol)
+## 4.4 External plugin actions (Doc/18 protocol)
 
 A gesture can be bound to an action provided by another installed Android app instead of one of
 Halo Ring's built-in `GlassAction` cases. From the wearer's perspective there's no observable
@@ -421,9 +452,9 @@ issues:
 
 | # | State machine | States | Transitions | Side effects |
 |---|---|---|---|---|
-| 1 | `KeyMapProfile` (the active one) | Navigation / Media / Reader / Fast / user-defined | Triple-tap cycle, auto-switch, manual select | Re-binds all 12 gestures; updates HUD; flashes ring LED; updates `GestureConfig` of the synthesiser |
+| 1 | `KeyMapProfile` (the active one) | Navigation / Media / Reader / user-defined (Fast dropped v0.4) | Triple-tap cycle, auto-switch, manual select | Re-binds the 13 gestures; updates HUD; flashes ring LED; updates `GestureConfig` of the synthesiser |
 | 2 | `ConnectionState` | DISCONNECTED / SCANNING / CONNECTING / READY | BLE callbacks | HUD signal indicator; arm wake-swallow on transition to READY |
-| 3 | `WearState` | WORN / OFF | Sensors (`RokidDoorReceiver` / Mercury 佩戴检测) + `ACTION_SCREEN_ON/OFF` fallback | Drives ring hand-over (§7); gates `TOUCH_ENABLE/DISABLE` (see [06](06-performance-and-power.md)) |
+| 3 | `WearState` | WORN / OFF | Sensors (`RokidDoorReceiver` / Mercury 佩戴检测) + `ACTION_SCREEN_ON/OFF` fallback | Drives ring hand-over (§7); gates `TOUCH_ENABLE/DISABLE` (see [04](04-architecture.md) §7) |
 | 4 | `ActiveMode` (BLE conn interval) | ACTIVE (short interval, ~15-30 ms) / IDLE (~100-200 ms) | recent-gesture timeout (~10 s) | BLE connection priority request |
 | 5 | `WakeSwallow` | armed(N) / disarmed | armed on reconnect | Eats N raw TOUCHes |
 

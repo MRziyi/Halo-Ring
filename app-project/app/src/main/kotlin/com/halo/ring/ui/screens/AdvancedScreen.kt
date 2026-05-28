@@ -23,8 +23,10 @@ import com.halo.ring.ui.ScreenPadding
 
 @androidx.compose.runtime.Immutable
 data class AdvancedPrefs(
+    /** v0.4: no consumer; preserved for DataStore back-compat. */
     val debugHudEnabled: Boolean = false,
     val latencyMeasurementEnabled: Boolean = false,
+    /** v0.4: surfaced in Vitals (C6) not Advanced; preserved for DataStore back-compat. */
     val spatialModeEnabled: Boolean = false,
 )
 
@@ -37,13 +39,12 @@ enum class AdvancedAction {
 }
 
 /**
- * Settings → Advanced (mockup §3 J). The "developer" pane:
- *  - 3 boolean toggles (Debug HUD / Latency measurement / Spatial mode — phase-3, warned)
- *  - 4 actions: deep-link to OS Accessibility settings, deep-link to battery exemption, re-run the
- *    ADB bootstrap wizard, export the latency-measurement CSV.
+ * Settings → Advanced. v0.4-slimmed (Doc/20 §4):
+ *  - one real toggle: Latency measurement (gates the LatencyLogger ring buffer)
+ *  - actions: open A11y settings, request battery exemption, re-run ADB wizard, export logs
  *
- * Persistence: the toggle state is owned by the caller (MainActivity); deep-link actions are
- * fire-and-forget Intents emitted via [onActionTriggered].
+ * The pre-v0.4 dead toggles (debug HUD never had a consumer; spatial mode moved to Vitals → C6)
+ * are no longer surfaced. The data class fields stay for DataStore back-compat.
  */
 @Composable
 fun AdvancedScreen(
@@ -53,6 +54,9 @@ fun AdvancedScreen(
     onToggleSpatial: () -> Unit = {},
     onActionTriggered: (AdvancedAction) -> Unit = {},
 ) {
+    @Suppress("UNUSED_EXPRESSION") onToggleDebugHud
+    @Suppress("UNUSED_EXPRESSION") onToggleSpatial
+
     Column(modifier = Modifier.fillMaxSize().padding(top = 4.dp)) {
         Text(
             text = stringResource(R.string.advanced_title),
@@ -60,28 +64,11 @@ fun AdvancedScreen(
             modifier = Modifier.padding(horizontal = ScreenPadding, vertical = 12.dp),
         )
 
-        // Audit-pass 2026-05-13t: `debugHudEnabled` is persisted but no consumer reads it
-        // (there's no actual debug-HUD renderer wired). Mark disabled so we don't lie about it.
-        ToggleRow(
-            title = stringResource(R.string.advanced_debug_hud),
-            description = stringResource(R.string.advanced_debug_hud_desc),
-            on = prefs.debugHudEnabled,
-            onToggle = onToggleDebugHud,
-            disabled = true,
-        )
         ToggleRow(
             title = stringResource(R.string.advanced_latency_measure),
             description = stringResource(R.string.advanced_latency_desc),
             on = prefs.latencyMeasurementEnabled,
             onToggle = onToggleLatency,
-        )
-        // Phase-3 (spatial / air gestures). Toggle has no runtime effect until phase-3 ships.
-        ToggleRow(
-            title = stringResource(R.string.advanced_spatial_mode),
-            description = stringResource(R.string.advanced_spatial_desc),
-            on = prefs.spatialModeEnabled,
-            onToggle = onToggleSpatial,
-            disabled = true,
         )
 
         Spacer(Modifier.height(16.dp))

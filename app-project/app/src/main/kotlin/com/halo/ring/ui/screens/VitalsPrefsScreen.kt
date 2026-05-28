@@ -120,6 +120,22 @@ fun VitalsPrefsScreen(
         }
         Divider()
 
+        // v0.4 C6 (Doc/20 §9) — spatial features opt-in. Subscribes the ring's accelerometer
+        // telemetry so AccelProcessor can fire free-fall / wrist-shake events. Default OFF
+        // (extra BLE traffic; opt-in per the user's invariant).
+        Spacer(Modifier.height(12.dp))
+        Text(
+            text = stringResource(R.string.vitals_spatial_section).uppercase(),
+            style = HaloType.Caption.copy(color = HaloColors.Mute),
+            modifier = Modifier.padding(horizontal = ScreenPadding, vertical = 4.dp),
+        )
+        ToggleRow(
+            title = stringResource(R.string.vitals_spatial_section),
+            description = stringResource(R.string.vitals_spatial_caption),
+            on = prefs.spatialFeaturesEnabled,
+            onToggle = { onUpdated(prefs.copy(spatialFeaturesEnabled = !prefs.spatialFeaturesEnabled)) },
+        )
+
         Spacer(Modifier.height(12.dp))
         Text(
             stringResource(R.string.vitals_prefs_footer),

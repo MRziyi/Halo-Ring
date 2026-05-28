@@ -129,7 +129,13 @@ fun ListRow(
     Box(Modifier.fillMaxWidth().height(1.dp).background(HaloColors.Line))
 }
 
-/** A primary-action button: bordered outline (default) or filled (when focused). */
+/** A primary-action button: bordered outline (default) or filled (when focused).
+ *
+ *  On-glasses fix 2026-05-27: now tracks Compose focus via `onFocusChanged` (like [FocusableRow]),
+ *  not just the explicit `focused` param. Without this, DPAD focus landing on a CTA produced no
+ *  visual change — the wearer couldn't tell where the cursor was ("不知道光标在哪"). When focused
+ *  the button fills solid accent (green) with black text + a thicker border — unmistakable on the
+ *  see-through panel. */
 @Composable
 fun Cta(
     text: String,
@@ -138,13 +144,16 @@ fun Cta(
     danger: Boolean = false,
     onClick: () -> Unit = {},
 ) {
+    var composeFocused by remember { mutableStateOf(false) }
+    val effective = focused || composeFocused
     val accent = if (danger) HaloColors.Bad else HaloColors.Accent
-    val bg = if (focused) accent else Color.Transparent
-    val fg = if (focused) HaloColors.Bg else accent
+    val bg = if (effective) accent else Color.Transparent
+    val fg = if (effective) HaloColors.Bg else accent
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .border(width = 1.dp, color = accent)
+            .onFocusChanged { composeFocused = it.isFocused }
+            .border(width = if (effective) 2.dp else 1.dp, color = accent)
             .background(bg)
             .clickable(onClick = onClick)
             .padding(vertical = 12.dp),

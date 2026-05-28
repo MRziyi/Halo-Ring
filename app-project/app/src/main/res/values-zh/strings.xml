@@ -21,6 +21,28 @@
     <string name="tab_status">状态</string>
 
     <!-- 设置入口 -->
+    <string name="settings_group_ring">戒指</string>
+    <string name="settings_group_vitals">健康</string>
+    <string name="settings_group_gestures">手势 &amp; 配置</string>
+    <string name="settings_group_plugins">插件</string>
+    <string name="settings_group_more">更多</string>
+    <string name="settings_section_vitals">健康数据</string>
+    <string name="settings_section_status">连接状态</string>
+    <string name="ring_capabilities_header">戒指能力</string>
+    <string name="hud_ring_dropped">戒指掉了？%1$s</string>
+    <string name="vitals_sport_section">运动</string>
+    <string name="vitals_sport_start_walk">开始步行</string>
+    <string name="vitals_sport_start_run">开始跑步</string>
+    <string name="vitals_sport_start_cycle">开始骑行</string>
+    <string name="vitals_sport_start_other">开始运动</string>
+    <string name="vitals_sport_stop">结束运动</string>
+    <string name="vitals_sport_active">进行中 · %1$s</string>
+    <string name="vitals_sport_type_walk">步行</string>
+    <string name="vitals_sport_type_run">跑步</string>
+    <string name="vitals_sport_type_cycle">骑行</string>
+    <string name="vitals_sport_type_other">其他</string>
+    <string name="vitals_spatial_section">空间感知</string>
+    <string name="vitals_spatial_caption">订阅戒指加速度计：跌落检测 + 摇腕手势。会增加 ~64 B/s BLE 流量。</string>
     <string name="settings_section_profiles">配置文件 &amp; 手势</string>
     <string name="settings_section_system_gestures">系统手势</string>
     <string name="settings_section_ring">戒指</string>
@@ -403,9 +425,26 @@
 
     <!-- 首次启动向导：眼镜 480×480 布局的短版本。 -->
     <string name="wizard_welcome_begin_cta">开始</string>
-    <string name="wizard_adb_intro_title">安装 agent</string>
-    <string name="wizard_adb_intro_body">先尝试 root 自动配置；如未 root，将提示输入 6 位配对码。</string>
-    <string name="wizard_adb_open_settings_cta">打开设置</string>
+    <string name="wizard_adb_intro_title">系统操作权</string>
+    <string name="wizard_adb_intro_body">为了让戒指操控眼镜，需要一次性授权——全程在眼镜上完成，无需电脑：\n1. 点下方「打开无线调试」并开启\n2. 返回，点「开始配对」\n3. 输入 6 位配对码\n完成后永久生效，重启也不掉，只需做这一次。</string>
+    <string name="wizard_adb_open_settings_cta">打开无线调试</string>
+    <!-- 步骤指示 + 保活步骤 -->
+    <string name="wizard_sys_step">系统授权</string>
+    <string name="wizard_sys_devopts_label">开发者选项</string>
+    <string name="wizard_sys_wireless_label">无线调试</string>
+    <string name="wizard_sys_enable_devopts_cta">开启开发者选项</string>
+    <string name="wizard_keepalive_step">保活</string>
+    <string name="wizard_pair_step">配对戒指</string>
+    <string name="wizard_keepalive_title">开启保活</string>
+    <string name="wizard_keepalive_body">为了让戒指在后台和重启后都持续工作，请同时开启这两项：</string>
+    <string name="wizard_keepalive_battery_row">电池：忽略优化</string>
+    <string name="wizard_keepalive_battery_desc">阻止 Android Doze 几小时后杀掉服务。</string>
+    <string name="wizard_keepalive_autostart_row">后台：不受限制</string>
+    <string name="wizard_keepalive_autostart_desc">在 应用信息 → 电池 里设为「不受限制」。开机自启由系统的开机广播自动处理，无需单独开关。部分 ROM 另有「自启动」开关，有的话也在这里打开。</string>
+    <string name="wizard_keepalive_autostart_cta">打开应用信息</string>
+    <string name="wizard_keepalive_battery_cta">允许电池后台</string>
+    <string name="wizard_keepalive_done_cta">继续</string>
+    <string name="wizard_done_cta">完成</string>
     <string name="wizard_adb_start_pairing_cta">开始配对</string>
     <string name="wizard_adb_running_title">配对中…</string>
     <string name="wizard_adb_paired_title">已配对</string>
@@ -453,6 +492,7 @@
     <string name="gesture_long_press_swipe_up">长按 + 上滑</string>
     <string name="gesture_long_press_swipe_down">长按 + 下滑</string>
     <string name="gesture_double_long_press">长按 × 2</string>
+    <string name="gesture_wrist_shake">甩手</string>
 
     <!-- 动作名 -->
     <string name="action_nav_prev">上一项</string>

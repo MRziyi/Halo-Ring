@@ -18,8 +18,18 @@ private val Context.firstRunDataStore: DataStore<Preferences> by preferencesData
 class FirstRunPrefsStore(private val context: Context) {
 
     private val key = booleanPreferencesKey("first_run_completed")
+    private val batteryAskedKey = booleanPreferencesKey("battery_exemption_asked")
 
     val completedFlow: Flow<Boolean> = context.firstRunDataStore.data.map { it[key] ?: false }
+
+    /** v0.4 — whether we've already auto-prompted for battery-optimisation exemption (keep-alive).
+     *  One-shot so we don't nag on every launch if the user declines. */
+    val batteryExemptionAskedFlow: Flow<Boolean> =
+        context.firstRunDataStore.data.map { it[batteryAskedKey] ?: false }
+
+    suspend fun markBatteryExemptionAsked() {
+        context.firstRunDataStore.edit { it[batteryAskedKey] = true }
+    }
 
     suspend fun markCompleted() {
         context.firstRunDataStore.edit { it[key] = true }

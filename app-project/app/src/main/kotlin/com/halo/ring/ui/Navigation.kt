@@ -12,6 +12,14 @@ import com.halo.ring.core.gesture.Gesture
  * are for.
  */
 sealed interface SubScreen {
+    /** v0.4 (Doc/20 §6.2): the former Vitals tab is now reachable from Settings. */
+    object VitalsDashboard : SubScreen
+    /** v0.4: the former Status tab. */
+    object StatusInfo : SubScreen
+    /** v0.4 C3 (Doc/20 §7): root → group → leaf. The group screen lists its member sections. */
+    data class SettingsGroupSubScreen(
+        val group: com.halo.ring.ui.screens.SettingsGroup,
+    ) : SubScreen
     object Feedback : SubScreen
     object Profiles : SubScreen
     data class ProfileEditor(val profileId: String) : SubScreen
@@ -32,9 +40,8 @@ sealed interface SubScreen {
     object TestArena : SubScreen
     /** Settings → External plugins (Doc/18 §8.2) — lists discovered plugin apps + refresh CTA. */
     object ExternalPlugins : SubScreen
-    // SubScreen.Guide removed in audit-2026-05-13p — the static cheatsheet was replaced by the
-    // interactive [com.halo.ring.ui.screens.GuidedTour] overlay. Re-open via About → onShowGuide
-    // which propagates up to the host (MainActivity) to flip `tourActive=true`.
+    // SubScreen.Guide removed in audit-2026-05-13p. The interactive GuidedTour was further
+    // deleted in v0.4 (Doc/20 §4) — Test Arena does the job better, on demand.
 }
 
 /** The 5 always-on system gesture slots (Doc/05 §5). */

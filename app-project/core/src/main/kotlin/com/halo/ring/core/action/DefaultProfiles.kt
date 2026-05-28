@@ -41,12 +41,12 @@ object DefaultProfiles {
         id = "navigation",
         name = "Navigation",
         gestureConfig = GestureConfig(
-            multiTapWindowMs = 280,
-            comboWindowMs = 300,
+            multiTapWindowMs = 300,
+            comboWindowMs = 400,
             optimisticSingleTap = false,
             awaitCombos = true,
             awaitLongPressCombos = true,
-            longPressFollowupWindowMs = 400,
+            longPressFollowupWindowMs = 60,
             enableTripleTap = true,
             enableQuadrupleTap = true,
             enableDoubleLongPress = true,
@@ -63,6 +63,10 @@ object DefaultProfiles {
             // two entry points (one combo, one system gesture).
             Gesture.DOUBLE_TAP_SWIPE_DOWN to GlassAction.OpenAIAssistant,
             Gesture.LONG_PRESS_SWIPE_UP   to GlassAction.Notifications,   // "long-press, pull-up" → notification shade
+            // v0.4: air gesture (accel) — a reliable no-touch AI trigger. DOUBLE_LONG_PRESS is
+            // effectively dead now (60 ms follow-up window < firmware hold), so wrist-shake is the
+            // dependable AI entry point. Needs Spatial features ON (Settings → Vitals).
+            Gesture.WRIST_SHAKE           to GlassAction.OpenAIAssistant,
         ),
         triggerPackages = emptyList(),   // fallback profile; matches whenever nothing else does
     )
@@ -72,12 +76,12 @@ object DefaultProfiles {
         id = "media",
         name = "Media",
         gestureConfig = GestureConfig(
-            multiTapWindowMs = 280,
-            comboWindowMs = 300,
+            multiTapWindowMs = 300,
+            comboWindowMs = 400,
             optimisticSingleTap = true,            // play/pause should feel instant
             awaitCombos = true,
             awaitLongPressCombos = true,
-            longPressFollowupWindowMs = 400,
+            longPressFollowupWindowMs = 60,
         ),
         map = systemSlots + mapOf(
             Gesture.TAP                   to GlassAction.MediaPlayPause,
@@ -93,6 +97,7 @@ object DefaultProfiles {
             Gesture.DOUBLE_TAP_SWIPE_UP   to GlassAction.Screenshot,
             Gesture.DOUBLE_TAP_SWIPE_DOWN to GlassAction.MediaPrev,
             Gesture.LONG_PRESS_SWIPE_UP   to GlassAction.Notifications,
+            Gesture.WRIST_SHAKE           to GlassAction.OpenAIAssistant,
         ),
         // Auto-activates when foreground app matches. Audit-pass 2026-05-14w: populated with
         // Sprite Music + common AOSP music/video apps. `ModeManager.onForegroundPackage` does
@@ -134,6 +139,7 @@ object DefaultProfiles {
             Gesture.LONG_PRESS_SWIPE_UP   to GlassAction.BrightnessDown,
             Gesture.DOUBLE_TAP_SWIPE_UP   to GlassAction.TakePhoto,          // capture an interesting passage
             Gesture.DOUBLE_TAP_SWIPE_DOWN to GlassAction.OpenTranslate,      // reading context → translate
+            Gesture.WRIST_SHAKE           to GlassAction.OpenChat,           // shake → ask AI about what you're reading
         ),
         triggerPackages = listOf(
             // Rokid Sprite reader-ish surfaces
@@ -179,7 +185,10 @@ object DefaultProfiles {
         triggerPackages = emptyList(),   // never auto-activates — user picks Fast explicitly
     )
 
-    val ALL = listOf(NAVIGATION, MEDIA, READER, FAST)
+    // Fast profile dropped 2026-05-27: post-v0.4 the base gestures are already instant system
+    // KeyEvents and long-press is firmware-bound, so Fast's "low-latency, no-combos" value is now the
+    // default behaviour — it was redundant. Kept the definition below for reference / easy restore.
+    val ALL = listOf(NAVIGATION, MEDIA, READER)
 
     /** Profile to fall back to when the foreground app matches none of the others'
      *  triggerPackages. The id (not the data) is exposed so `ModeManager` can resolve it after

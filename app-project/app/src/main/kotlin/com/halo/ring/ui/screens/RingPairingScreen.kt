@@ -19,7 +19,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.focusGroup
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.halo.ring.R
@@ -79,7 +82,13 @@ fun RingPairingScreen(
     // Auto-advance when bootstrap is fully done. "Done" = BLE READY + capability bitmap arrived
     // (so we know the command-channel is actually responding, not just a stale TLS-only ready).
     androidx.compose.runtime.LaunchedEffect(currentConn, capabilities, ringInfo) {
-        if (pairingState !is PairingState.Connecting) return@LaunchedEffect
+        // Only act once the user has tapped PAIR (i.e. state is past the Picking screen) AND
+        // we haven't already fired Done. Burn-in fix 2026-05-27: the previous guard was
+        // `!is PairingState.Connecting` which prevented us from advancing past Connecting,
+        // because we re-entered the lambda after the connection state changed to READY but the
+        // guard rejected us at that point. The picker hung forever showing "Connecting 2/3"
+        // even though BLE had already reached READY.
+        if (pairingState is PairingState.Picking || pairingState is PairingState.Done) return@LaunchedEffect
         when {
             currentConn == com.halo.ring.core.ble.ConnectionState.READY && capabilities.isNotEmpty() -> {
                 pairingState = PairingState.Done
@@ -98,7 +107,21 @@ fun RingPairingScreen(
 
     var selected by remember { mutableStateOf<String?>(null) }
 
-    Column(modifier = Modifier.fillMaxSize().padding(top = 4.dp)) {
+    // On glasses there's no touch — anchor focus into the device list / CTA so the temple/ring
+    // can select a ring. Re-fires as the device list grows (a new row may be the first focusable).
+    val listFocus = remember { FocusRequester() }
+    androidx.compose.runtime.LaunchedEffect(deviceList.size, pairingState) {
+        repeat(5) {
+            kotlinx.coroutines.delay(120)
+            val ok = try { listFocus.requestFocus(); true } catch (_: Throwable) { false }
+            if (ok) return@LaunchedEffect
+        }
+    }
+
+    Column(modifier = Modifier.fillMaxSize()
+        .focusRequester(listFocus)
+        .focusGroup()
+        .padding(top = 4.dp)) {
         Text(
             text = stringResource(R.string.ring_pairing_title),
             style = HaloType.Title,

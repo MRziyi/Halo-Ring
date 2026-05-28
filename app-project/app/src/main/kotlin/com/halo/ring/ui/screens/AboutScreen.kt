@@ -21,25 +21,18 @@ import com.halo.ring.ui.ScreenPadding
 import com.halo.ring.core.DeviceProfile
 
 /**
- * Settings → About. Audit-pass 2026-05-13t: stripped down for the on-glasses display.
- * Previously had the brand slogan, BLE-protocol-source row, Phase-0 probe row, credits
- * block, and docs block — useful on a phone, **wasted pixels on a 480×480 / 1280×480
- * waveguide**. Kept the version + detected-device + reopen-guide rows + the open-source
- * disclaimer (the "you were scammed if you paid" sentence is load-bearing — it tells the
- * wearer not to pay anyone for this app).
+ * Settings → About. v0.4-slimmed (Doc/20 §4): 3 rows — version, detected device, license disclaimer.
+ * GuidedTour was deleted; the row that re-opened it ("Show operation guide") is gone with it.
  */
 @Composable
 fun AboutScreen(
     versionName: String,
     versionCode: Int,
     detectedProfile: DeviceProfile,
-    onShowGuide: () -> Unit = {},
 ) {
     Column(modifier = Modifier
         .fillMaxSize()
         .padding(top = 4.dp)) {
-        // Bilingual brand name — single line, no slogan / byline (those live in the launcher
-        // icon + the public README; redundant inside the app).
         Text(
             text = stringResource(R.string.app_name_bilingual),
             style = HaloType.Title,
@@ -53,7 +46,6 @@ fun AboutScreen(
 
         ListRow(stringResource(R.string.about_app_version), "$versionName ($versionCode)")
         ListRow(stringResource(R.string.about_detected_device), stringResource(detectedProfile.labelRes()))
-        ListRow(stringResource(R.string.about_show_guide), "›", onClick = onShowGuide)
 
         Spacer(Modifier.height(12.dp))
         Box(Modifier.fillMaxWidth().height(1.dp).background(HaloColors.Line))

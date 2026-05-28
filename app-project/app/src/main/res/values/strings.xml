@@ -28,6 +28,28 @@
     <!-- ════════════════════════════════════════════════════════════════════════
          Settings root sections.
          ════════════════════════════════════════════════════════════════════════ -->
+    <string name="settings_group_ring">Ring</string>
+    <string name="settings_group_vitals">Vitals</string>
+    <string name="settings_group_gestures">Gestures &amp; Profiles</string>
+    <string name="settings_group_plugins">Plugins</string>
+    <string name="settings_group_more">More</string>
+    <string name="settings_section_vitals">Vitals dashboard</string>
+    <string name="settings_section_status">Connection status</string>
+    <string name="ring_capabilities_header">Ring capabilities</string>
+    <string name="hud_ring_dropped">Ring dropped? %1$s</string>
+    <string name="vitals_sport_section">Workout</string>
+    <string name="vitals_sport_start_walk">Start walk</string>
+    <string name="vitals_sport_start_run">Start run</string>
+    <string name="vitals_sport_start_cycle">Start cycle</string>
+    <string name="vitals_sport_start_other">Start workout</string>
+    <string name="vitals_sport_stop">Stop workout</string>
+    <string name="vitals_sport_active">Active · %1$s</string>
+    <string name="vitals_sport_type_walk">Walk</string>
+    <string name="vitals_sport_type_run">Run</string>
+    <string name="vitals_sport_type_cycle">Cycle</string>
+    <string name="vitals_sport_type_other">Other</string>
+    <string name="vitals_spatial_section">Spatial features</string>
+    <string name="vitals_spatial_caption">Stream ring accelerometer for drop-detection + wrist-shake. Adds ~64 B/s BLE traffic.</string>
     <string name="settings_section_profiles">Profiles &amp; Gestures</string>
     <string name="settings_section_system_gestures">System Gestures</string>
     <string name="settings_section_ring">Ring</string>
@@ -444,12 +466,29 @@
 
     <string name="wizard_complete_cta">FINISH</string>
 
-    <!-- First-run wizard: short variants used by the on-glasses 480×480 layout. -->
+    <!-- First-run wizard: short variants used by the on-glasses layout. -->
     <string name="wizard_welcome_begin_cta">BEGIN</string>
-    <string name="wizard_adb_intro_title">Install agent</string>
-    <string name="wizard_adb_intro_body">We\'ll try root auto-setup first. If your device isn\'t rooted you\'ll be asked for a 6-digit pairing code.</string>
-    <string name="wizard_adb_open_settings_cta">OPEN SETTINGS</string>
+    <string name="wizard_adb_intro_title">System access</string>
+    <string name="wizard_adb_intro_body">To let the ring drive the glasses, grant one-time system access — all on-device, no computer:\n1. OPEN WIRELESS DEBUGGING below, turn it ON\n2. Come back, tap START PAIRING\n3. Enter the 6-digit code\nThis survives reboot — you only do it once.</string>
+    <string name="wizard_adb_open_settings_cta">OPEN WIRELESS DEBUGGING</string>
     <string name="wizard_adb_start_pairing_cta">START PAIRING</string>
+    <!-- Step indicator + keep-alive step (v0.4 on-device setup). -->
+    <string name="wizard_sys_step">System access</string>
+    <string name="wizard_sys_devopts_label">Developer Options</string>
+    <string name="wizard_sys_wireless_label">Wireless Debugging</string>
+    <string name="wizard_sys_enable_devopts_cta">ENABLE DEVELOPER OPTIONS</string>
+    <string name="wizard_keepalive_step">Keep-alive</string>
+    <string name="wizard_pair_step">Pair ring</string>
+    <string name="wizard_keepalive_title">Keep it alive</string>
+    <string name="wizard_keepalive_body">So the ring keeps working in the background and after a reboot, enable both:</string>
+    <string name="wizard_keepalive_battery_row">Battery: ignore optimisation</string>
+    <string name="wizard_keepalive_battery_desc">Stops Android Doze from killing the service.</string>
+    <string name="wizard_keepalive_autostart_row">Background: unrestricted</string>
+    <string name="wizard_keepalive_autostart_desc">In App info → Battery, set to \"Unrestricted\". Restart-after-reboot is already automatic (boot receiver). Some ROMs also have a separate \"Auto-start\" toggle — enable it here if present.</string>
+    <string name="wizard_keepalive_autostart_cta">OPEN APP INFO</string>
+    <string name="wizard_keepalive_battery_cta">ALLOW BATTERY</string>
+    <string name="wizard_keepalive_done_cta">CONTINUE</string>
+    <string name="wizard_done_cta">FINISH</string>
     <string name="wizard_adb_running_title">Pairing…</string>
     <string name="wizard_adb_paired_title">Paired</string>
     <string name="wizard_adb_continue_cta">CONTINUE</string>
@@ -502,6 +541,7 @@
     <string name="gesture_long_press_swipe_up">Long-press + swipe up</string>
     <string name="gesture_long_press_swipe_down">Long-press + swipe down</string>
     <string name="gesture_double_long_press">Long-press × 2</string>
+    <string name="gesture_wrist_shake">Wrist shake</string>
 
     <!-- ════════════════════════════════════════════════════════════════════════
          Action names.

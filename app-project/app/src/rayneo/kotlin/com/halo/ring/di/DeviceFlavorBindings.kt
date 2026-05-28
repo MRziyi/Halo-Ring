@@ -10,18 +10,17 @@ import com.halo.ring.inject.AppProcessAgentBackend
 import com.halo.ring.inject.InotifydScriptBackend
 import com.halo.ring.core.DeviceProfile
 
-/** RayNeo flavor — wires the X3 Pro strategies into the graph. */
+/** RayNeo flavor — wires the X3 Pro strategies into the graph.
+ *
+ *  v0.4: TempleFocusBridge deleted along with InAppFocusController (Doc/20 §4-§6). RayNeo
+ *  temple-touchpad input is currently TBD — the user's app Activity will receive the temple
+ *  events natively via standard Android KeyEvents (Compose FocusManager handles DPAD on the
+ *  config screens). Re-wire Mercury TouchDispatcher here in a future revision if real-device
+ *  testing shows the temple needs explicit decoding (Doc/04 §11). */
 object DeviceFlavorBindings {
     fun create(context: Context, detected: DeviceProfile): Bindings {
         val intents = RayNeoFeatureIntents()
         val mapper = RayNeoActionMapper(intents)
-        // Install the temple-touchpad → in-app-focus bridge so when MainActivity is foreground,
-        // X3 Pro users can also navigate with the temple touchpad as a fallback to the ring.
-        // Today this only sets up the scaffolding (Mercury reflective lookup + lifecycle hooks);
-        // the actual touch-event flow needs hardware verification — see Doc/11 §B2.1.
-        com.halo.ring.ui.TempleFocusBridgeHolder.install(
-            com.halo.ring.ui.RayNeoTempleFocusBridge()
-        )
         return Bindings(
             displayAdapter = RayNeoDisplayAdapter(),
             mapper         = mapper,

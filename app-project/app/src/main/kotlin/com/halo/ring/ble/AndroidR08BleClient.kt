@@ -246,6 +246,7 @@ class AndroidR08BleClient(
                 return@post
             }
             adapter = a
+            wantConnection = true
             if (state != ConnectionState.DISCONNECTED) {
                 Log.d(TAG, "start() ignored — current state=$state")
                 return@post
@@ -258,6 +259,7 @@ class AndroidR08BleClient(
     @SuppressLint("MissingPermission")
     override fun stop() {
         scheduler.post {
+            wantConnection = false
             try { adapter?.bluetoothLeScanner?.stopScan(scanCallback) } catch (_: SecurityException) {}
             batteryPollHandle?.cancel(); batteryPollHandle = null
             scanTimeoutHandle?.cancel(); scanTimeoutHandle = null
@@ -467,9 +469,21 @@ class AndroidR08BleClient(
         scanTimeoutHandle?.cancel()
         scanTimeoutHandle = scheduler.postDelayed(SCAN_TIMEOUT_MS) {
             if (state == ConnectionState.SCANNING) {
-                Log.w(TAG, "no ring found within ${SCAN_TIMEOUT_MS} ms; stopping scan")
+                Log.w(TAG, "no ring found within ${SCAN_TIMEOUT_MS} ms; backing off ${reconnectBackoffMs} ms")
                 try { scanner.stopScan(scanCallback) } catch (_: SecurityException) {}
                 transitionTo(ConnectionState.DISCONNECTED)
+                // Escalate backoff and keep trying (slower) while we still want a connection — the
+                // ring may just be out of range. Capped so the worst case is one short scan every
+                // RECONNECT_BACKOFF_MAX_MS, not a tight loop.
+                if (wantConnection) {
+                    reconnectBackoffMs = (reconnectBackoffMs * 2).coerceAtMost(RECONNECT_BACKOFF_MAX_MS)
+                    scanTimeoutHandle = scheduler.postDelayed(reconnectBackoffMs) {
+                        if (wantConnection && state == ConnectionState.DISCONNECTED) {
+                            transitionTo(ConnectionState.SCANNING)
+                            beginScan()
+                        }
+                    }
+                }
             }
         }
     }
@@ -535,9 +549,16 @@ class AndroidR08BleClient(
     private fun connectTo(device: BluetoothDevice) {
         transitionTo(ConnectionState.CONNECTING)
         try {
+            // On-glasses fix 2026-05-27: was `autoConnect=true`, which on this stack took ~57 s to
+            // establish the FIRST connection (the OS waits for a slow background-scan window). The
+            // pairing UI sat at "Connecting 2/3" the whole time. `autoConnect=false` is a DIRECT
+            // connect — completes in ~1-3 s when the ring is in range (we just saw it on the
+            // active scan). We trade the OS's free auto-reconnect for our own re-scan in the
+            // disconnect handler below (gated on [wantConnection]); given the ring's SPEC §6.5
+            // ~10-20 s reconnect quirk we were re-scanning constantly anyway.
             gatt = device.connectGatt(
                 context,
-                /* autoConnect */ true,
+                /* autoConnect */ false,
                 gattCallback,
                 BluetoothDevice.TRANSPORT_LE,
             )
@@ -546,6 +567,15 @@ class AndroidR08BleClient(
             transitionTo(ConnectionState.DISCONNECTED)
         }
     }
+
+    /** True between [start] and [stop] — drives whether the disconnect handler re-scans (direct
+     *  connect has no OS auto-reconnect, so we re-scan ourselves) or stays down (intentional stop). */
+    @Volatile private var wantConnection = false
+    /** Energy: backoff before an auto-reconnect re-scan. Starts at [RECONNECT_BACKOFF_BASE_MS],
+     *  doubles on each consecutive scan that finds no ring (capped at [RECONNECT_BACKOFF_MAX_MS]),
+     *  resets to base on a successful READY. Keeps the SPEC §6.5 quirk-drop reconnect snappy while
+     *  preventing a permanent LOW_LATENCY scan loop when the ring is genuinely out of range. */
+    @Volatile private var reconnectBackoffMs = RECONNECT_BACKOFF_BASE_MS
 
     private val gattCallback = object : BluetoothGattCallback() {
         @SuppressLint("MissingPermission")
@@ -557,7 +587,7 @@ class AndroidR08BleClient(
                         try { g.discoverServices() } catch (_: SecurityException) {}
                     }
                     BluetoothProfile.STATE_DISCONNECTED -> {
-                        Log.w(TAG, "GATT disconnected (status=$status), autoConnect will retry")
+                        Log.w(TAG, "GATT disconnected (status=$status)")
                         batteryPollHandle?.cancel(); batteryPollHandle = null
                         // Drop stale notify timestamps so a fresh connection's estimator isn't
                         // biased by the gap between the old and new connection's samples.
@@ -584,7 +614,29 @@ class AndroidR08BleClient(
                         // suppress these and leave the ring with no touch IC after reconnect.
                         lastTouchEnabledRequested = null
                         lastIntervalModeRequested = null
-                        transitionTo(ConnectionState.CONNECTING)   // autoConnect is alive
+                        // autoConnect=false has no OS auto-reconnect. Close the dead GATT and,
+                        // if we still want a connection (not an intentional stop()), re-scan for
+                        // the ring — fast direct re-connect when it re-advertises (SPEC §6.5 quirk).
+                        try { g.close() } catch (_: SecurityException) {}
+                        gatt = null
+                        if (wantConnection) {
+                            // Energy fix (audit 2026-05-27): don't re-scan back-to-back. With
+                            // autoConnect=false we own reconnect, and the ring's SPEC §6.5 quirk
+                            // drops the link every ~10-20 s — an immediate LOW_LATENCY re-scan each
+                            // time = a permanent scan loop. Wait `reconnectBackoffMs` first; it
+                            // starts small (so the quirk-drop reconnect is still snappy) and only
+                            // escalates if scans keep failing (ring truly gone). Reset to 0 on READY.
+                            transitionTo(ConnectionState.DISCONNECTED)
+                            scanTimeoutHandle?.cancel()
+                            scanTimeoutHandle = scheduler.postDelayed(reconnectBackoffMs) {
+                                if (wantConnection && state == ConnectionState.DISCONNECTED) {
+                                    transitionTo(ConnectionState.SCANNING)
+                                    beginScan()
+                                }
+                            }
+                        } else {
+                            transitionTo(ConnectionState.DISCONNECTED)
+                        }
                     }
                 }
             }
@@ -620,6 +672,7 @@ class AndroidR08BleClient(
                         kickOffReadyGateRead(g)   // best-effort fallback
                     }
                 } catch (_: SecurityException) {}
+                reconnectBackoffMs = RECONNECT_BACKOFF_BASE_MS   // healthy connection → reset backoff
                 transitionTo(ConnectionState.READY)
 
                 // Safety: if onDescriptorWrite never fires (some firmware acks lazily or the
@@ -886,6 +939,11 @@ class AndroidR08BleClient(
         // Give up the LOW_LATENCY scan after this long. The user can retry via "Reconnect" or by
         // taking the glasses off + putting them back on (wear-state change re-invokes start()).
         private const val SCAN_TIMEOUT_MS = 30_000L
+        /** Energy: auto-reconnect re-scan backoff bounds. Base is short so the SPEC §6.5 quirk-drop
+         *  reconnect stays snappy (resets on every READY); max caps the worst-case to one short
+         *  scan per 30 s when the ring is genuinely gone, instead of a back-to-back scan loop. */
+        private const val RECONNECT_BACKOFF_BASE_MS = 800L
+        private const val RECONNECT_BACKOFF_MAX_MS = 30_000L
         /** Safety timeout for [requestVitalsSnapshot]. Burn-in 2026-05-27: bumped from 12s to 30s
          *  after live observation — the R08 PPG sensor emits `err=0/val=0` progress frames every
          *  ~500 ms and can take 15-25 s to converge on the first reading, especially after a

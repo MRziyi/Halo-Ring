@@ -1,7 +1,7 @@
 package com.halo.ring.ui.screens
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -18,9 +18,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.halo.ring.R
@@ -31,74 +32,97 @@ import com.halo.ring.ui.HaloType
 import com.halo.ring.ui.ScreenPadding
 
 /**
- * First-run wizard, sized for the 480×480 glasses display per [Doc/08](../../../../../../../../Doc/08-ui-design.md).
+ * First-run wizard, v0.4 — **complete on-device setup, no computer, mandatory (no skip)**.
  *
- * Five steps. Each step renders **at most one primary CTA** for its current sub-state — no
- * fan-out of skip/next/retry buttons at the same time. Body text capped at ~2 lines per Doc/08
- * §1's "big text, generous space" rule.
+ * The whole app is useless without the agent + a paired ring, so the wizard is a hard gate
+ * (user mandate 2026-05-27: "skip 无意义，必须经 wizard 才运行"). Each step shows **exactly one
+ * actionable button at a time**, strictly sequenced by live state, so the wearer is never given
+ * a wall of buttons ("别一上来给太多"):
  *
- * The code entry itself is NOT in this Compose tree — it's a system overlay
- * ([com.halo.ring.adb.AdbPairingOverlay]) so it can sit on top of the Settings →
- * Wireless-debugging pairing dialog. The Android system dialog tears down its mDNS
- * advertisement the moment it loses focus; without the overlay the user can't read the code
- * and switch apps in time.
+ *  1. **System access** — sequential sub-gate:
+ *       dev-options OFF  → only "Enable Developer Options" (jump to Build number)
+ *       wireless-debug OFF → only "Enable Wireless Debugging"
+ *       both ON          → only "Start pairing"
+ *       (agent already alive → "✓ done, continue" — no re-pairing)
+ *  2. **Keep-alive** — battery exemption (auto-detected) then auto-start, gated in order.
+ *  3. **Pair ring** — pick the R0x ring.
  */
 @Composable
 fun FirstRunWizardScreen(
     onOpenDeveloperSettings: () -> Unit = {},
+    onOpenBuildNumber: () -> Unit = {},
+    devOptionsEnabled: Boolean = false,
+    wirelessDebugEnabled: Boolean = false,
+    agentReady: Boolean = false,
     onStartAdbPairing: () -> Unit = {},
     adbStatus: String = "",
     onOpenAccessibilitySettings: () -> Unit = {},
     accessibilityEnabled: Boolean = false,
     onRequestBatteryExemption: () -> Unit = {},
     batteryExempted: Boolean = false,
+    onOpenAutostartSettings: () -> Unit = {},
     onStartRingPairing: () -> Unit = {},
     onCompleted: () -> Unit = {},
 ) {
+    @Suppress("UNUSED_EXPRESSION") onOpenAccessibilitySettings
+    @Suppress("UNUSED_EXPRESSION") accessibilityEnabled
+    @Suppress("UNUSED_EXPRESSION") onStartRingPairing
+
     HaloRingTheme {
-        var step by remember { mutableStateOf(WizardStep.WELCOME) }
+        var step by remember { mutableStateOf(WizardStep.SYSTEM_ACCESS) }
+        val focus = remember { FocusRequester() }
+        androidx.compose.runtime.LaunchedEffect(step, adbStatus, batteryExempted, devOptionsEnabled, wirelessDebugEnabled, agentReady) {
+            repeat(5) {
+                kotlinx.coroutines.delay(100)
+                val ok = try { focus.requestFocus(); true } catch (_: Throwable) { false }
+                if (ok) return@LaunchedEffect
+            }
+        }
 
         Column(
             modifier = Modifier.fillMaxSize().background(HaloColors.Bg)
-                .padding(horizontal = ScreenPadding, vertical = 20.dp),
+                .focusRequester(focus).focusGroup()
+                .padding(horizontal = ScreenPadding, vertical = 16.dp),
         ) {
-            if (step != WizardStep.WELCOME) {
-                StepIndicator(step)
-                Spacer(Modifier.height(20.dp))
-            }
+            StepIndicator(step)
+            Spacer(Modifier.height(14.dp))
             when (step) {
-                WizardStep.WELCOME -> WelcomeStep(onNext = { step = WizardStep.ADB })
-                WizardStep.ADB -> AdbStep(
-                    onOpenSettings = onOpenDeveloperSettings,
-                    onStartPairing = onStartAdbPairing,
+                WizardStep.SYSTEM_ACCESS -> SystemAccessStep(
+                    devOptionsEnabled = devOptionsEnabled,
+                    wirelessDebugEnabled = wirelessDebugEnabled,
+                    agentReady = agentReady,
                     status = adbStatus,
-                    onNext = { step = WizardStep.ACCESSIBILITY },
+                    onOpenBuildNumber = onOpenBuildNumber,
+                    onOpenWirelessDebug = onOpenDeveloperSettings,
+                    onStartPairing = onStartAdbPairing,
+                    onNext = { step = WizardStep.KEEP_ALIVE },
                 )
-                WizardStep.ACCESSIBILITY -> AccessibilityStep(
-                    enabled = accessibilityEnabled,
-                    onOpenSettings = onOpenAccessibilitySettings,
-                    onNext = { step = WizardStep.BATTERY },
-                )
-                WizardStep.BATTERY -> BatteryStep(
-                    exempted = batteryExempted,
-                    onRequest = onRequestBatteryExemption,
+                WizardStep.KEEP_ALIVE -> KeepAliveStep(
+                    batteryExempted = batteryExempted,
+                    onRequestBattery = onRequestBatteryExemption,
+                    onOpenAutostart = onOpenAutostartSettings,
                     onNext = { step = WizardStep.PAIR },
                 )
-                WizardStep.PAIR -> PairRingStep(
-                    onStartPairing = onStartRingPairing,
-                    onFinish = onCompleted,
-                )
+                WizardStep.PAIR -> {
+                    Text(stringResource(R.string.wizard_pair_title), style = HaloType.Title)
+                    Spacer(Modifier.height(6.dp))
+                    Text(stringResource(R.string.wizard_pair_body), style = HaloType.Caption)
+                    Spacer(Modifier.height(10.dp))
+                    // Pairing completes via onPaired (BLE READY + capabilities). No skip button —
+                    // a paired ring is required for the app to do anything.
+                    RingPairingScreen(onPaired = onCompleted)
+                }
             }
         }
     }
 }
 
-private enum class WizardStep { WELCOME, ADB, ACCESSIBILITY, BATTERY, PAIR }
+private enum class WizardStep { SYSTEM_ACCESS, KEEP_ALIVE, PAIR }
 
 @Composable
 private fun StepIndicator(current: WizardStep) {
     Row {
-        WizardStep.values().drop(1).forEach { s ->
+        WizardStep.values().forEach { s ->
             val active = s.ordinal <= current.ordinal
             Box(
                 Modifier.size(8.dp).clip(CircleShape)
@@ -109,123 +133,98 @@ private fun StepIndicator(current: WizardStep) {
     }
 }
 
+/** A ✓/✗ status line. */
 @Composable
-private fun WelcomeStep(onNext: () -> Unit) {
-    Column(
-        modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Text(stringResource(R.string.app_name), style = HaloType.Title)
-        Spacer(Modifier.height(28.dp))
-        Cta(stringResource(R.string.wizard_welcome_begin_cta), focused = true, onClick = onNext)
-    }
+private fun StatusLine(label: String, ok: Boolean) {
+    Text(
+        text = (if (ok) "✓ " else "✗ ") + label,
+        style = HaloType.Caption.copy(color = if (ok) HaloColors.Accent else HaloColors.Mute),
+    )
 }
 
-private enum class AdbSubState { INTRO, RUNNING, SUCCESS, FAILED }
-
 @Composable
-private fun AdbStep(
-    onOpenSettings: () -> Unit,
-    onStartPairing: () -> Unit,
+private fun SystemAccessStep(
+    devOptionsEnabled: Boolean,
+    wirelessDebugEnabled: Boolean,
+    agentReady: Boolean,
     status: String,
+    onOpenBuildNumber: () -> Unit,
+    onOpenWirelessDebug: () -> Unit,
+    onStartPairing: () -> Unit,
     onNext: () -> Unit,
 ) {
-    val sub = when {
-        status.isBlank() -> AdbSubState.INTRO
-        status.startsWith("✓") -> AdbSubState.SUCCESS
-        status.startsWith("✗") -> AdbSubState.FAILED
-        else -> AdbSubState.RUNNING
+    Text(stringResource(R.string.wizard_adb_intro_title), style = HaloType.Title)
+    Spacer(Modifier.height(8.dp))
+
+    // Already set up (agent alive or pairing reported success) → one CONTINUE button, no re-pairing.
+    if (agentReady || status.startsWith("✓")) {
+        Text(stringResource(R.string.wizard_adb_paired_title), style = HaloType.Body.copy(color = HaloColors.Accent))
+        Spacer(Modifier.height(16.dp))
+        Cta(stringResource(R.string.wizard_adb_continue_cta), onClick = onNext)
+        return
     }
 
-    when (sub) {
-        AdbSubState.INTRO -> {
-            Text(stringResource(R.string.wizard_adb_intro_title), style = HaloType.Title)
-            Spacer(Modifier.height(10.dp))
-            Text(
-                stringResource(R.string.wizard_adb_intro_body),
-                style = HaloType.Body,
-            )
-            Spacer(Modifier.height(24.dp))
-            Cta(stringResource(R.string.wizard_adb_open_settings_cta), onClick = onOpenSettings)
-            Spacer(Modifier.height(10.dp))
-            Cta(stringResource(R.string.wizard_adb_start_pairing_cta), focused = true, onClick = onStartPairing)
-        }
-        AdbSubState.RUNNING -> {
-            Text(stringResource(R.string.wizard_adb_running_title), style = HaloType.Title)
-            Spacer(Modifier.height(12.dp))
-            Text(status, style = HaloType.Body)
-        }
-        AdbSubState.SUCCESS -> {
-            Text(stringResource(R.string.wizard_adb_paired_title), style = HaloType.Title)
-            Spacer(Modifier.height(12.dp))
-            Text(status.removePrefix("✓").trim(), style = HaloType.Body)
-            Spacer(Modifier.height(24.dp))
-            Cta(stringResource(R.string.wizard_adb_continue_cta), focused = true, onClick = onNext)
-        }
-        AdbSubState.FAILED -> {
-            Text(stringResource(R.string.wizard_adb_failed_title), style = HaloType.Title)
-            Spacer(Modifier.height(12.dp))
-            Text(status.removePrefix("✗").trim(), style = HaloType.Body)
-            Spacer(Modifier.height(24.dp))
-            Cta(stringResource(R.string.wizard_adb_try_again_cta), focused = true, onClick = onStartPairing)
-        }
+    // Pairing in progress.
+    if (status.isNotBlank() && !status.startsWith("✗")) {
+        Text(stringResource(R.string.wizard_adb_running_title), style = HaloType.Title)
+        Spacer(Modifier.height(10.dp))
+        Text(status, style = HaloType.Body)
+        return
     }
-}
 
-@Composable
-private fun AccessibilityStep(enabled: Boolean, onOpenSettings: () -> Unit, onNext: () -> Unit) {
-    if (enabled) {
-        Text(stringResource(R.string.wizard_a11y_on_title), style = HaloType.Title)
-        Spacer(Modifier.height(10.dp))
-        Text(stringResource(R.string.wizard_a11y_on_body), style = HaloType.Body)
-        Spacer(Modifier.height(24.dp))
-        Cta(stringResource(R.string.wizard_adb_continue_cta), focused = true, onClick = onNext)
-    } else {
-        Text(stringResource(R.string.wizard_a11y_off_title), style = HaloType.Title)
-        Spacer(Modifier.height(10.dp))
-        Text(stringResource(R.string.wizard_a11y_off_body), style = HaloType.Body)
-        Spacer(Modifier.height(24.dp))
-        Cta(stringResource(R.string.wizard_adb_open_settings_cta), focused = true, onClick = onOpenSettings)
-        Spacer(Modifier.height(10.dp))
-        Cta(stringResource(R.string.common_skip), onClick = onNext)
+    // Pairing failed → single TRY AGAIN (no skip).
+    if (status.startsWith("✗")) {
+        Text(status.removePrefix("✗").trim(), style = HaloType.Body.copy(color = HaloColors.Bad))
+        Spacer(Modifier.height(16.dp))
+        Cta(stringResource(R.string.wizard_adb_try_again_cta), onClick = onStartPairing)
+        return
+    }
+
+    // Otherwise: the strict sequential sub-gate. Show the live status of both prerequisites,
+    // then EXACTLY ONE button for the next thing the user must do.
+    Text(stringResource(R.string.wizard_adb_intro_body), style = HaloType.Caption)
+    Spacer(Modifier.height(12.dp))
+    StatusLine(stringResource(R.string.wizard_sys_devopts_label), devOptionsEnabled)
+    StatusLine(stringResource(R.string.wizard_sys_wireless_label), wirelessDebugEnabled)
+    Spacer(Modifier.height(16.dp))
+
+    when {
+        !devOptionsEnabled ->
+            Cta(stringResource(R.string.wizard_sys_enable_devopts_cta), onClick = onOpenBuildNumber)
+        !wirelessDebugEnabled ->
+            Cta(stringResource(R.string.wizard_adb_open_settings_cta), onClick = onOpenWirelessDebug)
+        else ->
+            Cta(stringResource(R.string.wizard_adb_start_pairing_cta), onClick = onStartPairing)
     }
 }
 
 @Composable
-private fun BatteryStep(exempted: Boolean, onRequest: () -> Unit, onNext: () -> Unit) {
-    if (exempted) {
-        Text(stringResource(R.string.wizard_battery_on_title), style = HaloType.Title)
-        Spacer(Modifier.height(10.dp))
-        Text(stringResource(R.string.wizard_battery_on_body), style = HaloType.Body)
-        Spacer(Modifier.height(24.dp))
-        Cta(stringResource(R.string.wizard_adb_continue_cta), focused = true, onClick = onNext)
-    } else {
-        Text(stringResource(R.string.wizard_battery_off_title), style = HaloType.Title)
-        Spacer(Modifier.height(10.dp))
-        Text(stringResource(R.string.wizard_battery_off_body), style = HaloType.Body)
-        Spacer(Modifier.height(24.dp))
-        Cta(stringResource(R.string.wizard_battery_allow_cta), focused = true, onClick = onRequest)
-        Spacer(Modifier.height(10.dp))
-        Cta(stringResource(R.string.common_skip), onClick = onNext)
-    }
-}
+private fun KeepAliveStep(
+    batteryExempted: Boolean,
+    onRequestBattery: () -> Unit,
+    onOpenAutostart: () -> Unit,
+    onNext: () -> Unit,
+) {
+    Text(stringResource(R.string.wizard_keepalive_title), style = HaloType.Title)
+    Spacer(Modifier.height(6.dp))
+    Text(stringResource(R.string.wizard_keepalive_body), style = HaloType.Caption)
+    Spacer(Modifier.height(14.dp))
 
-@Composable
-private fun PairRingStep(onStartPairing: () -> Unit, onFinish: () -> Unit) {
-    // Burn-in fix 2026-05-27: previously this step just called `onStartPairing` which kicked off
-    // an unfiltered scan that auto-connected to the FIRST R0x-family name match — often picking
-    // up a stranger's ring or a stale phantom device. Now we embed the [RingPairingScreen] picker
-    // so the user explicitly selects which ring is theirs; the picker persists the MAC and
-    // triggers the connection on tap.
-    //
-    // Falls through to onFinish on the picker's `onPaired` so the wizard completes after a
-    // successful pair (or the user can tap SKIP to advance without pairing — e.g. on a dev rig).
-    com.halo.ring.ui.screens.RingPairingScreen(onPaired = onFinish)
+    StatusLine(stringResource(R.string.wizard_keepalive_battery_row), batteryExempted)
+
+    // Strict order: battery first (auto-detected), then auto-start, then CONTINUE. One button at a time.
+    if (!batteryExempted) {
+        Text(stringResource(R.string.wizard_keepalive_battery_desc), style = HaloType.Caption)
+        Spacer(Modifier.height(12.dp))
+        Cta(stringResource(R.string.wizard_keepalive_battery_cta), onClick = onRequestBattery)
+        return
+    }
+
     Spacer(Modifier.height(10.dp))
-    // Keep a skip path so we don't strand users running the wizard without a ring nearby.
-    Cta(stringResource(R.string.wizard_pair_done_cta), onClick = onFinish)
-    // The legacy `onStartPairing` callback is now redundant; kept in the function signature for
-    // forward-compat with anything that still passes it.
-    @Suppress("UNUSED_EXPRESSION") onStartPairing
+    Text("• " + stringResource(R.string.wizard_keepalive_autostart_row), style = HaloType.Body)
+    Text(stringResource(R.string.wizard_keepalive_autostart_desc), style = HaloType.Caption)
+    Spacer(Modifier.height(12.dp))
+    Cta(stringResource(R.string.wizard_keepalive_autostart_cta), onClick = onOpenAutostart)
+    Spacer(Modifier.height(10.dp))
+    Cta(stringResource(R.string.wizard_keepalive_done_cta), onClick = onNext)
 }

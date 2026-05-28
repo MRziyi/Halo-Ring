@@ -1,107 +1,58 @@
-# 08 — UI Design
+# 08 — UI Design (v0.4)
 
-> **Status**: design complete. Most Compose composables are implemented in
-> [`../app-project/app/src/main/kotlin/com/halo/ring/ui/`](../app-project/app/src/main/kotlin/com/halo/ring/ui/);
-> wiring to the runtime (BLE / agent / service) is the remaining work — see
-> [13-handoff.md](13-handoff.md) priorities A5 (HUD wiring), B1–B9 (detail settings screens).
->
-> **Live visual mockup**: open [`ui-mockup.html`](ui-mockup.html) in a browser. It renders every
-> screen at 1:1 actual size (480×480) and includes a binocular preview, the design tokens, and
-> all the HUD overlay variants. The mockup is the canonical reference for *what it looks like*;
-> this markdown is the *why*; the Compose code is the *what*.
+The Halo Ring UI has **two surfaces** in v0.4:
 
-The UI lives on the glasses (we don't ship a mobile companion). Three jobs:
+1. **HUD overlay** (`WindowManager.TYPE_APPLICATION_OVERLAY`) — the daily UX. Transient pips
+   fired by gesture-recognition, profile-switch, vitals, sport-tick, spatial alerts, ring status.
+   Owned by `HaloRingService`; visible regardless of which app is foreground.
+2. **Config Activity** (`MainActivity`) — opened occasionally (icon tap or `ACTION_SETTINGS_KEY`
+   two-finger long-press). Hosts pairing, the custom-gesture editor, Vitals dashboard, ring info,
+   plugin management. Allowed to be deep — but **never the daily entry point**.
 
-1. **Show the wearer's biometrics** that the ring streams in the background (HR, SpO2, stress,
-   activity, ring battery).
-2. **Configure the ring** — profiles, gesture mappings, system gestures, power preferences.
-3. **Host the resident background service** — the user can verify it's alive and lean.
+Pre-v0.4 design had a 3-tab top-level (Vitals / Settings / Status). v0.4 retires the tab strip
+and the `InAppFocusController` because they were the root cause of "ring 点不出来" on glasses
+([Doc/20 §2.1](20-v0.4-design.md)). Compose's standard `FocusManager` + system KeyEvents
+([Doc/05 §3.8](05-interaction-design.md#38-base-gesture-passthrough-v04)) handle navigation
+natively.
 
-Two display constraints from the platforms:
-
-- **Rokid Glasses**: single projector drives both eyes — both eyes see the same image
-- **RayNeo X3 Pro**: binocular optics, but for unity we render the same content to both eyes
-  (no stereo, no parallax). The X3 Pro's `BaseMirrorActivity` handles this for free.
-
-Result: **we design and ship one 480×480 composition; both glasses display it identically.**
+> Live visual mockup: [`ui-mockup.html`](ui-mockup.html). Note that the mockup still renders
+> 480×480 — update to 480×640 portrait per [Rokid bare-metal §00](../../Constellation/reference/rokid-glass/bare-metal-docs/00-overview.md).
 
 ---
 
-## 1. Three jobs → three tabs
+## 1. Display constants
 
-```
-┌──────────────────────────────────────┐
-│  VITALS    SETTINGS    STATUS        │ ← tabs at top, current underlined
-│  ━━━━━━━                             │
-│                                      │
-│  [content of selected tab scrolls]   │
-│                                      │
-└──────────────────────────────────────┘
-```
-
-| Tab | Function | Owner data | Visit frequency |
+| Platform | Canvas | Anchor for HUD pip | Notes |
 |---|---|---|---|
-| **VITALS** | Job 1 — biometrics dashboard | HR / SpO2 / stress / steps / cal / distance / ring battery | Occasional (a few times a day at most) |
-| **SETTINGS** | Job 2 — configuration | Profiles, gestures, system gestures, ring, power, vitals prefs, advanced, about | Rarely (after onboarding) |
-| **STATUS** | Job 3 — resident-service info | Connection, BLE interval, profile, last gesture latency, background draw, BLE quality | Occasionally (when curious / debugging) |
+| **Rokid Glasses** | **480×640 portrait**, right-eye only, mono green | Upper-right or upper-left (user-configurable `hudPosition`) | Lower-right reserved for Constellation pip when both apps run (see [Constellation-Glass §1.4](~/Code/Projects/Constellation-Glass/Doc/GLASS-CLIENT-DESIGN.md)) |
+| **RayNeo X3 Pro** | 1280×480 binocular (640×480/eye), full colour | Re-anchored to right-eye region via `Gravity.END` + ~160 px x-inset when `DisplayAdapter.isBinocular = true` | `HudOverlay.setBinocular(...)` called from `HaloRingService` |
 
-The top-tab layout is justified because all three jobs **are equally important to the user's
-trust** (especially #3 — they need to know the resident service isn't draining the battery
-silently). Hiding STATUS in a settings sub-menu would betray that.
+**APL ≤ 13%** (RayNeo design spec; Rokid green-only is universally safe under this). Black canvas
++ small accent + small text dominates — well under the cap.
 
-## 2. Visual language
+**Safe area**: 16 px on all sides (RayNeo) → `ScreenPadding` = 24 dp covers both.
 
-Six tokens. Anything more is too much for a 480×480 see-through canvas.
+## 2. Visual language — six tokens
 
 | Token | Hex | Use |
 |---|---|---|
-| `--ui-bg` | `#000` | Background — minimises light leak through the optic |
-| `--ui-fg` | `#fff` | Primary text and content |
-| `--ui-mute` | `#8a8a8a` | Secondary text, dividers, inactive items |
-| `--ui-accent` | `#5ee08c` | Focus indicator, primary action — matches the ring's green LED for visual coherence |
+| `--ui-bg` | `#000` | Default canvas. On additive see-through displays, unlit pixels are transparent |
+| `--ui-fg` | `#fff` | Primary text |
+| `--ui-mute` | `#8a8a8a` | Secondary text, dividers |
+| `--ui-accent` | `#5ee08c` | Focus indicator, primary action — matches the ring's green LED |
 | `--ui-warn` | `#ffb84d` | Low battery, conflict warnings |
-| `--ui-bad` | `#ff7c7c` | Error, destructive action (Forget & Re-pair, disconnect) |
-| `--ui-line` | `#2a2a2a` | Dividers, card outlines |
+| `--ui-bad` | `#ff7c7c` | Errors, destructive actions |
+| `--ui-line` | `#2a2a2a` | Dividers; never tinted backgrounds for sections |
 
-**No solid coloured fills**. No gradients. No shadows. No glass-morphism. The display is
-see-through; every lit pixel leaks into the wearer's view of the world AND costs display power.
+No fills, no gradients, no shadows, no glass-morphism. Black = transparent.
 
-> **APL ≤ 13%** (RayNeo design spec). The X3 Pro display thermal-throttles brightness when
-> average picture level exceeds ~13%. Practical rule: large white panels dim within seconds.
-> Stay on the black canvas; only use `--ui-fg` for text and `--ui-accent` for focus / actions.
-> Our actual implementation is dominated by black + small white text, well under the cap. The
-> HUD pill uses `Color(0xCC000000)` (80% black) deliberately.
+### Type scale (16 sp floor per RayNeo spec)
 
-> **Black = transparent** on additive see-through displays. `#000000` emits zero photons. Use
-> it as default canvas, not as "dark grey" for sections — sections should be delimited by
-> 1 px `--ui-line` dividers, not by tinted backgrounds.
-
-### Type scale
-
-| Token | Size / weight | Use |
-|---|---|---|
-| Title | 24 / 600 | Screen headers (Settings, Profiles) |
-| Body | 17 / 400 | Default for content rows |
-| Caption | 16 / 400 (mute) | Secondary information, hints |
-| Tab | 16 / 600 (1px letter-spacing) | Tab labels — small, set-back |
-| Mono | 16 / 600 (SF Mono) | MAC addresses, gesture names, command snippets |
-| Metric | 56 / 700 (tabular nums, -2px letter-spacing) | Big numbers on Vitals (HR, SpO2, stress) |
-| MetricKey | 14 / 400 (uppercase, mute) | Tiny grouping labels above big metrics |
-| RowKey | 16 / 400 (mute) | Left-aligned row labels |
-
-System sans-serif (`SF Pro` on Apple, `Roboto` on Android) — no custom font bundled. Saves APK
-size and benefits from system optimisation.
-
-> **16 sp is the floor.** RayNeo's design guide warns anything smaller renders with sub-pixel
-> artifacts on the see-through panels (and `HarmonyOS_Sans_SC` is their system font). On our
-> 480×480 canvas mapped to a ~30° FOV, smaller fonts also become genuinely unreadable. The
-> only intentional exception is `MetricKey` (14 sp, all-caps short labels above 56 sp metric
-> numbers — reads as a label, not body copy).
+`Title 24/600` · `Body 17/400` · `Caption 16/400 (mute)` · `Tab 16/600` · `Mono 16/600 (SF Mono)`
+· `Metric 56/700 (tabular nums)` · `MetricKey 14/400 (uppercase mute — sole sub-16 sp exception)`
+· `RowKey 16/400 (mute)`.
 
 ### Focus indicator
-
-Critical: the wearer has no touch input. They navigate via the ring (or temple touchpad), so the
-focused element must be **unmistakable**.
 
 ```
 ┌─ row, not focused ──────────────────┐
@@ -114,342 +65,147 @@ focused element must be **unmistakable**.
 └──┸──────────────────────────────────┘
 ```
 
-Both elements (bar + tint) together — either alone is too subtle on a small display in bright
-ambient light.
+Shared `Modifier.haloFocus()` extension applies both elements. Required (either alone is too
+subtle on a small display in bright ambient).
 
-### Six design principles
+## 3. HUD overlay — the daily UX surface
 
-1. **Black canvas.** Default pixel = off. Light only what carries information.
-2. **Transient by default.** Persistent UI only while the user is actively in a Settings screen.
-   Everything else flashes for ~2 s then auto-hides.
-3. **One column, one focus.** No multi-pane. Lists max ~5 items before scroll.
-4. **Big text, generous space.** Equivalent of a 43" virtual screen at viewing distance —
-   intentional overshoot is safer than under-sizing.
-5. **Audio + ring LED, not just visual.** The wearer may be looking past the display. Mode
-   switch → click + LED flash + brief HUD; wake → LED double-flash; etc.
-6. **Same image to both eyes.** No stereo composition. Same `Composable` rendered identically.
+`HudOverlay.kt` + `HudEvent.kt` (`:app/.../ui/hud/`). All HUD events fire from `HaloRingService`.
 
----
+### 3.1 Existing event variants (v0.3, kept)
 
-## 3. Screen catalogue
-
-(All rendered at actual size in [`ui-mockup.html`](ui-mockup.html). This is the index.)
-
-### Top-level tabs
-
-| # | Screen | Purpose | When seen |
+| Event | Trigger | Pip look | Duration |
 |---|---|---|---|
-| A | **VITALS dashboard** | HR / SpO2 / stress (big numerals), MEASURE NOW button, activity below | Default tab on launch |
-| B | **SETTINGS root** | 7-item list: Profiles, System Gestures, Ring, Power & Connection, Vitals, Advanced, About | After-onboarding occasional visit |
-| C | **STATUS** | Connection, BLE interval, profile, last gesture latency, background draw bar, BLE-quality sparkline | "Is the service OK?" |
+| `GesturePip` | Gesture-hint mode on AND any recognised gesture | `Double tap → Back` | 800 ms |
+| `ProfileSwitched` | `ModeManager.cycleNext()` / auto-switch / manual select | accent-bordered: `↻ → Navigation` | 2 s |
+| `LowBattery` | Ring ≤ 20% | warn-bordered: `● R08_E600 18%` | 2 s |
+| `Disconnected` | BLE link lost | bad-bordered, 2 lines: `● Ring disconnected` + hint `Open app → Settings → Ring → Reconnect` | 4 s, re-displays every 60 s while still disconnected |
+| `Reconnecting` | Re-attempt in progress | accent-bordered: `↻ Reconnecting…` | until READY |
+| `Connected` | BLE link came up | accent-bordered: `● Connected` | 1 s |
 
-### Settings detail screens
+### 3.2 v0.4-added events
 
-| # | Screen | Purpose |
-|---|---|---|
-| D | **Profiles list** | The 4 default profiles + add custom; current shown with green bullet |
-| E | **Gesture mapping editor** | Per-profile, 12 rows (gesture name on left, action on right). 4 system slots greyed out |
-| F | **System gestures** | The 5 always-on overrides (wake / sleep / cycle / peek / reconnect) and their bindings |
-| G | **Ring** | MAC + firmware + signal + battery, FIND MY RING / SHUT DOWN / FORGET buttons |
-| H | **Power & Connection** | Sliders for the three timing windows + BLE interval policy + keepalive toggle |
-| I | **Feedback** *(new)* | Toggles for the user-facing feedback channels: gesture-hint HUD (see §10), audio click, ring-LED patterns, HUD position |
-| J | **Vitals preferences** | What to show on HUD, opt-in for auto-snapshot, CSV export |
-| K | Advanced (TBD) | Debug HUD toggle, backend status, latency-measurement mode, re-run ADB bootstrap |
-| L | **External plugins** *(Doc/18)* | Read-only directory of [Doc/18-plugin-protocol](18-plugin-protocol.md) plugins. App name + package + protocol version + action count + status. REFRESH PLUGINS CTA. Plugin actions also surface in the Action Picker's new EXTERNAL APPS group (between SYSTEM and NONE). |
-| M | About (TBD) | Version, detected device profile, credits, links to Doc/ |
-
-### HUD overlays
-
-The HUD is **transient** — appears for ~2 s on events, or on QUADRUPLE_TAP. Anchor is the
-wearer's chosen `hudPosition` from Settings → Feedback (default `TopRight`); never centred (no
-occlusion of the line of sight). A small dark pill (`0xCC000000` fill + 1 dp accent/warn/bad
-border), Compose-hosted inside a `WindowManager TYPE_APPLICATION_OVERLAY`.
-
-| Variant | Trigger | Look | Duration |
+| Event | Trigger | Pip look | Duration |
 |---|---|---|---|
-| **Default Peek** | QUADRUPLE_TAP / connection change | `●  Navigation  87%` | 2 s |
-| **Mode switched** | TRIPLE_TAP | accent-bordered: `↻ →  Navigation  cycle` | 2 s |
-| **Gesture recognised** | Any recognised gesture *while gesture-hint mode is on* (see §10) | small pill: `Double tap → Back` | 800 ms |
-| **Low battery** | Ring ≤ 20% | warn-bordered: `●  R08_2A3F  18%` | 2 s |
-| **Disconnected** | Lost BLE link | bad-bordered, two-line: `●  Ring disconnected` + hint `Long-press × 2 to reconnect` (at the wearer's chosen HUD position — defaults TopRight). Re-displays every 60 s while still disconnected. | 4 s, periodic |
+| `VitalsSnapshot` | User-bound `MeasureVitals` action completes | `❤ 72 bpm  •  SpO₂ 97%` | 3 s |
+| `SportTick` | Active sport session (during) | `🏃 12:34  •  ❤ 138` | 8 s |
+| `SpatialAlert` | `AccelProcessor.FreeFall` | bad-bordered: `Ring dropped?` | 2 s |
+| `PluginCard` | Plugin pushes via PROFILE_PUSH | plugin-rendered runs (title + body) | Plugin-controlled |
 
-> **AR-guidelines correction (audit-2026-05-13l)**: previously the Disconnected pill rendered
-> centre-of-eye and persisted until reconnect. That violated two RayNeo / Rokid design rules: do
-> not occlude the wearer's line of sight, and prefer transient toasts over persistent overlays.
-> The in-app StatusBar's red ● dot (visible whenever MainActivity is open) is the *persistent*
-> indicator; the HUD now nudges briefly every 60 s with an actionable hint.
+### 3.3 HUD design rules
 
-### First-run wizard
+- **AR rule**: never persist centred (would occlude line of sight). Default `hudPosition =
+  TopRight`. Disconnected is the one event that previously broke this rule (centred + persistent)
+  — fixed in audit-pass-l (transient pip + 60-s re-nudge).
+- **No animations** beyond appear/disappear. Animation costs CPU + lit pixels and AR users don't
+  expect mobile-app fluidity.
+- **Audio + LED reinforcement**: most state changes also fire `ToneGenerator` click + ring LED
+  blink. Visual is for "user happens to be looking at the canvas"; audio + LED handles "user is
+  looking through it".
 
-Five full-screen steps:
+## 4. Config Activity — the editing surface
 
-1. **Welcome** — "Setup takes about a minute."
-2. **ADB bootstrap** — one-shot `pm grant` shown as a monospace command to run on the computer.
-3. **Accessibility** (optional) — deep-link to system Accessibility settings.
-4. **Battery exemption** — Android prompt.
-5. **Pair the ring** — auto-discovers `R08_xxxx`, shows MAC + RSSI, confirms with a ring-LED
-   double-flash.
+Opened by: app icon tap, `ACTION_SETTINGS_KEY` two-finger long-press (Rokid), launcher icon
+from Sprite. **Never the daily entry point.**
 
-After step 5, drop the wearer into the **Vitals** tab.
+### 4.1 Top-level (after v0.4 reorg: 10 flat items → 5 groups)
 
----
+| Group | Members |
+|---|---|
+| **Ring** | Pair/Re-pair, Find Ring, MAC/FW/RSSI/battery, Forget, Reconnect, Capabilities (gated list) |
+| **Vitals** | Auto-snapshot interval, CSV export, HR-on-HUD, Step target, Sport session, "Pause when off-finger", Spatial features (opt-in) |
+| **Gestures** | Profiles list → Profile editor / Action picker / System gestures / Gesture picker / **Test Arena** (custom-gesture training) |
+| **Plugins** | External plugins (Doc/18) |
+| **More** | Power & Connection (collapsed defaults), Feedback, Language, Advanced (slim), About (3 rows) |
 
-## 4. Per-platform realisation
+### 4.2 Headline screens — the custom-gesture editor
+
+These are the **value-add UI**. Custom gestures + plugin protocol are pillar #1 of the project
+([Doc/20 §1](20-v0.4-design.md)). None of these get deleted in v0.4.
+
+| Screen | Purpose |
+|---|---|
+| **Profiles list** | 4 default profiles (Navigation / Media / Reader / Fast) + user-defined; active marked with green bullet; "duplicate to create" |
+| **Profile editor** | 12-row gesture → action map for one profile. v0.4: **4 base rows shown as `(system)` and not editable**; the 8 custom rows are fully editable. `triggerPackages` and `GestureConfig` knobs below the map. |
+| **Action picker** | ~35 entries grouped (Nav / Media / Camera / AI / System / Modal / Plugin). Unsupported actions on the active flavor greyed out via `GlassActionMapper.supports()` |
+| **System gestures** | The 5 always-on slots: ScreenWake (default LONG_PRESS), ScreenSleep (LP+SwipeDown), ProfileCycle (TripleTap), PeekHUD (QuadrupleTap), AIAssistant (DoubleLongPress). Reassignable; inline conflict warnings |
+| **Gesture picker** | 12-gesture list; "in use by Slot X" markers; "(disable this slot)" row |
+| **Test Arena** | Gesture-training surface. Rows light up when recognised. Exit = universal DOUBLE_TAP (works regardless of how the user rebound DOUBLE_TAP — hardcoded inside the recognised-flow collector). No exit button (glasses have no touchscreen). |
+| **External plugins** (Doc/18) | Read-only directory: app name + package + protocol version + action count + status. REFRESH PLUGINS CTA. Plugin actions surface in the Action Picker under "EXTERNAL APPS". |
+
+### 4.3 SPEC v3 protocol surface
+
+Pillar #2 of the project ([Doc/20 §1](20-v0.4-design.md)) is to expose the full protocol surface.
+
+| Screen | Surface |
+|---|---|
+| **Vitals dashboard** | Big metrics: HR / SpO2 / steps / cal / distance / ring battery. MEASURE NOW button → on-demand snapshot. Sub-section for active sport session (Start / Stop + duration + live HR). Spatial features toggle. |
+| **Ring screen** | MAC / FW / HW rev / RSSI / battery / advertised name. CTAs: Find Ring (`0x50 [0x55, 0xAA]`), Forget, Reconnect. **No Shutdown** (would brick — `0x0F` is OTA-mode entry). Capabilities expandable row. |
+| **HUD pip** | Transient surfaces for VitalsSnapshot / SportTick / SpatialAlert (§3.2) |
+
+### 4.4 Pairing — the only blocking screen
+
+**1 step** (was 5 in pre-v0.4 FirstRunWizard):
+
+```
+┌──────────────────────────────────────┐
+│ Pair your ring                       │
+│                                      │
+│  ● R08_E600     -54 dBm    [SELECT]  │
+│  ● R08_2A3F     -71 dBm    [SELECT]  │
+│  ● Colmi 4D     -88 dBm    [SELECT]  │
+│                                      │
+│  RESCAN                              │
+└──────────────────────────────────────┘
+```
+
+After a ring is selected: persist MAC → start `HaloRingService` → ring LED double-flash ack →
+`finish()`. The remaining ADB / A11y / battery permissions surface lazily only when an action
+that needs them is invoked.
+
+## 5. Per-platform realisation
 
 | | Rokid Glasses | RayNeo X3 Pro |
 |---|---|---|
-| Display | Single projector, right-eye-only (Doc/03 §1.1) | Binocular, dual eye-pieces |
-| Native Activity | Plain `ComponentActivity` with a Compose root | Mercury SDK `BaseMirrorActivity` mirrors the Compose root to both eye-pieces automatically |
-| Focus traversal | Standard Android (Compose `Modifier.focusable()`); driven by DPAD key events from the temple bar | Mercury SDK's `FocusHolder` + `FocusInfo` framework. **`Modifier.focusable()` alone is NOT enough** — Mercury's `TouchDispatcher` swallows the temple `MotionEvent`s before Compose sees them. Each focusable composable must register a `FocusInfo` via `focusHolder.addFocusTarget(...)`. The bridge layer wraps `Modifier.focusable()` so screen code stays platform-agnostic (Doc/03 §2.2). |
-| Touch input | **None.** No `pointerInput { }` / drag composables — they're dead. Use `Modifier.clickable()` (DPAD_CENTER auto-triggers it) | Yes (temple touchpad), but consumed by Mercury SDK; apps should consume `TempleAction.SlideForward/Backward/UpwardsDownwards/Click/DoubleClick` from the SDK's `Flow`, not raw `MotionEvent`s (avoids fighting the user's "Natural mode" inversion toggle) |
-| Content area | ~480 × 480 px usable, right-eye optic | 640 × 480 per eye; we centre our 480 × 480 composition with ~80 px black pad each side |
-| Safe area | Standard Android insets (status bar managed by `PageActivity`) | 16 px on all sides at 5 m depth; our 24 dp `ScreenPadding` covers it |
-| Min font | 16 sp (shared floor; see §2 type scale callout) | 16 sp (RayNeo design spec) |
-| APL ceiling | No published cap; black canvas is universally safe | ≤ 13% (above that, thermal throttling dims the panel mid-session) |
-| Anti-light-leakage | Inherit system setting (Rokid's "anti-light-leakage mode" dims brightness to min and hides status bar) | Inherit system setting (same concept) |
+| Activity host | Plain `ComponentActivity` with Compose | Mercury SDK `BaseMirrorActivity` (free binocular mirror) |
+| Input path (Service) | **System ordered broadcasts** (`ACTION_SPRITE_BUTTON_*` + `ACTION_TWO_FINGER_*`) — see [Doc/04 §8.1](04-architecture.md#81-rokid-glasses-yodaos-sprite-android-12-go) | Mercury SDK `TouchDispatcher` → `TempleAction` Flow |
+| Input path (Activity) | Standard `onKeyDown` (DPAD events) | Mercury SDK + `FocusInfo` registration per focusable |
+| Touch input | **None** — no `pointerInput` / drag in shared code | Available but consumed by Mercury SDK |
+| Content area | 480×640 portrait | 1280×480 logical (640/eye); centre our 480×640 portrait composition |
 
-**One Compose tree, two Activity hosts.** No per-platform UI logic — but the RayNeo bridge
-layer (`focusable` ↔ `FocusInfo`, `TempleAction` ↔ `InAppFocusController`) is a NON-trivial
-flavor-specific module. As of 2026-05-13 it's planned but not yet wired (Doc/03 §2.3); needs
-the Mercury AAR. Verification deferred to [11 §B8](11-verification-checklists.md).
+**One Compose tree, two Activity hosts.** Shared screens have no per-platform logic; the RayNeo
+flavor wires a small Mercury bridge that maps `TempleAction` → Compose focus.
 
----
+## 6. Implementation notes (highlights)
 
-## 5. Decisions on previously-open questions
+- **HUD overlay** owned by `HaloRingService` via `HudServiceHost` (Lifecycle / ViewModelStore /
+  SavedStateRegistry bundle so a plain Service can host Compose).
+- **`HaloSwitch` pill widget** (`Components.kt`) — green-tinted ON dot pinned right vs grey OFF
+  pinned left. Replaces the pre-v0.3 colour-only `ON`/`OFF` text that the waveguide rendered
+  imperceptibly.
+- **`FocusableRow.content: @Composable RowScope.() -> Unit`** — required `RowScope` so long
+  descriptions can `.weight(1f)` and not push the switch off-screen.
+- **Placeholder rows** (DataStore-persisted but no runtime consumer yet) render as `disabled =
+  true` with localised "coming soon / 即将推出" caption. We never lie about functionality.
+- **No images / icons bundled**. Unicode glyphs (●, ›, ⤓, ⌖, ❤, 🏃) + Compose line drawing.
+- **Sound feedback** — `ToneGenerator(STREAM_NOTIFICATION)` click on focus-move + Confirm. Gated
+  by `FeedbackPrefs.clickSoundOnModeSwitch`. Mirrors Sprite Launcher's per-focus beep.
+- **Ring LED feedback** via `R08BleClient.findRing()` etc. Mode switch = `BLINK_TWICE`-equivalent
+  pattern.
 
-(From the v0.7 draft — resolved.)
+## 7. What's NOT in the v0.4 design
 
-| Question | Decision | Rationale |
-|---|---|---|
-| HUD position | **Top-right corner** for normal events; **centre + enlarged** only for disconnect | Top-right is the least-intrusive area for the dominant hand-eye coordination (most users are right-handed and naturally glance right); centre reserved for "you should know about this right now" events |
-| Brightness control | **Inherit system; never override** | Wearers configure their preferred brightness once; we shouldn't surprise them. Anti-light-leakage mode propagates naturally |
-| Accent colour | **Single green** (`#5ee08c`), matches the ring LED | Visual + tactile coherence; rejects per-profile colour-coding (would clutter a small canvas) |
-| Settings depth | **2 levels max** (Settings root → individual screen → at most one editor below) | Anything requiring deeper navigation gets redesigned |
-| Custom profile creation | **Copy from existing** (default behaviour) + rename + tweak | Less laborious than a blank form; covers 95% of intent |
-| Color tabs vs underline | **Underline + green accent on active**; mute label otherwise | Underline is the lightest tab pattern; chrome-mass minimised |
-| Show binocular preview to user | No, we render the same content to both eyes; the user never sees a "binocular preview" | The binocular preview in the mockup is for design/dev review only |
-
----
-
-## 6. Implementation notes
-
-| Concern | Approach |
-|---|---|
-| **HUD overlay** | A `WindowManager` `TYPE_APPLICATION_OVERLAY` view hosted by `HaloRingService` so it appears above any app, not just ours. Compose composable internally. Auto-hide via `delay()` in a coroutine. On **binocular side-by-side displays (RayNeo X3 Pro, 1280×480 logical)** `CENTER_HORIZONTAL` would land at x≈640 — between the eyes, visible only at the nose. We re-anchor `TopCenter`/`Center` to the right-eye region via `Gravity.END` + an x-inset of ~160 px when `DisplayAdapter.isBinocular = true`. Wiring: `HudOverlay.setBinocular(...)` called from `HaloRingService` reading `graph.displayAdapter.isBinocular`. (Audit-pass 2026-05-13s.) |
-| **System bar / anti-light-leakage** | We respect the system flag (`Settings.System.someBrightnessMode`); never override. Apps like Rokid's Translate use it; our HUD should too |
-| **Tabs** | A `TabRow`-equivalent custom composable (Material `TabRow` has unwanted padding). 3 fixed tabs; selected state simply changes the underline + bold. |
-| **Focus indicator** | A single shared `Modifier.r08Focus()` extension that applies 2 px left border + 7% green tint. One implementation; every focusable item uses it |
-| **Toggle switch** | Every Settings ON/OFF row uses the shared [`HaloSwitch`](../app-project/app/src/main/kotlin/com/halo/ring/ui/Components.kt) pill — fixed-width capsule with a green-tinted "ON" state (indicator dot pinned right) vs grey "OFF" (dot pinned left). Earlier revisions surfaced state via colour-only `ON` / `OFF` text in `HaloType.RowVal`; on the waveguide the colour delta was easy to miss, and on long-description rows (e.g. "Optimistic single tap") the text was pushed off-screen entirely because `FocusableRow`'s content slot lacked `RowScope`. Fixed in audit-pass 2026-05-14u/v: `FocusableRow.content: @Composable RowScope.() -> Unit` + every long-description row gives its title column `.weight(1f)`. Disabled state ("`coming soon`") is part of the same widget so placeholder rows look obviously inert, not broken. |
-| **Placeholder rows** | When a Settings row is wired through DataStore but has no runtime consumer yet (e.g. all five `VitalsPrefs` fields, `AdvancedPrefs.debugHudEnabled`, `AdvancedPrefs.spatialModeEnabled`), the row passes `disabled = true` to its `ToggleRow`. The row's title goes muted, the value column shows the localised "coming soon / 即将推出" caption (no ON/OFF), and `onClick` is a no-op. We never lie about functionality by showing a working-looking ON/OFF state for something with no consumer. (Audit-pass 2026-05-14u.) |
-| **Test Arena exit** | The Test Arena is the one screen with no focusable rows (gestures light up rows for display only). Glasses have no touchscreen so a visible EXIT button at the bottom of a 12-row gesture grid was physically unreachable; the screen has **no button at all** and instead hardcodes `Gesture.DOUBLE_TAP → onExit()` inside the `recognisedGestureFlow` collector. This mirrors the universal "double-tap = back" convention the rest of the app uses (Navigation profile default), so the wearer doesn't need to learn a different exit gesture for this one screen — and it works regardless of how they've remapped DOUBLE_TAP in their active profile. (Audit-pass 2026-05-14u.) |
-| **System gesture slots** | Five always-on slots intercept *before* the active profile (Doc/05 §5): `WAKE` (screen-off fast path, default `LONG_PRESS`), `SLEEP` (default `LONG_PRESS_SWIPE_DOWN`), `PROFILE_CYCLE` (default `TRIPLE_TAP`), `PEEK_HUD` (default `QUADRUPLE_TAP`), and `AI_ASSISTANT` (default `DOUBLE_LONG_PRESS`). The fifth slot was `FORCE_RECONNECT` until audit-pass 2026-05-14w — auto-reconnect handles 99% of BLE drops, so the slot is worth more on a daily action; reconnect lives on as a button in Settings → Ring. AI_ASSISTANT routes to `GlassAction.OpenAIAssistant` via the standard dispatch path (per-flavor `FeatureIntents.openAIAssistant()` returns the Intent / shell), distinct from `AskVisualAI` which is camera-grounded VQA. |
-| **Profile auto-switching** | Each `KeyMapProfile` carries a `triggerPackages: List<String>` of foreground-app prefix matches. The `AccessibilityBackend` reports foreground-pkg changes to `ModeManager.onForegroundPackage(pkg)`, which: (1) respects a 5-second manual-lock after explicit profile switches; (2) matches `pkg.startsWith(trigger)` against every non-active profile in declared order; (3) **falls back to `DefaultProfiles.DEFAULT_FALLBACK_ID`** (Navigation) when the foreground app matches nothing AND the current profile has its own non-empty triggerPackages. So leaving Spotify and returning to the system launcher correctly drops Media → Navigation instead of stranding you on Media. Media's default triggers: Sprite Music, Spotify, YouTube, NetEase, QQMusic, B 站, 抖音, 快手. Reader's: Sprite Translate / WordTips, Kindle, Adobe Reader, Play Books, Chrome, Firefox. Fast has empty triggers — never auto-activates. (Audit-pass 2026-05-14w.) |
-| **No animations** | Just appear / disappear. Animation has cost (CPU + lit pixels) and AR users don't expect mobile-app fluidity |
-| **Sound** | `ToneGenerator(STREAM_NOTIFICATION).startTone(TONE_PROP_BEEP, 30)` on every accepted nav move (`NavPrev/NavNext/NavLeft/NavRight`), tab-cycle, and Confirm-into-content. Mirrors Rokid Sprite Launcher's per-focus-move beep (`sprite-launcher.md` §"Activity Hierarchy"). Gated by `FeedbackPrefs.clickSoundOnModeSwitch` (UI label: "UI click sound" / "界面点击音"). Allocated lazily in `InAppFocusController`, released in `detach()`. (Audit-pass 2026-05-13s.) |
-| **Ring LED feedback** | Via `R08BleClient.blinkLed()` (writes `0x10` or pattern via repeated commands). See [05](05-interaction-design.md) §4.3 for the patterns |
-| **No images / icons bundled** | Use unicode glyphs (●, ›, ⤓, ⌖) and CSS-style line drawing in Compose. Saves APK size + keeps consistent line weight |
+- ❌ Top tabs (Vitals / Settings / Status) — retired with `InAppFocusController`
+- ❌ `StatusScreen` as a full-screen panel — converted to a HUD-overlay trigger via PEEK_HUD
+- ❌ `GuidedTour` — Test Arena does the job
+- ❌ 5-step FirstRunWizard — collapsed to 1 step (pair only)
+- ❌ Per-profile colour theming — one green accent
+- ❌ Light theme — black canvas always
+- ❌ Mobile companion app — deferred (Doc/13 D3); v0.4 ships glasses-native only
+- ❌ Charts / sparklines in Vitals — display resolution insufficient
+- ❌ Animations beyond appear/disappear
 
 ---
 
-## 7. What's NOT in the design
-
-(Things we explicitly decided against.)
-
-- **No per-profile colour theming.** One green accent, period.
-- **No charts in Vitals.** Big numbers + (optional, later) a tiny sparkline. No D3-style anything.
-- **No "swipe down" or "long-press" gestures *on the UI itself*.** The user navigates the UI
-  through whatever the ring's current profile binds — same gestures, no separate UI vocabulary.
-- **No "tap target" sizing in the conventional sense.** No touchscreen.
-- **No tutorials within the app (after first-run).** Help text inside screens is two lines max.
-- **No notifications from this app** beyond the persistent foreground-service notification (which
-  is required by Android).
-- **No light theme.** Black canvas always.
-- **No multi-account, no profiles-per-user.** One wearer.
-
----
-
-## 9. In-app navigation — how the wearer drives our own UI
-
-The whole product premise is "use the ring to drive the glasses". That includes **our own
-Settings UI**: the wearer must be able to configure the ring using the ring itself (eating our
-own dog food).
-
-### 9.1 The injection path
-
-When our Activity is foreground, gestures route as follows:
-
-```
-Ring TAP (= Confirm GlassAction in profile)
-  → InteractionRouter resolves to GlassAction.Confirm
-  → InteractionRouter checks: is *our* Activity foreground?
-  → YES → InAppFocusController.confirm()       (direct call — no agent, no ADB)
-  → NO  → ActionRouter → executor backend → injection → focused window
-```
-
-The "foreground detection" comes from a simple `MainActivity.isInForeground` flag set in
-`onResume`/`onPause`. No accessibility needed for this path.
-
-`InAppFocusController` calls Compose's `FocusManager` directly:
-
-| GlassAction | InAppFocusController call | Compose effect |
-|---|---|---|
-| `NavPrev` (default = SWIPE_UP) | If focus is on the tab strip: `tabs.prev()`. Otherwise: `moveFocus(FocusDirection.Up)`. | Move focus up one row, or cycle to previous tab if at the top |
-| `NavNext` (default = SWIPE_DOWN) | If focus is on the tab strip: `tabs.next()`. Otherwise: `moveFocus(FocusDirection.Down)`. | Move focus down or to next tab |
-| `Confirm` (default = TAP) | Compose's `Modifier.clickable()` already handles DPAD_CENTER → onClick; no special routing needed | Activate focused row / tab |
-| `Back` (default = DOUBLE_TAP) | `navigator.pop()` (or `finish()` at root) | Back-stack handling |
-| `Home` | `finish()` | Leaves the app |
-| `NavLeft` / `NavRight` | `moveFocus(Left / Right)` — useful for user-defined profiles that bind a gesture to these | (no default profile binds these, since the ring has no left/right swipes) |
-| Everything else (Volume, Camera, etc.) | falls through to the executor backend (agent) | Same as outside our app |
-
-### 9.1.1 Tab strip navigation
-
-The ring only emits **vertical swipes** (`SWIPE_UP` / `SWIPE_DOWN`) — there are no left/right
-swipes. So the tab strip is navigated by:
-
-1. **Swipe up past the top content row** → focus moves onto the active tab in the strip.
-2. While focused on a tab, **SWIPE_UP** moves to the previous tab; **SWIPE_DOWN** moves to the
-   next tab (and one more SWIPE_DOWN moves back down into the content of the newly-selected tab).
-3. **TAP** while focused on a tab activates / confirms it (most relevant when you've cycled
-   to a different tab and want to commit).
-4. **DOUBLE_TAP** still means Back regardless of where focus is.
-
-The InAppFocusController distinguishes "focus on tab strip" from "focus on content" via a
-state flag fed by `onFocusChanged` on the tab strip's focusable container.
-
-This means: when the wearer is in Settings doing `Swipe up / Swipe down / Tap / Double-tap`,
-the UI responds to ring gestures in ~50 ms (zero-cost — direct in-process call), not ~80 ms
-(via the agent). Bonus speed.
-
-### 9.2 Temple touchpad of the glasses themselves
-
-The glasses' own temple touchpad should also drive the UI — useful for first-time setup
-*before* the ring is paired, and as a fallback if the ring is dead.
-
-| Glasses | How it works |
-|---|---|
-| **Rokid** | Temple bar → system DPAD key events → Android focus traversal → Compose `Modifier.focusable()` picks them up natively. **Zero extra code.** |
-| **RayNeo X3 Pro** | Temple bar → MotionEvents → ARSDK `TouchDispatcher` → `TempleAction` Flow. Bridged: our `Activity` extends `BaseEventActivity`, subscribes to `templeActionViewModel.state`, translates each `TempleAction` to the equivalent `InAppFocusController` call. Same end behaviour. |
-
-### 9.3 Profile-aware navigation
-
-Different profiles map the same gestures to different actions, but **inside our UI** we want
-consistent behaviour regardless of profile (otherwise Settings becomes profile-dependent — bad).
-Solution: the `InteractionRouter` short-circuits to `InAppFocusController` with a **fixed
-in-app mapping** when our Activity is foreground:
-
-| Gesture | In-app action (constant) |
-|---|---|
-| TAP / SWIPE_UP / SWIPE_DOWN / LONG_PRESS / DOUBLE_TAP | Use the active profile's mapping translated to in-app focus (Confirm = activate, NavPrev/Next = up/down focus, Back = pop screen, Menu = open context menu if any) |
-| TRIPLE_TAP / QUADRUPLE_TAP / LONG_PRESS_SWIPE_DOWN / DOUBLE_LONG_PRESS | **System-level still applies** (cycle profile, peek HUD, sleep screen, reconnect) — the wearer can switch profile / sleep screen from inside our UI just like outside |
-
-This keeps the wearer's mental model unified: same gesture means the same thing everywhere.
-
-### 9.4 Focus indicators always present
-
-Every focusable element gets the standard 2 px green-bar + 7% tint indicator (the `Modifier.r08Focus()`
-extension). The default Compose focus indicator (a thin border) is too subtle for the
-low-resolution see-through display.
-
----
-
-## 10. Gesture-hint mode (new)
-
-> An opt-in feedback mode that flashes "what just got recognised" in the HUD after every gesture.
-> Useful for: learning gestures during onboarding, verifying mappings after a profile change,
-> debugging when something feels "off".
-
-### 10.1 Behaviour
-
-When **Settings → Feedback → Show recognised gesture (HUD)** is ON:
-
-- Every recognised `Gesture` (output of the synthesiser, after the InteractionRouter resolves it)
-  triggers a brief HUD overlay.
-- Overlay format:
-  ```
-  Double tap → Back
-  Swipe up → Nav prev
-  Triple tap → Profile: Media
-  Long-press + swipe down → Sleep screen
-  Quadruple tap → Peek
-  Swipe up → (no action)              ← if unmapped
-  ```
-- Position: top-right (same as default Peek HUD).
-- Duration: **800 ms** (deliberately shorter than the 2 s informational HUD — this fires often
-  and we don't want it lingering).
-- New gesture **replaces** any already-showing gesture-hint HUD (no queueing).
-- If a different HUD variant (mode-switched, low-battery, disconnected) is already showing, the
-  gesture-hint HUD waits.
-
-### 10.2 Default: OFF
-
-Off by default. Most wearers don't want their field of view interrupted on every gesture.
-
-But the **first-run wizard** auto-enables it for ~5 minutes after the user completes pairing
-(so they have built-in feedback while learning the gesture vocabulary), then turns it off
-automatically. The wearer can re-enable it at any time.
-
-### 10.3 Friendly names
-
-The HUD shows human-readable names, not enum identifiers:
-
-| Identifier | Friendly name |
-|---|---|
-| `TAP` | "Tap" |
-| `DOUBLE_TAP` | "Double tap" |
-| `TRIPLE_TAP` | "Triple tap" |
-| `QUADRUPLE_TAP` | "4× tap" |
-| `SWIPE_UP` | "Swipe up" (or "Swipe forward" — calibrate after device verification) |
-| `SWIPE_DOWN` | "Swipe down" / "Swipe backward" |
-| `LONG_PRESS` | "Long press" |
-| `LONG_PRESS_SWIPE_UP` | "Long-press + swipe up" |
-| `LONG_PRESS_SWIPE_DOWN` | "Long-press + swipe down" |
-| `DOUBLE_LONG_PRESS` | "Long-press × 2" |
-| `DOUBLE_TAP_SWIPE_UP` | "Double-tap + swipe up" |
-| `DOUBLE_TAP_SWIPE_DOWN` | "Double-tap + swipe down" |
-
-Actions also get friendly names: `Back`, `Confirm`, `Nav prev`, `Profile: Media`, `Wake screen`,
-`Sleep screen`, `Peek`, `Reconnect`, `(no action)`, `Camera`, `Visual AI`, `Notifications`, etc.
-
-### 10.4 Implementation hook
-
-In `:core`, `InteractionRouter` exposes a callback:
-
-```kotlin
-class InteractionRouter(
-    // ... existing params ...
-    /** Fires after a gesture is routed. (gesture, finalAction-or-null-for-system-handled) */
-    var onGestureRecognized: ((Gesture, GlassAction?) -> Unit)? = null,
-)
-```
-
-The `:app` layer wires this to the `HudOverlay` only when the user preference is ON.
-
----
-
-## 11. Implementation status
-
-The work is now mostly **execution** rather than design. See [13-handoff.md §2](13-handoff.md)
-for the full priority-ordered TODO list. Brief status:
-
-### Done (in `app/src/main/.../ui/`)
-- `R08Theme.kt` — the 8 design tokens + type scale + `Modifier.r08Focus()` focus indicator
-- `Components.kt` — `StatusBar`, `FocusableRow`, `ListRow`, `Cta`, `AccentBar`, `MetricCell`
-- `TabBar.kt` — 3-tab strip with focus tracking for in-app navigation
-- `R08App.kt` — root composable; manages tab state + sub-screen stack; attaches/detaches
-  `InAppFocusController`
-- `InAppFocusController.kt` + `BackController`/`TabController` — in-app fast path
-- `screens/VitalsScreen.kt`, `SettingsRootScreen.kt`, `StatusScreen.kt`, `FeedbackScreen.kt`
-- `hud/HudEvent.kt`, `hud/HudOverlay.kt` — overlay + all 6 event variants including
-  `GestureRecognised` (the gesture-hint mode)
-
-### To do
-- A5 (in §2 of [13](13-handoff.md)): wire HudOverlay to `InteractionRouter.onGestureRecognized`
-  + BLE connection state + ModeManager profile-changed
-- A7: persist `FeedbackPrefs` via DataStore + auto-on-after-pairing 5-min timer
-- B1–B9: detail settings screens (Profiles list/edit, System Gestures, Ring, Power & Connection,
-  Vitals prefs, Advanced, About, first-run wizard)
-- B10: modal layer state machines (Volume / Brightness / Recents / AIDictate)
-
-For each new screen: extend [`ui-mockup.html`](ui-mockup.html) with the layout first, review,
-then Compose. The mockup is the design source of truth for visual decisions; the Compose code
-implements what the mockup shows.
+For pre-v0.4 longer UI design (pre-merge of platform notes, tab-strip nav design, audit pass
+detail), see [`_archive/`](_archive/).

@@ -31,6 +31,15 @@ enum class Gesture {
     LONG_PRESS_SWIPE_UP,
     LONG_PRESS_SWIPE_DOWN,   // default = system ScreenSleep
     DOUBLE_LONG_PRESS,       // default = system ForceReconnect
+
+    /**
+     * v0.4 — air gesture from the accelerometer (`0xA1` ch3 → [com.halo.ring.core.sensor.AccelProcessor]).
+     * NOT synthesised from touch by [GestureSynthesizer]; the foreground service injects it directly
+     * into [InteractionRouter.onGesture] when AccelProcessor emits a WristShake. Routes through the
+     * active profile like any custom gesture. Requires the accel stream ON (Settings → Vitals →
+     * Spatial features). A no-touch "shake to dismiss / back / AI" input.
+     */
+    WRIST_SHAKE,
 }
 
 /**
@@ -76,19 +85,62 @@ enum class Gesture {
  *                          even right after ring auto-sleep). Verify count on real hardware.
  */
 data class GestureConfig(
-    val multiTapWindowMs: Long = 280,
-    val comboWindowMs: Long = 300,
+    val multiTapWindowMs: Long = 300,
+    // Widened 300 → 400 ms (2026-05-27): the window after a DOUBLE_TAP to land a follow-up swipe.
+    // Combos (DOUBLE_TAP_SWIPE) were hard to train at 300 ms — the double-tap committed (= Back!)
+    // before the user got the swipe out. 400 ms gives comfortable slack.
+    val comboWindowMs: Long = 400,
     val optimisticSingleTap: Boolean = false,
     val awaitCombos: Boolean = true,
     val enableTripleTap: Boolean = true,
     val enableQuadrupleTap: Boolean = true,
 
     val awaitLongPressCombos: Boolean = true,
-    val longPressFollowupWindowMs: Long = 400,
+    // On-glasses tuning 2026-05-27: 400 → 120 → 280 → 60 ms. The user found bare LONG_PRESS
+    // "长得要命" (deathly slow) at 280 ms and asked for 60 ms — near-instant after the firmware's
+    // ~600 ms hold floor. Trade-off: LONG_PRESS_SWIPE / DOUBLE_LONG_PRESS combos need the follow-up
+    // within 60 ms (very tight, effectively off). DOUBLE_TAP_SWIPE combos are unaffected — they use
+    // the separate `comboWindowMs` (400 ms), which the user confirmed feels good.
+    val longPressFollowupWindowMs: Long = 60,
     val enableDoubleLongPress: Boolean = true,
 
     val minRawIntervalMs: Long = 0,
     val wakeSwallowCount: Int = 1,
+
+    /**
+     * v0.3 P1: when true, the 4 BASE gestures (`TAP` / `DOUBLE_TAP` / `SWIPE_UP` / `SWIPE_DOWN`)
+     * fire **system KeyEvents** instead of routing through the per-profile [GlassAction] map.
+     * This makes the ring a thin extension of the Rokid temple touchpad — wherever a temple
+     * gesture works, the ring gesture works identically, no app-specific focus management
+     * required.
+     *
+     * Mapping (per Rokid bare-metal-docs §01-key-events.md):
+     * ```
+     *   TAP        → KEYCODE_DPAD_CENTER
+     *   DOUBLE_TAP → KEYCODE_BACK            (system-reserved on right-temple key)
+     *   SWIPE_UP   → KEYCODE_DPAD_RIGHT      (temple "swipe forward" = "next")
+     *   SWIPE_DOWN → KEYCODE_DPAD_LEFT       (temple "swipe back"    = "previous")
+     * ```
+     *
+     * **Custom gestures (everything except those four)** continue through the profile mapping
+     * unchanged — that's the project's flagship customisation layer.
+     *
+     * Default `true`: matches the user's "ring = temple extension" invariant for v0.3+.
+     * See Doc/19 §3.P1 for the design decision.
+     */
+    val useSystemKeyEvents: Boolean = true,
+
+    /**
+     * v0.3 P1: when [useSystemKeyEvents] is true AND this is true, SWIPE_UP / SWIPE_DOWN swap
+     * their KeyEvent mapping:
+     * ```
+     *   SWIPE_UP   → KEYCODE_DPAD_LEFT
+     *   SWIPE_DOWN → KEYCODE_DPAD_RIGHT
+     * ```
+     * For users who read "up" as "scroll up the page" (prior) rather than the temple's
+     * "next-in-sequence" semantics. Default `false`.
+     */
+    val reverseSwipeSemantics: Boolean = false,
 ) {
     init {
         require(multiTapWindowMs > 0) { "multiTapWindowMs must be > 0" }

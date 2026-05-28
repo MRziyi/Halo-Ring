@@ -1,110 +1,110 @@
 # 04 — Architecture
 
 How the codebase is organised, how the layers interact, what plugs where. Read this once and you
-should be able to navigate `app-project/` without surprises.
+should be able to navigate [`../app-project/`](../app-project/) without surprises.
 
-The full implementation skeleton is at [`../app-project/`](../app-project/); this doc tells you
-*why* it's shaped the way it is.
+Absorbs the content of the former Doc/03 (target platforms), Doc/06 (performance & power), and
+Doc/07 (sensor utilisation + modules) — those were merged in 2026-05-27 as part of the v0.4 doc
+pass. See `_archive/` for the pre-merge snapshots.
 
-## 1. Top-level constraint: same product, two platforms
+---
 
-The user requirement: one ring should work as a remote for **two different AR glasses** (Rokid +
-RayNeo X3 Pro), with **identical operations, UI content, and behaviour**. The implementation
-differences (DPAD-key injection on Rokid vs swipe-MotionEvent injection on X3 Pro) must be
-invisible to the end user.
+## 1. The product shape
+
+**Goal**: one ring should work as a remote for **two different AR glasses** (Rokid + RayNeo X3
+Pro) with **identical operations, UI content, and behaviour**. The implementation differences
+(DPAD key injection on Rokid vs swipe-MotionEvent injection on X3 Pro) must be invisible.
 
 We satisfy this with: **one Git repo, one `:core` Kotlin/JVM module (device-agnostic), and two
-Android product flavors (`rokid`, `rayneo`) that pull device-specific strategies from
-flavor-specific source sets**. Each flavor ships as a separate APK. The 90% shared / 10%
-different split lives along strategy-pattern interfaces ([§4 below](#4-the-four-device-strategies)).
+Android product flavors (`rokid`, `rayneo`)** that pull device-specific strategies from
+flavor-specific source sets. Each flavor ships as a separate APK.
 
-We considered "one APK with runtime device detection" — it works, but it's strictly more complex
-than two APKs for no real benefit beyond "fewer downloads", which doesn't matter when each user
-only has one or two pairs of glasses. The strategies are still resolved at runtime via
-`DeviceProfile` for sanity-checking + GENERIC_ANDROID dev fallback (so you can run a stub on a
-regular phone).
+In v0.4 the **HaloRingService (ForegroundService) is the system's main entry point**, not the
+Activity. The Activity is for configuration only and may be unopened for days at a time. Mirrors
+Constellation-Glass's "Service spine + HUD-first" model (`~/Code/Projects/Constellation-Glass/Doc/GLASS-CLIENT-DESIGN.md`).
 
 ## 2. Module graph
 
 ```
-:core      ─────────────►  pure Kotlin/JVM library (no Android deps)
-                            R08BleClient (interface), R08Protocol, R08Frame, RingEvent,
-                            GestureSynthesizer (the 12-gesture state machine),
-                            SystemGestures, InteractionRouter, Modal interface,
-                            GlassAction (sealed) + Capability, KeyMapProfile,
-                            DefaultProfiles, ModeManager, ActionRouter,
-                            ExecutorBackend (interface), DeviceStrategy interfaces
-                            (DisplayAdapter / GlassActionMapper / WearStateProvider /
-                            FeatureIntents), DeviceProfile.
-                            ── trivially unit-testable on JVM ──
-                            (GestureSynthesizerTest, R08FrameTest, ManualScheduler)
+:core      ─── pure Kotlin/JVM library (no Android deps; 282 tests) ───
+   R08Protocol, R08Frame, RingEvent, R08BleClient (interface),
+   GestureSynthesizer (the 12-gesture state machine), Scheduler,
+   SystemGestures, InteractionRouter, Modal interface,
+   GlassAction (sealed) + Capability + ModalSentinel + PluginAction codec,
+   KeyMapProfile, DefaultProfiles, ModeManager, ActionRouter,
+   ExecutorBackend (interface), DeviceStrategy interfaces
+   (DisplayAdapter / GlassActionMapper / WearStateProvider / FeatureIntents),
+   AccelProcessor (posture / free-fall / impact / wrist-shake),
+   PowerPolicy (3-band IntervalMode), DeviceProfile,
+   AdbMessage (wire packet for the agent bootstrap),
+   AgentWireProtocol (KEY/TAP/SWIPE/AM/BC/SH line protocol).
 
-:agent     ─────────────►  the app_process injection agent (small Java/Kotlin dex; runs as
-                            shell uid). LocalSocket server; reflects InputManager.injectInputEvent
-                            for ~1-3ms per gesture. Built once, bundled as a :app asset.
+:agent     ─── small Java/Kotlin dex; runs as shell uid ───
+   LocalServerSocket("halo.agent"); reflects InputManager.injectInputEvent
+   for ~1-3 ms per gesture. Built once, bundled as a :app asset.
 
-:app       ─────────────►  Android application. Compose. Foreground service.
-   main/                    HaloRingApplication, MainActivity, AppGraph,
-                            HaloRingService, BootReceiver,
-                            AndroidR08BleClient (BluetoothGatt impl of the core interface),
-                            AndroidScheduler (HandlerThread-backed Scheduler),
-                            HaloRingAccessibilityService,
-                            ExecutorBackend impls: AppProcessAgentBackend (LocalSocket to :agent),
-                            InotifydScriptBackend (fallback),
-                            AccessibilityBackend.
-   src/rokid/               RokidDisplayAdapter, RokidActionMapper, RokidFeatureIntents,
-                            RokidWearStateProvider; DeviceFlavorBindings wires them.
-   src/rayneo/              RayNeoDisplayAdapter, RayNeoActionMapper, RayNeoFeatureIntents,
-                            RayNeoWearStateProvider; depends on the Mercury AAR (optional).
+:app       ─── Android application. Compose. ForegroundService.
+   main/      HaloRingApplication, MainActivity (PairingActivity-shaped in v0.4),
+              AppGraph, HaloRingService, BootReceiver,
+              AndroidR08BleClient (BluetoothGatt impl of the core interface),
+              AndroidScheduler (HandlerThread-backed Scheduler),
+              HaloRingAccessibilityService,
+              ExecutorBackend impls: AppProcessAgentBackend (LocalSocket to :agent),
+              InotifydScriptBackend (fallback), AccessibilityBackend.
+              v0.4-added: SystemBroadcastReceiver (Rokid temple system broadcasts).
+              v0.4-removed: InAppFocusController, TempleFocusBridge, GuidedTour.
+   src/rokid/ Rokid strategies + DeviceFlavorBindings.
+   src/rayneo/ RayNeo strategies + DeviceFlavorBindings + Mercury AAR.
 
-→ ./gradlew :app:assembleRokidDebug  ⇒  app-rokid-debug.apk
-→ ./gradlew :app:assembleRayneoDebug ⇒  app-rayneo-debug.apk
+:test-plugin  ─── reference Doc/18 plugin app for integration testing ───
+
+→ ./gradlew :app:assembleRokidDebug   ⇒  app-rokid-debug.apk
+→ ./gradlew :app:assembleRayneoDebug  ⇒  app-rayneo-debug.apk
 ```
 
 ## 3. Runtime data flow
 
-What happens when the user does a gesture, end to end:
-
 ```
 [R08 ring]
-   ↓  BLE notify (`73 2D 03` for a single touch)
+   ↓  BLE notify (e.g. `73 2D 03` for a single touch)
 [AndroidR08BleClient]
-   ↓  100ms byte-identical dedup (carefully tuned per phase-0 measurement)
-   ↓  R08Frame.parse → RingEvent.GestureEvent(raw = TOUCH)
+   ↓  byte-level dedup (phase-0-calibrated window, ~40-60 ms)
+   ↓  R08Frame.parse → RingEvent (GestureEvent / Health / Activity / Battery / Capability / ...)
    ↓  post onto AndroidScheduler.handler (the pipeline's single thread)
 [InteractionRouter]
-   ↓  screen-off fast path?
-   ↓     if screen off AND raw == wakeGesture → emit ScreenWake → ActionRouter → done
-   ↓     if screen off AND not wake → drop (no false positives)
-   ↓  otherwise: continue to GestureSynthesizer
+   ↓  screen-off fast path? wake gesture → ScreenWake → ActionRouter → done; else drop
+   ↓  otherwise → GestureSynthesizer
 [GestureSynthesizer]
-   ↓  state-machine combines raw events into Gesture (TAP / DOUBLE_TAP / SWIPE_UP / ...)
-   ↓  timing windows: multi-tap (280ms), combo (300ms), long-press follow-up (400ms)
-[InteractionRouter (back to it)]
-   ↓  system-level layer:  systemGestures.sleep → ScreenSleep
-   ↓                        systemGestures.profileCycle → ModeManager.cycleNext
-   ↓                        systemGestures.peekHud → onPeekHud()  (UI callback)
-   ↓                        systemGestures.forceReconnect → onForceReconnect()
-   ↓  modal layer:          if a modal active, modal.handle(gesture) takes over
-   ↓  profile layer:        modeManager.active().actionFor(gesture) → GlassAction
+   ↓  state machine: 4 raw → 12 vocab (TAP / DOUBLE_TAP / ... / DOUBLE_LONG_PRESS)
+   ↓  timing windows: multi-tap (280 ms), combo (300 ms), long-press follow-up (400 ms)
+[InteractionRouter — second pass]
+   ↓  step 1: if base gesture (TAP/DOUBLE_TAP/SWIPE_UP/SWIPE_DOWN) AND useSystemKeyEvents=true
+   ↓          → SystemKeyDispatcher (KEYCODE_DPAD_CENTER/BACK/DPAD_RIGHT/DPAD_LEFT) → done
+   ↓  step 2: system slots (sleep / profileCycle / peekHud / AI_assistant)
+   ↓  step 3: active modal — modal.handle(gesture)
+   ↓  step 4: profile layer — modeManager.active().actionFor(gesture) → GlassAction
 [ActionRouter]
    ↓  per-flavor GlassActionMapper.capabilityFor(action) → Capability
-   ↓  pick highest-priority ExecutorBackend that has the Capability and isReady()
+   ↓  pick highest-priority ExecutorBackend that has Capability + isReady()
 [ExecutorBackend]
-   ↓  AppProcessAgentBackend → mapper.primitives(action) → LocalSocket command list to agent
+   ↓  AppProcessAgentBackend → mapper.primitives(action) → LocalSocket commands → agent
 [:agent (shell uid)]
-   ↓  parse line protocol, reflect InputManager.injectInputEvent
+   ↓  parse line protocol → InputManager.injectInputEvent via reflection
 [Android InputDispatcher]
    ↓  KeyEvent or MotionEvent goes to focused window
 [Glasses system UI / app reacts → frame renders]
 ```
 
+**v0.4 addition** — a second event source flows into the same `InteractionRouter`: temple
+touchpad **system ordered broadcasts** received by `HaloRingService.SystemBroadcastReceiver`
+(see §8.1). Ring and temple are unified at the routing layer.
+
 ## 4. The four device strategies
 
-The single source of truth for "what's different between glasses" is these four interfaces in
+The single source of truth for "what's different between glasses" — interfaces in
 [`core/.../device/DeviceStrategy.kt`](../app-project/core/src/main/kotlin/com/halo/ring/core/device/DeviceStrategy.kt):
 
-### 4.1 `DisplayAdapter` — how our app's own UI is rendered
+### 4.1 `DisplayAdapter`
 
 ```kotlin
 interface DisplayAdapter {
@@ -114,208 +114,327 @@ interface DisplayAdapter {
 }
 ```
 
-- **Rokid**: `isBinocular = false`, content area 480×480 (right-eye mono).
-- **RayNeo X3 Pro**: `isBinocular = true`, content area 640×480 per eye. With the Mercury SDK
-  AAR present, our Activity extends `BaseMirrorActivity` and gets free left/right mirroring.
-  Without the AAR (DIY fallback): we draw content twice into a 1280×480 surface with a small
-  parallax offset.
+- **Rokid Glasses**: `isBinocular=false`, content area **480×640 portrait** (per Rokid bare-metal
+  docs §00 — corrects pre-v0.4 docs that said 480×480).
+- **RayNeo X3 Pro**: `isBinocular=true`, content area 640×480 per eye. With the Mercury SDK AAR
+  the Activity extends `BaseMirrorActivity` and gets free left/right mirroring; without it, draw
+  content twice into a 1280×480 surface with parallax offset.
 
-### 4.2 `GlassActionMapper` — abstract action → device-specific injection
+### 4.2 `GlassActionMapper`
 
 ```kotlin
 interface GlassActionMapper {
-    fun capabilityFor(action: GlassAction): Capability?      // override what the action's needs are on this device
+    fun capabilityFor(action: GlassAction): Capability?
     fun primitives(action: GlassAction): List<InjectionPrimitive>
+    fun supports(action: GlassAction): Boolean
 }
 ```
 
-`InjectionPrimitive` is the IR the executor backend executes:
+`InjectionPrimitive` IR: `Key(keycode)` / `Tap(x,y)` / `Swipe(x1,y1,x2,y2,ms)` /
+`StartActivity(comp, extras)` / `Broadcast(action, extras)` / `Shell(cmd)` / `A11yGlobal(action)`.
 
-```kotlin
-sealed interface InjectionPrimitive {
-    data class Key(val keycode: Int)
-    data class Tap(val x: Int, val y: Int)
-    data class Swipe(val x1: Int, val y1: Int, val x2: Int, val y2: Int, val durationMs: Int)
-    data class StartActivity(val component: String, val extras: Map<String, String> = ...)
-    data class Broadcast(val action: String, val extras: ...)
-    data class Shell(val cmd: String)
-    data class A11yGlobal(val action: A11yGlobalAction)      // BACK / HOME / RECENTS / NOTIFICATIONS / QUICK_SETTINGS / LOCK_SCREEN / TAKE_SCREENSHOT / POWER_DIALOG
-}
-```
+- Rokid `NavPrev` → `Key(KEYCODE_DPAD_UP)` (capability `NAVIGATE` via `KEY_EVENT`)
+- RayNeo `NavPrev` → `Swipe(400, 240, 240, 240, 60ms)` (capability `NAVIGATE` via `TAP_SWIPE`)
 
-- **Rokid `NavPrev`** → `Key(KEYCODE_DPAD_UP)` — capability `NAVIGATE` satisfied by KEY_EVENT.
-- **RayNeo `NavPrev`** → `Swipe(400, 240, 240, 240, 60ms)` — capability `NAVIGATE` satisfied by
-  TAP_SWIPE.
+### 4.3 `WearStateProvider`
 
-Same `GlassAction.NavPrev`, totally different injection. The user has no idea.
+Drives **TOUCH_DISABLE on the ring** when not worn (power saving) + ring hand-over between
+glasses. Drives the `PowerPolicy.IntervalMode` decision.
 
-### 4.3 `WearStateProvider` — is the user wearing these glasses?
+- Rokid: `vendor.rkd.glasses.is_take_on` sysprop + `RokidDoorReceiver` broadcast + proximity
+- RayNeo: Mercury SDK 佩戴检测 module (`MobileState.isWearing()` via reflection)
+- Fallback: `ACTION_SCREEN_ON/OFF` proxy
 
-```kotlin
-interface WearStateProvider {
-    fun isWorn(): Boolean
-    fun observe(onChange: (worn: Boolean) -> Unit): () -> Unit
-}
-```
+### 4.4 `FeatureIntents`
 
-Drives **TOUCH_DISABLE on the ring** when not worn (power saving) and the **ring hand-over**
-between glasses (see [05](05-interaction-design.md) §5).
-
-- **Rokid**: `RokidDoorReceiver` broadcast + proximity sensor + hinge state (see
-  [03](03-target-platforms.md) §1.7). Fallback: `ACTION_SCREEN_ON/OFF` as a proxy.
-- **RayNeo X3 Pro**: Mercury SDK 佩戴检测 API. Fallback: same screen on/off proxy.
-
-### 4.4 `FeatureIntents` — abstract feature → device-specific Intent
-
-```kotlin
-interface FeatureIntents {
-    fun openCamera(): List<InjectionPrimitive>
-    fun takePhoto(): List<InjectionPrimitive>
-    fun askVisualAI(): List<InjectionPrimitive>
-    fun openTranslate(): List<InjectionPrimitive>
-    fun openChat(): List<InjectionPrimitive>
-    fun openMusic(): List<InjectionPrimitive>
-    fun openSettings(): List<InjectionPrimitive>
-    fun openGallery(): List<InjectionPrimitive>
-    fun launchApp(pkg: String): List<InjectionPrimitive>
-}
-```
-
-Each returns a sequence of primitives to invoke the feature on that device.
-
-- **Rokid**: fully populated from `rokid-docs/yodaos/docs/apps/sprite-launcher.md` — all 21
-  page Activities documented (see [03](03-target-platforms.md) §1.3).
-- **RayNeo**: mostly TODO until on-device discovery via `pm list packages` / `dumpsys activity
-  top` (see [11](11-verification-checklists.md) §B6). For now `launchApp` falls back to
-  `monkey -p <pkg> -c android.intent.category.LAUNCHER 1`.
-
-### 4.5 (Optional, dev-only) `DeviceProfile`
-
-Enum `{ ROKID_GLASSES, RAYNEO_X3PRO, GENERIC_ANDROID }`, resolved at startup from `Build.*`. The
-flavor build pins the right strategies; runtime detection is just a sanity check (catches "wrong
-APK installed") and lets us run a stubbed GENERIC build on a regular Android phone for development.
+Abstract feature → device-specific `am start` / `am broadcast` primitives. Both flavors implement
+`openCamera / takePhoto / askVisualAI / openTranslate / openChat / openMusic / openSettings /
+openGallery / launchApp(pkg)`. Rokid is fully populated; RayNeo has placeholders pending on-device
+discovery via `pm list packages` / `dumpsys activity top`.
 
 ## 5. Executor backends
 
-The `ExecutorBackend` interface — see [`core/.../inject/ExecutorBackend.kt`](../app-project/core/src/main/kotlin/com/halo/ring/core/inject/ExecutorBackend.kt):
+`ActionRouter` picks the highest-priority ready backend that has the action's required
+`Capability`. Multiple backends can be alive simultaneously.
 
-```kotlin
-interface ExecutorBackend {
-    val id: String
-    val priority: Int                              // higher = preferred
-    fun capabilities(): Set<Capability>            // probed at runtime
-    fun isReady(): Boolean
-    suspend fun perform(action: GlassAction): Boolean
-}
-```
+| # | Backend | Priority | Capabilities | Latency |
+|---|---|---|---|---|
+| 1 | **AppProcessAgentBackend** | 100 | NAVIGATE, KEY_EVENT, TAP_SWIPE, LAUNCH_INTENT, SHELL, + A11y globals | ~1-3 ms inject + ~3-7 ms socket overhead |
+| 2 | **ShizukuBackend** (optional) | 90 | Same as agent | ~5-10 ms |
+| 3 | **InotifydScriptBackend** | 60 | NAVIGATE, KEY_EVENT, TAP_SWIPE, LAUNCH_INTENT, SHELL | ~50-150 ms (`input` JVM spawn) |
+| 4 | **PollScriptBackend** | 40 | Same | ~100-200 ms |
+| 5 | **AccessibilityBackend** | 80 | BACK, HOME, RECENTS, NOTIFICATIONS (+ reads foreground pkg) | ~10-20 ms |
 
-The `ActionRouter` picks the highest-priority ready backend that has the action's required
-`Capability`. Multiple backends can be alive simultaneously; the router negotiates.
+The agent is the performance win — persistent process, persistent connection, reflects
+`InputManager.injectInputEvent(KeyEvent | MotionEvent, MODE_ASYNC)`. Line protocol over
+`LocalSocket("halo.agent")`: `KEY <keycode>` / `TAP <x> <y>` / `SWIPE x1 y1 x2 y2 ms` / `AM <args>` /
+`SH <raw>` / `PING`.
 
-### 5.1 The four backends, in priority order
+Accessibility cannot inject DPAD on Android 12 (API 33+). It's a helper for BACK/HOME/RECENTS and
+the foreground-package signal, never a replacement for the agent.
 
-| # | Backend | Priority | Capabilities | When available | Cost / latency |
-|---|---|---|---|---|---|
-| 1 | **AppProcessAgentBackend** | 100 | NAVIGATE, KEY_EVENT, TAP_SWIPE, LAUNCH_INTENT, SHELL, BACK, HOME, RECENTS, NOTIFICATIONS | After bootstrap wizard + agent running | ~1–3 ms / event |
-| 2 | **ShizukuBackend** (optional) | 90 | Same as agent | User has Shizuku/Sui installed | ~5–10 ms |
-| 3 | **InotifydScriptBackend** | 60 | Same as agent, minus pure shell speed | After bootstrap wizard | ~50–150 ms (`input keyevent` JVM spawn) |
-| 4 | **PollScriptBackend** | 40 | Same | Last-resort, `小猪`-style 50ms polling | ~100–200 ms |
-| 5 | **AccessibilityBackend** | 80 | BACK, HOME, RECENTS, NOTIFICATIONS (and reads foreground package for auto-switch) | User enabled accessibility service | ~10–20 ms |
-
-The agent is the performance win. It runs as a shell-uid process started by `app_process` (with
-classpath = our dex pushed to `/data/local/tmp/`). Once running, it serves a LocalSocket with a
-trivial line protocol (`KEY <keycode>` / `TAP <x> <y>` / `SWIPE x1 y1 x2 y2 ms` / `AM <args>` /
-`SH <raw>` / `PING`); the backend connects once at startup, then pipelines commands. The agent
-internally reflects `InputManager.injectInputEvent(KeyEvent | MotionEvent, MODE_ASYNC)` — same as
-scrcpy, same as Shizuku, ~1–3 ms per call.
-
-See [10-developer-guide.md](10-developer-guide.md) §6 for the agent's build + bootstrap flow.
-
-### 5.2 The Accessibility role
-
-We use AccessibilityService for *two* things, both optional:
-
-1. **Cheap Back/Home/Recents/Notifications/etc.** — even without ADB. `performGlobalAction`
-   covers these on Android 12.
-2. **Reading the foreground package** — `onAccessibilityEvent(TYPE_WINDOW_STATE_CHANGED)` →
-   feed the new package to `ModeManager.onForegroundPackage()` → auto-switch profile.
-
-Crucially, on Android 12 AccessibilityService **cannot inject DPAD key events**
-(`GLOBAL_ACTION_DPAD_*` is API 33+). It also can't inject MotionEvents reliably to the focus-based
-system UI. So it's a *helper*, never a replacement for the agent.
-
-## 6. The InteractionRouter (the top-level routing pipeline)
+## 6. The InteractionRouter (4-layer routing pipeline)
 
 [`core/.../gesture/InteractionRouter.kt`](../app-project/core/src/main/kotlin/com/halo/ring/core/gesture/InteractionRouter.kt)
-implements the 4-layer hierarchy. Layers, in order, top to bottom:
+runs the layers top to bottom:
 
 ```
 1. Screen-state gateway
-   ↓ if screen off:
-   ↓   raw == wakeGesture → ScreenWake → done
-   ↓   else                → drop
-   ↓ if screen on: continue
-2. System-level gestures
-   ↓ gesture == sleepGesture          → ScreenSleep → done
-   ↓ gesture == profileCycle (3-tap)  → ModeManager.cycleNext + LED ack → done
-   ↓ gesture == peekHud (4-tap)       → show HUD 2s → done
-   ↓ gesture == forceReconnect (2-LP) → R08BleClient.reconnect → done
-   ↓ else: continue
-3. Modal layer (when active)
-   ↓ activeModal.handle(gesture) → GlassAction
-   ↓ if handled, dispatch; if sentinel Exit/Cancel, exit modal
-4. Profile layer
+   ↓ screen off: raw == wakeGesture → ScreenWake → done; else drop
+2. Base-gesture system-KeyEvent passthrough (v0.4)
+   ↓ if useSystemKeyEvents AND gesture ∈ {TAP, DOUBLE_TAP, SWIPE_UP, SWIPE_DOWN}
+   ↓    SystemKeyDispatcher.dispatch(keycode) → done
+3. System-level gestures (5 slots)
+   ↓ sleep / profileCycle / peekHud / AI_assistant / capability-gated extras → done
+4. Modal layer
+   ↓ activeModal.handle(gesture) → GlassAction; sentinel Exit/Cancel/FireAndExit semantics
+5. Profile layer
    ↓ modeManager.active().actionFor(gesture) → GlassAction → ActionRouter
 ```
 
-This separation is what lets:
-- Sleep/wake gestures be **system-wide** regardless of the active profile
-- The 5-second manual-lock on profile switching not interfere with screen on/off
-- A modal own the user's attention (e.g. "Volume modal" — swipes change volume) without
-  permanently rebinding gestures
-- The screen-off fast path **bypass the gesture synthesiser entirely** so wake-via-long-press has
-  zero synthesis latency (since `LONG_PRESS` is a raw event from the ring, not synthesised)
+Layer 2 is the v0.4 addition (hard-locked base passthrough). See [Doc/20 §3](20-v0.4-design.md)
+for why and [Doc/05 §3.8](05-interaction-design.md) for behaviour detail.
 
-## 7. The pipeline thread
+## 7. Performance & power
 
-The whole pipeline (BLE callback dedup → frame parse → InteractionRouter → synthesiser → modal /
-profile → ActionRouter → executor) runs on **one HandlerThread**, the `AndroidScheduler`. BLE
-callbacks land on the binder thread; the BLE client immediately posts onto the scheduler. This
-gives the gesture state machine **race-free single-threaded execution** without any locks.
+### 7.1 End-to-end latency budget
 
-The agent socket I/O is on its own thread (sending; receiving is non-blocking ACKs). The
-foreground service notification + Compose UI live on the main thread.
+```
+①  Ring firmware: touch IC → RF03 → BLE frame  ─── ~5-20 ms (fixed)
+②  Frame waits for next BLE connection event ──── 0 to conn_interval (lever A)
+③  BLE radio → glasses BT controller → HAL ────── ~5-15 ms (system)
+④  GestureSynthesizer window ──────────────────── 0 ms (optimistic / swipe / wake) or 280-400 ms (multi-tap / combo)
+⑤  ActionRouter → ExecutorBackend → injection ── ~5-10 ms (agent) / 50-150 ms (input cmd)
+⑥  System InputDispatcher → focused window ───── ~16-50 ms (1-2 frames)
+```
 
-Wakelock: **none**. The BT controller's interrupt wakes the CPU on every notify; no explicit
-wakelock needed. (`com.ring.r08remote`'s persistent `PARTIAL_WAKE_LOCK` is one of its biggest
-power waste — see [06](06-performance-and-power.md) §3.)
+Targets (p95): SWIPE / optimistic-TAP / LONG_PRESS = **50-80 ms**; ScreenWake = **<150 ms**;
+multi-tap = synthesis cost + ~50-80 ms; LP+combo = +400 ms.
 
-## 8. Lifecycle & resident running
+### 7.2 The two latency levers
 
-- **`HaloRingService`** — foreground service, type `connectedDevice`. Quiet low-priority
+**Lever A — BLE connection interval** (step ②). On connect call
+`requestConnectionPriority(CONNECTION_PRIORITY_HIGH)` → ~15-30 ms. Idle-relax timer drops to
+`BALANCED` (~75-100 ms) after 10 s; screen-off + worn drops to `LOW_POWER` (~200-500 ms). Next
+gesture snaps back to HIGH.
+
+**Lever B — Injection path** (step ⑤). Agent (~1-3 ms) > Shizuku (~5-10 ms) > inotifyd (~50-150 ms)
+> shell polling (~100-200 ms). Default agent; fallback ladder when unavailable.
+
+### 7.3 Power state machine
+
+`PowerPolicy` (`:core`, 12 tests) decides `(touchEnabled, intervalMode, disconnect)` from
+`(worn, screenOn, lastActivityMs, lastWornMs, nowMs)`:
+
+| Wear state | Screen | Touch IC | BLE interval | Reason |
+|---|---|---|---|---|
+| Not worn for ≥5 min | (n/a) | DISABLE | (disconnect) | Save everything |
+| Not worn <5 min | (n/a) | DISABLE | BALANCED | Quick re-arm if user puts ring back on |
+| Worn | OFF | **ENABLE** | **SLOW** (~200-500 ms) | Wake-gesture must remain listenable |
+| Worn | ON, active (<10 s ago) | ENABLE | HIGH (~15-30 ms) | Low-latency stream |
+| Worn | ON, idle (≥10 s) | ENABLE | BALANCED (~75-100 ms) | Save while not actively interacting |
+
+Touch IC stays on when worn + screen-off so the wake-gesture works.
+
+### 7.4 The three power wastes we avoid (vs the reference `小猪遥控戒指` app)
+
+- **No persistent CPU wakelock**. BLE controller IRQ wakes the CPU on every notify; that's enough.
+- **No app-level scan loop**. `connectGatt(autoConnect=true)` — BT stack handles low-duty-cycle
+  background scanning. App-level scan only on explicit "find ring" / `ForceReconnect`.
+- **Event-driven injection**, not polled. Agent LocalSocket OR inotifyd. Zero CPU when idle.
+
+Plus our foreground notification is `IMPORTANCE_LOW` + silent.
+
+### 7.5 Reliability
+
+- **De-duplication**: BLE may re-deliver identical notify within ms. Drop byte-identical packets
+  in `AndroidR08BleClient` before parsing. Window calibrated per phase-0 (~40-60 ms).
+- **Threading**: pipeline runs on one HandlerThread (`AndroidScheduler`). BT callbacks post via
+  `scheduler.post`. No shared mutable state → no races, no locks.
+- **Connection robustness**: `connectGatt(autoConnect=true)` + 30 s scan timeout + MAC whitelist
+  via `RingPairingPrefsStore` + `armWakeSwallow()` on every reconnect.
+- **Idempotence trackers**: `lastTouchEnabledRequested` / `lastIntervalModeRequested` prevent BLE
+  write storms; reset on disconnect/stop.
+
+## 8. Target platforms
+
+### 8.1 Rokid Glasses (YodaOS-Sprite, Android 12 Go)
+
+Authoritative source: `~/Code/Projects/Constellation/reference/rokid-glass/bare-metal-docs/`
+(captured 2026-05-26 from custom.rokid.com).
+
+| Property | Value |
+|---|---|
+| Model | RG-glasses |
+| OS | YodaOS-Sprite (Android 12 Go, API 32) |
+| Display | JBD JBD4020 Micro-LED, **right eye only**, **480×640 portrait** |
+| IMU | InvenSense ICM-4x6xx (accel + gyro + freefall) via I3C |
+| Speech co-proc | NXP RT600 (iFlytek + Rokid KWS) |
+| Default locale | zh-CN |
+
+**Input** — Rokid publishes temple touchpad actions as **system ordered broadcasts** AND
+standard Android KeyEvents. Halo Ring's `SystemBroadcastReceiver` (on `HaloRingService`)
+registers these:
+
+| KeyType | Action constant | Notes |
+|---|---|---|
+| `CLICK` | `com.android.action.ACTION_SPRITE_BUTTON_CLICK` | Side-key single click |
+| `DOUBLE_CLICK` | `com.android.action.ACTION_SPRITE_BUTTON_DOUBLE_CLICK` | **System-occupied = back; can't abortBroadcast()** |
+| `LONG_PRESS` | `com.android.action.ACTION_SPRITE_BUTTON_LONG_PRESS` | Side-key long press |
+| `ACTION_TWO_FINGER_SINGLE_TAP` | (same as constant) | |
+| `ACTION_TWO_FINGER_DOUBLE_TAP` | (same) | |
+| `ACTION_TWO_FINGER_SWIPE_FORWARD` | (same) | |
+| `ACTION_TWO_FINGER_SWIPE_BACK` | (same) | |
+| `ACTION_SETTINGS_KEY` | (same — 二指长按) | Used to launch Halo Ring config |
+| `AI_START` | `com.android.action.ACTION_AI_START` | **System-occupied; can't intercept** |
+
+`priority=100` + `abortBroadcast()` available for non-system-occupied entries. KeyEvents on the
+foreground Activity are still consumed by Compose's `FocusManager` for navigation when the
+config Activity is visible.
+
+**System launcher**: Sprite Launcher (`com.rokid.os.sprite.launcher`) is focus-based with DPAD
+key transport. 21 launchable page Activities including:
+- Camera: `am start -n com.rokid.os.sprite.launcher/.page.camera.CameraPageActivity`
+- AI chat (everyday): `…/.page.chat.ChatPageActivity`
+- Translate: `…/.page.translate.TranslatePageActivity`
+- Word tips (teleprompter): `…/.page.wordtips.WordTipsPageActivity`
+- Music / Navigation / Payment / Settings (full list in `bare-metal-docs/`)
+- "Open any installed app": `am broadcast -a com.rokid.os.sprite.launcher.cmd --es cmd open_app --es pkg <pkg>`
+- Visual AI: `am broadcast -a com.rokid.visualaidemo.ACTION_START`
+
+These are wired into `RokidFeatureIntents` (`app/src/rokid/.../RokidStrategies.kt`).
+
+**No touchscreen on Rokid.** Any `Modifier.pointerInput { }` / `detectTapGestures` / drag in
+shared code is dead. Stay focus-driven; `Modifier.clickable()` (DPAD_CENTER triggers it) is fine.
+
+**Wear detection**: `RokidDoorReceiver` broadcast + proximity sensor + hinge state.
+
+**ADB bootstrap**: 5-pin development cable + companion phone app (one-time). Then `pm grant
+WRITE_SECURE_SETTINGS` lets us toggle wireless debugging on subsequent reboots.
+
+### 8.2 RayNeo X3 Pro (RayNeo AIOS 2.0)
+
+Source: official docs at https://rayneo.gitbook.io/rayneo-devdoc/.
+
+| Property | Value |
+|---|---|
+| Model code | ARGF20 |
+| OS | RayNeo AIOS 2.0 (Android 12+, API ≥ 31) |
+| SoC | Snapdragon AR1 Gen 1 |
+| RAM/ROM | 4 GB / 32 GB |
+| Display | Full-colour MicroLED + diffractive waveguide; **dual-eye 1280×480 (640×480/eye)**; ~30° FOV |
+| Cameras | 12 MP RGB + VGA spatial |
+| Sensors | `TYPE_GAME_ROTATION_VECTOR` @ 219 Hz; Mercury SDK 佩戴检测 |
+| Weight | 76 g |
+
+**Input** — temple touchpad delivers raw Android `MotionEvent`s to the foreground Activity. The
+ARSDK (Mercury) `TouchDispatcher` recognises gestures and dispatches `TempleAction`s:
+`Click`, `DoubleClick`, `TripleClick`, `LongClick`, `SlideForward/Backward/Upwards/Downwards`,
+`TpSlideContinuous`, X3-only `onTPDoubleFingerClick/LongClick`.
+
+To drive the system UI we inject **swipe MotionEvents** (the launcher's focus controller expects
+them). DPAD keys *might* also work — verify on first hardware.
+
+**Mercury SDK** (`com.ffalcon.mercury.android.sdk`, AAR from open.rayneo.com): 合目处理
+(`BaseMirrorActivity`), 焦点管理 (`FocusHolder` + `FocusInfo`), 触控板 (`BaseTouchActivity`),
+3D 效果, audio, camera, IMU, phone link, 佩戴检测. We base the rayneo Activity on
+`BaseMirrorActivity` for free binocular mirroring.
+
+**Sideload**: Settings → swipe left ×10 → developer mode → USB-C data cable → adb.
+
+**Intent map TBD** — RayNeo doesn't publicly document launcher Intent strings. Discover on-device
+via `dumpsys activity top` / `pm list packages`. Until then `RayNeoFeatureIntents` falls back to
+`monkey -p <pkg> -c LAUNCHER 1`.
+
+### 8.3 Same / different cheat-sheet
+
+| | Rokid | RayNeo X3 Pro |
+|---|---|---|
+| Android | 12 (API 32) | 12+ (API ≥ 31) |
+| Display | mono 480×640 portrait | binocular 1280×480 |
+| Temple input | **Ordered broadcasts** + DPAD KeyEvents | Mercury TouchDispatcher (MotionEvents) |
+| Inject for nav | DPAD KeyEvents (system Sprite Launcher) | Swipe MotionEvents |
+| Feature intents | Fully documented (Sprite Launcher 21 pages) | TBD via dumpsys |
+| Wear detection | `RokidDoorReceiver` + sysprop | Mercury 佩戴检测 |
+| Public system-app dump | Yes (rokid-docs) | No |
+
+## 9. Sensor utilisation matrix (formerly Doc/07 §1.1)
+
+Confidence: 🟢 R08-verified per SPEC v3 / 🟡 plausible / 🔵 still speculative / 🔴 conflicting.
+
+| Source | Data | Direction | Power cost | Role | Confidence |
+|---|---|---|---|---|---|
+| Touch ring | 4 raw events (`73 2D 01..04`) | push | Touch IC always-on while enabled = dominant ring drain | **Control core** | 🟢 |
+| Touch status echo | `73 2A` | push | — | Wear-state signal (charging dock detection) | 🟢 |
+| Battery | `0x03 <level>` poll + `73 0C` push | both | trivial | Passive HUD + adaptive | 🟢 |
+| Activity totals push | `73 12 <steps_BE24, kcal_BE24/1000, dist_BE24/1000>` | push | zero extra | Passive stats | 🟢 |
+| Activity totals canonical | `0x48` 14-byte BE response | pull | trivial | Passive stats (richer than push) | 🟢 |
+| HR (real-time) | `0x69 01 01` start / `0x6A` stop | start/stop stream | PPG LED on = **large** | On-demand snapshot (15-25 s convergence) | 🟢 |
+| SpO2 (real-time) | `0x69 03 01` | same | same | On-demand | 🟢 |
+| Stress / HRV / Temp | `0x69 <kind> 01` (8/10/11) | same | same | Progress-only on this fw per SPEC §4.5 | 🟡 |
+| Wear via `0x69 errCode` | err byte in response | passive | — | Cheap wear-state hint | 🟢 |
+| HR history / HRV / stress / step / sleep history | `0x15` / `0x39` / `0x37` / `0x43` / `0x44` multi-packet | pull | low | On-demand | 🟢 per SPEC §4.7 |
+| Auto-monitor cadence | `0x16` / `0x2C` / `0x36` / `0x38` | r/w | low | Config (ring is cadence master) | 🟢 |
+| Accelerometer | `0xA1` 16B frame, 3-axis int16 LE payload | push (subscription) | low (~64 B/s when ON) | **Spatial — AccelProcessor: posture/free-fall/impact/wrist-shake** | 🟢 |
+| LED + vibration | `0x50 [0x55, 0xAA]` (Find Ring) | write | trivial | **Output channel** | 🟢 verified on burn-in |
+| Soft reboot | `0x08` | write | trivial | (Avoid — `0x08` is OTA-mode entry; would brick) | 🟢 negative-verified |
+| Capability bitmap | SetTime 14B response + `0x3C` 9B response | pull (once per connect) | trivial | Feature gating per fw | 🟢 verified |
+| Time sync | `0x01` BCD UTC+8 (per SPEC §4.8) | write (once per connect) | trivial | Required for any history read | 🟢 |
+| Sport session | `0x77 [01, sport_type]` start, `0x78` ticks (duration + HR), `0x77 [00]` stop | push during session | medium (~64 B/s) | Workout tracking | 🟢 verified |
+| Firmware / HW revision | GATT `0x2A26` / `0x2A27` | pull | trivial | About panel + identity | 🟢 |
+| Spontaneous reconnect quirk | SPEC §6.5 — 10-20 s cycle on this fw | — | — | Self-heals; ignore | 🟡 fw-specific |
+
+Glasses-side sensors (Doc/03 covers in §8.1-§8.2): IMU (head pose), wear detection, screen state,
+battery, foreground app (drives auto-switch profile).
+
+## 10. Threading + lifecycle
+
+- **`HaloRingService`** — ForegroundService, type `connectedDevice`, low-priority silent
   notification.
 - **`BootReceiver`** — restarts the service on boot / unlock / package replace.
 - **Battery optimisation exemption** — `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` requested in the
-  first-run wizard; without it Android Doze kills our service after some hours.
-- **Agent process** — also persists across our service restarts (started via `nohup`); has a
-  heartbeat file `/data/local/tmp/halo.agent.heartbeat`. If the heartbeat is stale, the service
-  re-spawns it.
+  pairing flow; without it Android Doze kills the service after some hours.
+- **Agent process** — persists across our service restarts (`nohup`); heartbeat file
+  `/data/local/tmp/halo.agent.heartbeat`; service re-spawns if stale.
+- **No persistent wakelock** (see §7.4).
+- **Pipeline thread**: one HandlerThread (`AndroidScheduler`). All `:core` state machine
+  mutations land here. BT callbacks post-onto. Agent socket I/O hops to `Dispatchers.IO`.
+  HUD overlay `show/hide/setPosition` are `runOnMain`-wrapped internally.
 
-See [06-performance-and-power.md](06-performance-and-power.md) for the low-power state machine
-that gates `TOUCH_ENABLE/DISABLE` and BLE connection interval.
+## 11. v0.4 cuts and additions
 
-## 9. Where things live
+| Status | Component |
+|---|---|
+| **Added** | `SystemBroadcastReceiver` (Rokid temple system broadcasts → InteractionRouter) |
+| **Added** | `SystemKeyDispatcher` interface in `:core` + `ActivitySystemKeyDispatcher` in `:app` |
+| **Added** | `GestureConfig.useSystemKeyEvents` (default true) + `reverseSwipeSemantics` (default false) |
+| **Removed** | `InAppFocusController` — Compose `FocusManager` + system KeyEvents replace it |
+| **Removed** | `TempleFocusBridge` scaffolding — system broadcast path replaces it |
+| **Removed** | `GuidedTour` — Test Arena does the same job |
+| **Shrunk** | `FirstRunWizardScreen` 5 → 1 step (pair ring only) |
+| **Shrunk** | `AdvancedScreen`, `AboutScreen`, `PowerConnectionScreen` |
+| **Converted** | `StatusScreen` full-screen panel → HUD-overlay trigger |
+| **Reorganised** | Settings 10 flat items → 5 groups (Ring / Vitals / Gestures / Plugins / More) |
+
+See [Doc/20 §4-§5](20-v0.4-design.md) for rationale. The deletes happen in code refactor C1
+(Doc/20 §11).
+
+## 12. Where things live
 
 | Concern | File(s) |
 |---|---|
 | BLE protocol constants | `core/.../ble/R08Protocol.kt` |
 | Notify-frame parsing | `core/.../ble/R08Frame.kt` |
 | Gesture state machine | `core/.../gesture/GestureSynthesizer.kt` (+ `Gestures.kt`, `Scheduler.kt`) |
+| System KeyEvent dispatch | `core/.../gesture/SystemKeyDispatcher.kt` + `app/.../ui/ActivitySystemKeyDispatcher.kt` |
 | Top-level routing | `core/.../gesture/InteractionRouter.kt` (+ `SystemGestures.kt`) |
 | Action vocabulary | `core/.../action/Action.kt` |
 | Default profiles | `core/.../action/DefaultProfiles.kt` |
 | Profile + auto-switch | `core/.../action/KeyMapProfile.kt`, `ModeManager.kt` |
 | Action routing | `core/.../action/ActionRouter.kt` |
+| Plugin protocol codec | `core/.../action/GlassActionCodec.kt` + `PluginAction` variant |
+| Power policy | `core/.../power/PowerPolicy.kt` |
+| Accelerometer processing | `core/.../sensor/AccelProcessor.kt` |
 | Executor interface | `core/.../inject/ExecutorBackend.kt` |
 | Device strategy interfaces | `core/.../device/DeviceStrategy.kt` |
 | Android BLE client | `app/src/main/.../ble/AndroidR08BleClient.kt` |
@@ -326,3 +445,4 @@ that gates `TOUCH_ENABLE/DISABLE` and BLE connection interval.
 | Rokid strategies | `app/src/rokid/.../device/rokid/RokidStrategies.kt` |
 | RayNeo strategies | `app/src/rayneo/.../device/rayneo/RayNeoStrategies.kt` |
 | Agent body | `agent/src/main/.../Main.kt` |
+| HUD overlay | `app/src/main/.../ui/hud/HudOverlay.kt` + `HudEvent.kt` + `HudServiceHost.kt` |

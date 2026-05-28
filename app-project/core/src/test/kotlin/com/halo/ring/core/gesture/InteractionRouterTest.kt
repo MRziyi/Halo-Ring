@@ -96,21 +96,85 @@ class InteractionRouterTest {
         assertTrue(b.dispatched.isEmpty(), "system-level cycle must not hit the backend")
     }
 
-    @Test fun `LONG_PRESS_SWIPE_DOWN routes to ScreenSleep system action`() = runBlocking<Unit> {
+    @Test fun `LONG_PRESS routes to ScreenSleep system action when screen on - v04 screen-toggle`() = runBlocking<Unit> {
+        // v0.4: LONG_PRESS is the system SLEEP gesture when the screen is on (and WAKE when off).
         val (ir, _, _, b) = fixture()
-        ir.onGesture(Gesture.LONG_PRESS_SWIPE_DOWN)
+        ir.onGesture(Gesture.LONG_PRESS)
         assertEquals(listOf<GlassAction>(GlassAction.ScreenSleep), b.dispatched)
     }
 
     // ── profile layer ──────────────────────────────────────────────────────────────────────────
 
-    @Test fun `TAP in default Navigation profile dispatches Confirm to the backend`() = runBlocking<Unit> {
+    @Test fun `TAP base gesture fires DPAD_CENTER via systemKeyDispatcher and skips backend`() = runBlocking<Unit> {
+        // v0.3 P1 (Doc/19): the 4 BASE gestures bypass the profile/backend and fire system
+        // KeyEvents to mirror Rokid temple-touchpad semantics. The default GestureConfig has
+        // useSystemKeyEvents = true.
         val (ir, _, _, b) = fixture()
+        val dispatched = mutableListOf<Int>()
+        ir.systemKeyDispatcher = SystemKeyDispatcher { code -> dispatched += code; true }
+        ir.onGesture(Gesture.TAP)
+        assertEquals(listOf(SystemKeyMapping.KEYCODE_DPAD_CENTER), dispatched)
+        assertTrue(b.dispatched.isEmpty(), "backend must be skipped — base gesture is system KeyEvent")
+    }
+
+    @Test fun `DOUBLE_TAP base gesture fires KEYCODE_BACK and skips backend`() = runBlocking<Unit> {
+        val (ir, _, _, b) = fixture()
+        val dispatched = mutableListOf<Int>()
+        ir.systemKeyDispatcher = SystemKeyDispatcher { code -> dispatched += code; true }
+        ir.onGesture(Gesture.DOUBLE_TAP)
+        assertEquals(listOf(SystemKeyMapping.KEYCODE_BACK), dispatched)
+        assertTrue(b.dispatched.isEmpty())
+    }
+
+    @Test fun `SWIPE_UP fires DPAD_UP + DPAD_LEFT (both axes for vertical+horizontal UIs)`() = runBlocking<Unit> {
+        // On-glasses fix 2026-05-27: swipe dispatches BOTH a vertical and a horizontal DPAD key so
+        // it navigates vertical lists (home/notifications/in-app) AND the horizontal Sprite
+        // Launcher app list. Only the axis with a focusable neighbour actually moves.
+        val (ir, _, _, _) = fixture()
+        val dispatched = mutableListOf<Int>()
+        ir.systemKeyDispatcher = SystemKeyDispatcher { code -> dispatched += code; true }
+        ir.onGesture(Gesture.SWIPE_UP)
+        assertEquals(listOf(SystemKeyMapping.KEYCODE_DPAD_UP, SystemKeyMapping.KEYCODE_DPAD_LEFT), dispatched)
+    }
+
+    @Test fun `reverseSwipeSemantics flips SWIPE_UP to DPAD_DOWN + DPAD_RIGHT`() = runBlocking<Unit> {
+        val (ir, mm, _, _) = fixture()
+        // Patch the active profile's gesture config to enable the reverse-semantics toggle.
+        val reversed = mm.active().copy(
+            gestureConfig = mm.active().gestureConfig.copy(reverseSwipeSemantics = true)
+        )
+        mm.upsert(reversed)
+        val dispatched = mutableListOf<Int>()
+        ir.systemKeyDispatcher = SystemKeyDispatcher { code -> dispatched += code; true }
+        ir.onGesture(Gesture.SWIPE_UP)
+        assertEquals(listOf(SystemKeyMapping.KEYCODE_DPAD_DOWN, SystemKeyMapping.KEYCODE_DPAD_RIGHT), dispatched)
+    }
+
+    @Test fun `useSystemKeyEvents=false falls back to profile-mapped GlassAction`() = runBlocking<Unit> {
+        val (ir, mm, _, b) = fixture()
+        // Disable v0.3 P1 passthrough — TAP should now route through profile → Confirm → backend
+        // (the pre-v0.3 behaviour, for users who want the old custom focus management).
+        val classic = mm.active().copy(
+            gestureConfig = mm.active().gestureConfig.copy(useSystemKeyEvents = false)
+        )
+        mm.upsert(classic)
         ir.onGesture(Gesture.TAP)
         assertEquals(listOf<GlassAction>(GlassAction.Confirm), b.dispatched)
     }
 
+    @Test fun `custom (non-base) gesture still routes through profile + backend`() = runBlocking<Unit> {
+        // LONG_PRESS_SWIPE_UP is NOT a base gesture and NOT a system gesture — Navigation profile
+        // maps it to Notifications. Even with useSystemKeyEvents=true it goes through dispatch().
+        // (LONG_PRESS itself is now the system screen-toggle, so we use the combo here.)
+        val (ir, _, _, b) = fixture()
+        ir.onGesture(Gesture.LONG_PRESS_SWIPE_UP)
+        assertEquals(listOf<GlassAction>(GlassAction.Notifications), b.dispatched)
+    }
+
     // ── foreground bypass (inAppShortCircuit) ──────────────────────────────────────────────────
+    // v0.3 P1: base gestures don't reach inAppShortCircuit (systemKeyDispatcher handles them).
+    // v0.4: LONG_PRESS is now the system screen-toggle, so these use LONG_PRESS_SWIPE_UP (a
+    // non-base, non-system gesture mapped to Notifications in Navigation) to exercise the shortcut.
 
     @Test fun `inAppShortCircuit returning true prevents backend dispatch`() = runBlocking<Unit> {
         val (ir, _, _, b) = fixture()
@@ -119,16 +183,16 @@ class InteractionRouterTest {
             shortCircuited += action
             true   // claim we handled it
         }
-        ir.onGesture(Gesture.TAP)
-        assertEquals(listOf<GlassAction>(GlassAction.Confirm), shortCircuited.toList())
+        ir.onGesture(Gesture.LONG_PRESS_SWIPE_UP)   // Navigation maps LONG_PRESS_SWIPE_UP → Notifications
+        assertEquals(listOf<GlassAction>(GlassAction.Notifications), shortCircuited.toList())
         assertTrue(b.dispatched.isEmpty(), "backend must be skipped when shortcut returns true")
     }
 
     @Test fun `inAppShortCircuit returning false falls through to backend dispatch`() = runBlocking<Unit> {
         val (ir, _, _, b) = fixture()
         ir.inAppShortCircuit = { false }
-        ir.onGesture(Gesture.TAP)
-        assertEquals(listOf<GlassAction>(GlassAction.Confirm), b.dispatched)
+        ir.onGesture(Gesture.LONG_PRESS_SWIPE_UP)
+        assertEquals(listOf<GlassAction>(GlassAction.Notifications), b.dispatched)
     }
 
     @Test fun `inAppShortCircuit is NOT consulted for in-app pseudo-actions`() = runBlocking<Unit> {
