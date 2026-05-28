@@ -1,6 +1,10 @@
 package com.halo.ring.ui
 
+import android.accessibilityservice.AccessibilityService
 import android.util.Log
+import android.view.KeyEvent
+import android.view.accessibility.AccessibilityNodeInfo
+import com.halo.ring.accessibility.HaloRingAccessibilityService
 import com.halo.ring.core.gesture.SystemKeyDispatcher
 import com.halo.ring.inject.AppProcessAgentBackend
 import kotlinx.coroutines.CoroutineScope
@@ -9,24 +13,19 @@ import kotlinx.coroutines.launch
 /**
  * v0.4 — the base-gesture KeyEvent dispatcher used by [com.halo.ring.core.gesture.InteractionRouter].
  *
- * Routes the 4 base gestures' system KeyEvents (DPAD_CENTER / BACK / DPAD_UP / DPAD_DOWN) to the
- * right channel depending on whether the Halo Ring config Activity is foreground:
+ * Dispatch priority (out-of-app only — in-app uses [ActivitySystemKeyDispatcher]):
  *
- *  1. **Foreground** → [ActivitySystemKeyDispatcher] dispatches into our own window via
- *     `Activity.dispatchKeyEvent`. Fast, no agent required — this is how the ring drives Halo
- *     Ring's own config UI.
- *  2. **Not foreground** (the wearer is in Sprite Launcher / a third-party app) →
- *     [AppProcessAgentBackend.injectKey] injects the same keycode **system-wide** via
- *     `InputManager.injectInputEvent`. This is the "ring as a wireless temple touchpad for the
- *     whole glasses" path — it only works once the on-device ADB bootstrap has installed + started
- *     the agent (Doc/20; the wizard's ADB step / `bootRecoverAgent`).
+ *  1. **Agent** ([AppProcessAgentBackend.injectKey]) — full system-wide KeyEvent injection via
+ *     `InputManager.injectInputEvent` as shell uid. Requires the ADB bootstrap to have run.
+ *     On agent-not-ready, falls through to path 2.
  *
- * If neither channel is available (no foreground Activity AND no agent yet), the gesture is
- * dropped — the wearer needs to finish the ADB setup to control apps outside Halo Ring.
- *
- * [dispatch] is called from the scheduler thread (gesture pipeline). The activity path posts to
- * the main thread internally; the agent path is launched on [scope] (bound to the scheduler
- * dispatcher) so the suspend `injectKey` runs off the synchronous dispatch call.
+ *  2. **Accessibility service fallback** ([HaloRingAccessibilityService]) — covers the agent-down
+ *     window (reboot before Wi-Fi comes up, first run). Limited to:
+ *       • BACK → `performGlobalAction(GLOBAL_ACTION_BACK)`
+ *       • HOME → `performGlobalAction(GLOBAL_ACTION_HOME)`
+ *       • DPAD_CENTER → `ACTION_CLICK` on the focused node
+ *       • DPAD_UP/DOWN → `ACTION_SCROLL_BACKWARD/FORWARD` on the focused node
+ *     Not available for arbitrary keycodes (third-party app media keys etc.) — those are dropped.
  */
 class CompositeSystemKeyDispatcher(
     private val agentBackend: AppProcessAgentBackend?,
@@ -34,22 +33,49 @@ class CompositeSystemKeyDispatcher(
 ) : SystemKeyDispatcher {
 
     override fun dispatch(keyCode: Int): Boolean {
-        // 1. In-app fast path. ActivitySystemKeyDispatcher returns false ONLY when no Halo Ring
-        //    Activity is foreground (its WeakReference is null) — that's our "we're backgrounded"
-        //    signal.
         if (ActivitySystemKeyDispatcher.dispatch(keyCode)) return true
 
-        // 2. Out-of-app: inject system-wide via the agent.
         val agent = agentBackend
-        if (agent == null) {
-            Log.d(TAG, "no agent backend wired; dropping out-of-app keycode $keyCode")
+        if (agent != null) {
+            scope.launch {
+                val ok = agent.injectKey(keyCode)
+                if (!ok) {
+                    Log.d(TAG, "agent not ready; a11y fallback for keycode $keyCode")
+                    injectViaA11y(keyCode)
+                }
+            }
+            return true
+        }
+
+        // No agent wired at all — use accessibility service directly.
+        scope.launch { injectViaA11y(keyCode) }
+        return true
+    }
+
+    private fun injectViaA11y(keyCode: Int): Boolean {
+        val a11y = HaloRingAccessibilityService.instance ?: run {
+            Log.d(TAG, "no agent, no a11y service; keycode $keyCode dropped")
             return false
         }
-        scope.launch {
-            val ok = agent.injectKey(keyCode)
-            if (!ok) Log.d(TAG, "agent not ready; out-of-app keycode $keyCode dropped (run ADB setup)")
+        return when (keyCode) {
+            KeyEvent.KEYCODE_BACK ->
+                a11y.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)
+            KeyEvent.KEYCODE_HOME ->
+                a11y.performGlobalAction(AccessibilityService.GLOBAL_ACTION_HOME)
+            KeyEvent.KEYCODE_DPAD_CENTER ->
+                a11y.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
+                    ?.performAction(AccessibilityNodeInfo.ACTION_CLICK) ?: false
+            KeyEvent.KEYCODE_DPAD_UP ->
+                a11y.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
+                    ?.performAction(AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD) ?: false
+            KeyEvent.KEYCODE_DPAD_DOWN ->
+                a11y.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
+                    ?.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD) ?: false
+            else -> {
+                Log.d(TAG, "a11y fallback: no mapping for keycode $keyCode")
+                false
+            }
         }
-        return true
     }
 
     private companion object { const val TAG = "HaloSysKey" }

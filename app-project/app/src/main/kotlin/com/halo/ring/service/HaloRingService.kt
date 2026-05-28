@@ -803,11 +803,50 @@ class HaloRingService : Service() {
         // remembered adb_keys entry let us reconnect over wireless ADB without UI. Silent on
         // failure: the wizard CTA is the user-facing fallback.
         serviceScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-            val bootstrap = com.halo.ring.adb.AdbBootstrap(applicationContext)
             try {
-                bootstrap.bootRecoverAgent()
+                graph.adbBootstrap.bootRecoverAgent()
             } catch (t: Throwable) {
                 Log.w(TAG, "bootRecoverAgent threw: ${t.message}")
+            }
+        }
+
+        // ── 12. Wi-Fi connectivity listener → auto-recover agent when Wi-Fi comes up ──────────
+        // Covers the common reboot scenario: Wi-Fi is off at boot → bootRecoverAgent fails →
+        // user (or auto-enable) brings Wi-Fi up → we catch the onAvailable callback and retry.
+        // This means turning Wi-Fi on is sufficient to start the agent — no wizard required.
+        val connectivityManager = getSystemService(android.net.ConnectivityManager::class.java)
+        if (connectivityManager != null) {
+            val recoveryInFlight = java.util.concurrent.atomic.AtomicBoolean(false)
+            val wifiCallback = object : android.net.ConnectivityManager.NetworkCallback() {
+                override fun onAvailable(network: android.net.Network) {
+                    if (!recoveryInFlight.compareAndSet(false, true)) return
+                    Log.i(TAG, "Wi-Fi available — scheduling agent recovery")
+                    serviceScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                        try {
+                            kotlinx.coroutines.delay(2_000)  // let adbd bind its port
+                            graph.adbBootstrap.bootRecoverAgent()
+                        } catch (t: Throwable) {
+                            Log.w(TAG, "bootRecover on Wi-Fi up: ${t.message}")
+                        } finally {
+                            recoveryInFlight.set(false)
+                        }
+                    }
+                }
+            }
+            try {
+                connectivityManager.registerNetworkCallback(
+                    android.net.NetworkRequest.Builder()
+                        .addTransportType(android.net.NetworkCapabilities.TRANSPORT_WIFI)
+                        .build(),
+                    wifiCallback,
+                )
+                cleanup += {
+                    try { connectivityManager.unregisterNetworkCallback(wifiCallback) }
+                    catch (_: Exception) {}
+                }
+                Log.i(TAG, "Wi-Fi recovery callback registered")
+            } catch (e: Exception) {
+                Log.w(TAG, "Wi-Fi callback registration failed: ${e.message}")
             }
         }
     }

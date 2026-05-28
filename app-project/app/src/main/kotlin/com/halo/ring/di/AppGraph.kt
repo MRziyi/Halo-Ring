@@ -48,6 +48,13 @@ class AppGraph private constructor(
     val router: ActionRouter,
     val scheduler: AndroidScheduler,
     val bleClient: R08BleClient,
+    /**
+     * Process-scoped ADB bootstrap. Holds the single loopback ADB connection that keeps the
+     * `app_process` agent alive (the agent dies when its foreground shell stream closes, so the
+     * connection must outlive any one Activity). Shared by the wizard ([MainActivity]) and the
+     * service's boot-recovery so they never open competing connections or race on the dex push.
+     */
+    val adbBootstrap: com.halo.ring.adb.AdbBootstrap,
     val feedbackPrefs: FeedbackPrefsStore,
     val profilesPrefs: ProfilesPrefsStore,
     val advancedPrefs: AdvancedPrefsStore,
@@ -158,6 +165,7 @@ class AppGraph private constructor(
                 router = router,
                 scheduler = scheduler,
                 bleClient = ble,
+                adbBootstrap = com.halo.ring.adb.AdbBootstrap(context.applicationContext),
                 feedbackPrefs = FeedbackPrefsStore(context.applicationContext),
                 profilesPrefs = ProfilesPrefsStore(context.applicationContext),
                 advancedPrefs = AdvancedPrefsStore(context.applicationContext),

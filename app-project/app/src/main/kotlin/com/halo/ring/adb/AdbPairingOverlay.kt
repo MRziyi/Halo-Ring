@@ -13,26 +13,23 @@ import android.view.WindowManager
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -43,7 +40,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.halo.ring.R
@@ -63,24 +59,32 @@ import com.halo.ring.ui.HaloRingTheme
 import com.halo.ring.ui.HaloType
 
 /**
- * System-overlay panel that lets the user type the 6-digit pairing code WITHOUT having to leave
- * the Settings → Wireless debugging → "Pair with code" dialog. The Android settings dialog
- * tears down its mDNS advertisement the moment it loses foreground focus, so a plain in-app
- * dialog doesn't work — by the time the user comes back to our app, the pairing service is
- * already gone.
+ * Overlay panel that lets the user type the 6-digit pairing code WITHOUT having to leave the
+ * Settings → Wireless Debugging → "Pair with code" dialog.
+ *
+ * Two window types are supported — the caller passes [windowType]:
+ *
+ *  - `TYPE_APPLICATION_OVERLAY` (default): requires `SYSTEM_ALERT_WINDOW`. Blocked over
+ *    Settings on Android 12+ because Settings declares `HIDE_NON_SYSTEM_OVERLAY_WINDOWS`.
+ *
+ *  - `TYPE_ACCESSIBILITY_OVERLAY`: can only be used when an accessibility service is running
+ *    in the same process. Explicitly exempt from `HIDE_NON_SYSTEM_OVERLAY_WINDOWS` — this is
+ *    the only window type that survives on top of Settings without system-app privileges.
+ *    Pass `this` (the service context) as [appContext] from within the accessibility service.
  *
  * Owned LifecycleOwner: we keep our own [LifecycleRegistry] pinned at RESUMED for the
  * overlay's whole life. Hooking it to the Activity's lifecycle made the Compose tree stop
- * composing the moment the user switched to Settings, which made the overlay look like it
- * had vanished.
+ * composing the moment the user switched to Settings.
  *
- * Window flags: TYPE_APPLICATION_OVERLAY + NOT_TOUCH_MODAL so touches OUTSIDE the panel's
- * bounds fall through to whatever's underneath. Without NOT_TOUCH_MODAL the entire screen's
- * touch input gets eaten while the overlay is up.
- *
- * Requires `SYSTEM_ALERT_WINDOW`. Caller should check [hasPermission] first.
+ * Window flags: NOT_TOUCH_MODAL so touches OUTSIDE the panel fall through to Settings.
  */
-class AdbPairingOverlay(private val appContext: Context) :
+class AdbPairingOverlay(
+    private val appContext: Context,
+    private val windowType: Int = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+        WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+    else
+        @Suppress("DEPRECATION") WindowManager.LayoutParams.TYPE_PHONE,
+) :
     LifecycleOwner, ViewModelStoreOwner, SavedStateRegistryOwner {
 
     private val lifecycleRegistry = LifecycleRegistry(this)
@@ -155,10 +159,7 @@ class AdbPairingOverlay(private val appContext: Context) :
     }
 
     private fun buildLayoutParams(): WindowManager.LayoutParams {
-        val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-        else
-            @Suppress("DEPRECATION") WindowManager.LayoutParams.TYPE_PHONE
+        val type = windowType
         // NOT_TOUCH_MODAL is critical: without it, the overlay window eats every touch on the
         // screen (including ones outside its visible bounds), breaking the home screen and the
         // Settings dialog we're floating over.
@@ -173,7 +174,8 @@ class AdbPairingOverlay(private val appContext: Context) :
             WindowManager.LayoutParams.WRAP_CONTENT,
             type, flags, PixelFormat.TRANSLUCENT,
         ).apply {
-            gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+            // TOP matches HudOverlay positioning — BOTTOM is off-screen on Rokid's AR lens.
+            gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
             y = 32
         }
     }
@@ -199,6 +201,17 @@ class AdbPairingOverlay(private val appContext: Context) :
     }
 }
 
+/**
+ * Compact pairing panel — no title, no body, no TextField.
+ *
+ * Layout (target ≈ 180dp tall on a 240dp-wide panel):
+ *   [●][●][●][_][_][_]  [⌫]   ← 6 code-slot dots + inline backspace
+ *   [1]  [2]  [3]               ┐
+ *   [4]  [5]  [6]               ├ 3 × 24dp digit rows
+ *   [7]  [8]  [9]               ┘
+ *   [✕]  [0]  [PAIR]            ← action row, PAIR highlights when 6 digits ready
+ *   status…                     ← single truncated line, only when non-empty
+ */
 @Composable
 private fun PairingPanel(
     status: String,
@@ -210,131 +223,113 @@ private fun PairingPanel(
 
     Column(
         modifier = Modifier
-            // Width chosen to fit Rokid's mono 480 px content area at 1.5x density (≈ 320dp wide)
-            // with margin; on RayNeo binocular 1280×480 (≈ 640dp per eye at 1x), this stays well
-            // within the safe area. Doc/08 §2 caps useful width at ~320dp for single-eye displays.
-            .width(300.dp)
-            .clip(RoundedCornerShape(12.dp))
+            .width(240.dp)
+            .clip(RoundedCornerShape(10.dp))
             .background(HaloColors.Bg)
-            .padding(16.dp)
-            // verticalScroll so the panel never gets clipped on small AR displays even when the
-            // text field + status text + NumPad all stack up.
-            .verticalScroll(androidx.compose.foundation.rememberScrollState()),
+            .padding(8.dp),
     ) {
-        Text(stringResource(R.string.adb_pair_title), style = HaloType.Title)
-        Spacer(Modifier.height(6.dp))
-        Text(
-            stringResource(R.string.adb_pair_body),
-            style = HaloType.Caption,
-        )
-        Spacer(Modifier.height(10.dp))
-        OutlinedTextField(
-            value = code,
-            onValueChange = { code = it.filter(Char::isDigit).take(6) },
-            singleLine = true,
-            enabled = !isRunning,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+        // Code slots row + inline backspace
+        Row(
             modifier = Modifier.fillMaxWidth(),
-        )
-        // Audit-2026-05-13o: ring-navigable NumPad. AR glasses without an external keyboard
-        // can't type into the field above; this 3x4 grid is fully reachable via Compose's
-        // focus traversal (DPAD_UP/DOWN/LEFT/RIGHT from injected swipes or the temple's
-        // TempleAction.Slide{Forward,Backward,Upwards,Downwards}). DPAD_CENTER = TAP commits.
-        Spacer(Modifier.height(10.dp))
-        NumberPad(
-            enabled = !isRunning,
-            onDigit = { d -> if (code.length < 6) code += d },
-            onBackspace = { if (code.isNotEmpty()) code = code.dropLast(1) },
-        )
-        if (status.isNotBlank()) {
-            Spacer(Modifier.height(8.dp))
-            Text(status, style = HaloType.Body)
+            horizontalArrangement = Arrangement.spacedBy(3.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            (0 until 6).forEach { i ->
+                val filled = i < code.length
+                val isCursor = i == code.length
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(22.dp)
+                        .clip(RoundedCornerShape(3.dp))
+                        .background(if (filled) HaloColors.Accent.copy(alpha = 0.12f) else Color.Transparent)
+                        .border(1.dp, if (isCursor) HaloColors.Accent else HaloColors.Line, RoundedCornerShape(3.dp)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (filled) Text("●", fontSize = 9.sp, color = HaloColors.Accent)
+                }
+            }
         }
-        Spacer(Modifier.height(12.dp))
-        Row(modifier = Modifier.fillMaxWidth()) {
-            TextButton(onClick = onCancel, enabled = !isRunning) { Text(stringResource(R.string.adb_pair_cancel)) }
-            Spacer(Modifier.width(8.dp))
-            TextButton(
-                onClick = { onSubmit(code) },
-                enabled = code.length == 6 && !isRunning,
-            ) { Text(stringResource(R.string.adb_pair_submit)) }
-        }
-    }
-}
 
-/**
- * Ring-navigable 3x4 number pad: 1 2 3 / 4 5 6 / 7 8 9 / DEL 0 ENTER-style PAIR-area.
- * Each cell is a `clickable` focusable Box — DPAD_CENTER (injected by the ring as `TAP`)
- * fires its onClick. NavPrev/NavNext from ring SWIPE_UP/DOWN walks the grid via Compose
- * focus traversal.
- *
- * Layout chosen so the most-used digits (1-9) form a phone-style grid; row 4 has DEL
- * (backspace) and 0. The "PAIR" trigger lives outside the grid (in the parent's TextButton
- * row) so it's reachable after the digits are entered.
- */
-@Composable
-private fun NumberPad(
-    enabled: Boolean,
-    onDigit: (Char) -> Unit,
-    onBackspace: () -> Unit,
-) {
-    val rows = listOf(
-        listOf("1", "2", "3"),
-        listOf("4", "5", "6"),
-        listOf("7", "8", "9"),
-        listOf("⌫", "0", ""),  // backspace, zero, spacer (PAIR is in the parent row)
-    )
-    Column(modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        rows.forEach { row ->
-            Row(modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                row.forEach { label ->
-                    if (label.isEmpty()) {
-                        Spacer(Modifier.weight(1f).aspectRatio(3.0f))
-                    } else {
-                        NumberPadKey(
-                            label = label,
-                            enabled = enabled,
-                            modifier = Modifier.weight(1f).aspectRatio(3.0f),
-                            onClick = {
-                                if (label == "⌫") onBackspace() else onDigit(label[0])
-                            },
-                        )
+        if (status.isNotBlank()) {
+            Spacer(Modifier.height(3.dp))
+            Text(status, fontSize = 11.sp,
+                color = if (status.startsWith("✗")) HaloColors.Bad else HaloColors.Fg,
+                maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+
+        Spacer(Modifier.height(5.dp))
+
+        // Digit rows 1-9
+        listOf(listOf("1","2","3"), listOf("4","5","6"), listOf("7","8","9")).forEach { row ->
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                row.forEach { d ->
+                    PadKey(d, enabled = code.length < 6 && !isRunning,
+                        modifier = Modifier.weight(1f).height(24.dp)) {
+                        if (code.length < 6 && !isRunning) code += d
                     }
                 }
+            }
+            Spacer(Modifier.height(3.dp))
+        }
+
+        // Action row: ⌫ | 0 | PAIR  (backspace replaces cancel — user exits via Back gesture)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+            PadKey("⌫", enabled = code.isNotEmpty() && !isRunning,
+                modifier = Modifier.weight(1f).height(24.dp)) {
+                if (code.isNotEmpty()) code = code.dropLast(1)
+            }
+            PadKey("0", enabled = code.length < 6 && !isRunning,
+                modifier = Modifier.weight(1f).height(24.dp)) {
+                if (code.length < 6 && !isRunning) code += "0"
+            }
+            // PAIR key — accent-filled when 6 digits ready
+            val pairReady = code.length == 6 && !isRunning
+            var pairFocused by remember { mutableStateOf(false) }
+            Box(
+                modifier = Modifier
+                    .weight(1f).height(24.dp)
+                    .clip(RoundedCornerShape(3.dp))
+                    .background(if (pairReady) HaloColors.Accent else if (pairFocused) HaloColors.FocusTint else Color.Transparent)
+                    .border(1.dp, if (pairReady || pairFocused) HaloColors.Accent else HaloColors.Line, RoundedCornerShape(3.dp))
+                    .onFocusChanged { pairFocused = it.isFocused }
+                    .clickable(enabled = pairReady) { onSubmit(code) },
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = stringResource(R.string.adb_pair_submit),
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (pairReady) HaloColors.Bg else HaloColors.Mute,
+                )
             }
         }
     }
 }
 
+/** Single focusable key cell used in the compact NumPad. */
 @Composable
-private fun NumberPadKey(
+private fun PadKey(
     label: String,
     enabled: Boolean,
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
     var focused by remember { mutableStateOf(false) }
-    val borderColor = if (focused) HaloColors.Accent else HaloColors.Line
-    val bg = if (focused) HaloColors.FocusTint else androidx.compose.ui.graphics.Color.Transparent
-    val fg = if (enabled) HaloColors.Fg else HaloColors.Mute
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(6.dp))
-            .background(bg)
-            .border(1.dp, borderColor, RoundedCornerShape(6.dp))
+            .clip(RoundedCornerShape(3.dp))
+            .background(if (focused) HaloColors.FocusTint else Color.Transparent)
+            .border(1.dp, if (focused) HaloColors.Accent else HaloColors.Line, RoundedCornerShape(3.dp))
             .onFocusChanged { focused = it.isFocused }
             .clickable(enabled = enabled, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         Text(
             text = label,
-            style = HaloType.Title.copy(
-                fontSize = 22.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = fg,
-            ),
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Medium,
+            color = if (enabled) HaloColors.Fg else HaloColors.Mute,
         )
     }
 }

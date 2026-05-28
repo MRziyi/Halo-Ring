@@ -16,6 +16,15 @@
          (No actual outbound network — the daemon is local. NsdManager.create() still throws
          SecurityException without this permission on Android 14+.) -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- ACCESS_NETWORK_STATE: ConnectivityManager (network type checks). Normal permission. -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- ACCESS_WIFI_STATE: WifiManager.isWifiEnabled() — used by the wizard's Wi-Fi gate
+         (wireless ADB needs the Wi-Fi interface on; internet connectivity not required). -->
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <!-- CHANGE_WIFI_STATE: WifiManager.setWifiEnabled() — best-effort auto-enable Wi-Fi at
+         boot so bootRecoverAgent can restart the agent without user interaction.
+         Deprecated on Android 10+ for third-party apps but may work on OEM builds (Rokid). -->
+    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
 
     <!-- Resident foreground service for the BLE central + ring lifecycle -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />

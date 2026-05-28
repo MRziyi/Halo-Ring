@@ -4,6 +4,8 @@ import android.content.Context
 import android.util.Log
 import java.security.KeyPair
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 /**
@@ -33,6 +35,21 @@ class AdbBootstrap(private val context: Context) {
 
     /** Set by [connect]; reused by push / grant / startAgent within the same bootstrap session. */
     @Volatile private var connection: AdbConnection? = null
+
+    /** Single-flight guard for [bootRecoverAgent]. The service fires recovery from two places
+     *  (onCreate + the Wi-Fi onAvailable callback); without this they ran concurrently on
+     *  separate instances and raced on the dex push, crashing one agent with ClassNotFoundException
+     *  (observed 2026-05-28). Now that this is an [AppGraph]-scoped singleton, the lock serialises
+     *  them: the second caller blocks, then finds the agent already up and returns. */
+    private val recoveryMutex = Mutex()
+
+    /**
+     * Serialise an externally-driven bootstrap sequence (the wizard's pair / reconnect, which call
+     * [connect]/[pushAgentDex]/[startAgent] directly) against [bootRecoverAgent] so the two never
+     * run concurrently on this singleton — they'd otherwise race on the shared dex push + agent
+     * socket exactly like the two boot-recovery callers used to.
+     */
+    suspend fun <T> withRecoveryLock(block: suspend () -> T): T = recoveryMutex.withLock { block() }
 
     sealed class State {
         object Idle : State()
@@ -98,7 +115,7 @@ class AdbBootstrap(private val context: Context) {
      * freshly-started adbd → no accumulated transport state → spawn should work first try.
      * Verify on C7 / C8.
      */
-    suspend fun bootRecoverAgent(): Result = withContext(Dispatchers.IO) {
+    suspend fun bootRecoverAgent(): Result = recoveryMutex.withLock { withContext(Dispatchers.IO) {
         if (keyStore.load() == null) {
             Log.i(TAG, "bootRecover: no persisted keypair — user hasn't completed wizard yet, skipping")
             return@withContext Result.Failure("not paired yet")
@@ -107,12 +124,15 @@ class AdbBootstrap(private val context: Context) {
             Log.i(TAG, "bootRecover: agent already alive on @halo.agent, nothing to do")
             return@withContext Result.Success
         }
+        // Agent is down → drop any stale connection a previous (now-dead) recovery left held,
+        // so connect() re-establishes a fresh loopback session instead of reusing a dead socket.
+        disconnect()
+        ensureWifiEnabled()
         ensureWirelessDebugEnabled()
 
-        // Give adbd's wireless debugging a moment to start advertising mDNS after boot.
-        // The connect port is persistent across reboots (Android remembers it once the user
-        // enabled wireless debug), so this is just a settling delay, not a polling loop.
-        kotlinx.coroutines.delay(2_000)
+        // Give adbd time to bind its TLS port after ensureWirelessDebugEnabled() flips
+        // adb_wifi_enabled=1. On Rokid YodaOS this takes 3-4 s after the sysprop is written.
+        kotlinx.coroutines.delay(4_000)
 
         when (val r = connect()) {
             is Result.Failure -> {
@@ -139,15 +159,19 @@ class AdbBootstrap(private val context: Context) {
             }
             else -> Unit
         }
-        // Give the agent a beat to settle into its `setsid` session before tearing down the
-        // ADB transport — see wizard's runRootedBootstrap which uses the same delay. Without
-        // it the agent dies between startAgent returning and us closing the socket.
-        kotlinx.coroutines.delay(800)
+        // Poll for agent socket within the live ADB session (up to 3 s).
+        // On success, leave the connection open — agent runs in shell foreground and dies at disconnect.
+        for (i in 0..14) {
+            kotlinx.coroutines.delay(200)
+            if (isAgentAlive()) {
+                Log.i(TAG, "bootRecover: agent up")
+                return@withContext Result.Success
+            }
+        }
+        Log.w(TAG, "bootRecover: agent socket never came up (exec failure?)")
         disconnect()
-        val alive = isAgentAlive()
-        Log.i(TAG, "bootRecover: agent re-spawned via wireless ADB; aliveCheck=$alive")
-        if (alive) Result.Success else Result.Failure("agent socket not reachable after spawn")
-    }
+        Result.Failure("agent socket not reachable — exec may have failed")
+    } }
 
     private fun isAgentAlive(): Boolean = try {
         android.net.LocalSocket().use { s ->
@@ -156,6 +180,31 @@ class AdbBootstrap(private val context: Context) {
             true
         }
     } catch (_: Exception) { false }
+
+    /**
+     * Best-effort Wi-Fi auto-enable on boot. Two complementary paths:
+     *   1. [WifiManager.setWifiEnabled] — deprecated for third-party apps on Android 10+ but may
+     *      work on OEM builds (Rokid YodaOS has relaxed restrictions).
+     *   2. Write `wifi_on=1` to [Settings.Global] — some OEM Wi-Fi stacks observe this key at
+     *      runtime; noop on stock AOSP but harmless to write.
+     * Both are fire-and-forget; callers wait for [ensureWirelessDebugEnabled] + the settling
+     * delay anyway, which gives the radio time to come up.
+     */
+    private fun ensureWifiEnabled() {
+        val wm = context.getSystemService(android.net.wifi.WifiManager::class.java) ?: return
+        if (wm.isWifiEnabled) return
+        @Suppress("DEPRECATION")
+        try {
+            val ok = wm.setWifiEnabled(true)
+            Log.i(TAG, "ensureWifiEnabled: setWifiEnabled(true) returned $ok")
+        } catch (e: Exception) {
+            Log.i(TAG, "ensureWifiEnabled: setWifiEnabled denied (${e.message})")
+        }
+        try {
+            android.provider.Settings.Global.putInt(context.contentResolver, "wifi_on", 1)
+            Log.i(TAG, "ensureWifiEnabled: wrote wifi_on=1 to Settings.Global")
+        } catch (_: Exception) {}
+    }
 
     /**
      * If we hold `WRITE_SECURE_SETTINGS` (granted by `pm grant` during first wizard run on
@@ -226,14 +275,51 @@ class AdbBootstrap(private val context: Context) {
     }
 
     /**
-     * Discover (via mDNS) and connect to the device's TLS-wrapped ADB service. Must be called
-     * before [pushAgentDex] / [grantWriteSecureSettings] / [startAgent]. Idempotent.
+     * Connect to the device's TLS-wrapped ADB service. Must be called before [pushAgentDex] /
+     * [grantWriteSecureSettings] / [startAgent]. Idempotent.
+     *
+     * Primary path — Settings.Secure.adb_wifi_port: adbd writes the connect port here on Android
+     * 11+ when wireless debugging is enabled. Connecting to 127.0.0.1:<port> is far more reliable
+     * than mDNS on Rokid YodaOS, which does not advertise _adb-tls-connect._tcp.
+     *
+     * Fallback — mDNS discovery: used when the Secure setting is absent (some AOSP builds store
+     * the port differently) or returns 0.
      */
     suspend fun connect(): Result = withContext(Dispatchers.IO) {
         if (connection != null) return@withContext Result.Success
+
+        // Try reading the port directly — avoids mDNS entirely when on the same device.
+        val localPort = readAdbWifiPort()
+        if (localPort > 0) {
+            Log.i(TAG, "connect: Settings adb_wifi_port=$localPort → 127.0.0.1")
+            return@withContext connectTo("127.0.0.1", localPort)
+        }
+
+        Log.i(TAG, "connect: adb_wifi_port not in Settings, trying mDNS")
         val endpoint = mdns.discover(AdbMdnsDiscovery.CONNECT_SERVICE_TYPE)
             ?: return@withContext Result.Failure("mDNS: no _adb-tls-connect._tcp service found")
         connectTo(endpoint.host, endpoint.port)
+    }
+
+    private fun readAdbWifiPort(): Int {
+        val cr = context.contentResolver
+        for (read in listOf<() -> Int>(
+            // Rokid YodaOS: adbd writes the TLS port here, Settings.Secure is empty.
+            { sysprop("service.adb.tls.port") },
+            // Stock Android 11–13: Settings.Secure / Settings.Global.
+            { android.provider.Settings.Secure.getInt(cr, "adb_wifi_port", 0) },
+            { android.provider.Settings.Global.getInt(cr, "adb_wifi_port", 0) },
+        )) {
+            try { val p = read(); if (p > 0) return p } catch (_: Exception) {}
+        }
+        return 0
+    }
+
+    /** Read a system property via reflection (android.os.SystemProperties is @hide). */
+    private fun sysprop(key: String): Int {
+        val cls = Class.forName("android.os.SystemProperties")
+        val get = cls.getMethod("get", String::class.java, String::class.java)
+        return (get.invoke(null, key, "0") as? String)?.toIntOrNull() ?: 0
     }
 
     /** Connect directly to a known host:port (skips mDNS — useful for local-loopback test rigs). */
@@ -273,27 +359,40 @@ class AdbBootstrap(private val context: Context) {
     }
 
     /**
-     * Spawn the agent via `app_process`. After this, [AppProcessAgentBackend] should connect
-     * to the agent's LocalSocket within a few hundred ms.
+     * True if the agent's Unix abstract socket is reachable on this device.
+     * Use as a cheap liveness probe during and after a bootstrap session.
+     */
+    suspend fun checkAgentAlive(): Boolean = withContext(Dispatchers.IO) { isAgentAlive() }
+
+    /**
+     * Spawn the agent via `app_process` and keep the ADB shell stream open.
      *
-     * The `(setsid ... &)` subshell-with-background pattern double-detaches: the inner
-     * `setsid` creates a new session (so SIGHUP from the exec: shell's exit can't reach the
-     * agent), and the outer subshell + `&` lets the foreground command return immediately so
-     * the exec: stream can close cleanly. `nohup &` alone wasn't enough — the agent died
-     * when the exec: stream closed.
+     * On Rokid YodaOS, TCP/TLS connections from the app kill ALL background children
+     * (`&`) of the shell session the moment the shell exits — regardless of `nohup` or
+     * `setsid` (tested 2026-05-28). The only reliable path is to run the agent in the
+     * shell FOREGROUND (no `&`) so the shell stays alive, and keep the ADB connection
+     * open in a fire-and-forget coroutine. The agent lifetime is then tied to the loopback
+     * ADB connection, which survives Wi-Fi toggle (127.0.0.1 is always routable).
      */
     suspend fun startAgent(): Result = withContext(Dispatchers.IO) {
         val conn = connection ?: return@withContext Result.Failure("not connected")
-        // Must use the `shell:` service, not `exec:`. The wireless-TLS adbd implementation
-        // appears to track and kill processes spawned from an `exec:` transport when that
-        // stream closes, defeating both `nohup` and `setsid`. The `shell:` service spawns
-        // a pty-attached shell that survives stream close → backgrounded children inherit
-        // the surviving shell, then we setsid them out of its session.
-        val cmd = "setsid sh -c 'CLASSPATH=$AGENT_DEX_PATH exec app_process /system/bin " +
-                "--nice-name=halo-agent com.halo.ring.agent.Main' " +
-                "</dev/null >/data/local/tmp/halo-agent.log 2>&1 &"
-        val out = conn.exec(cmd, service = "shell")
-        Log.i(TAG, "startAgent issued; shell output: '${out.trim()}'")
+        // Step 1: write the launcher script via shell: so that '>' redirection is honoured.
+        val scriptContent = "CLASSPATH=$AGENT_DEX_PATH exec app_process /system/bin " +
+            "--nice-name=halo-agent com.halo.ring.agent.Main"
+        val writeOut = conn.exec(
+            "echo '$scriptContent' > $AGENT_START_SCRIPT && chmod 755 $AGENT_START_SCRIPT && echo ok",
+            service = "shell",
+        )
+        if (!writeOut.trim().endsWith("ok")) {
+            Log.w(TAG, "startAgent: write launcher script unexpected output: '$writeOut'")
+        }
+        // Step 2: open a persistent shell stream (no CMD_CLSE) so the agent runs in the
+        // stream's foreground for the lifetime of this AdbConnection. On Rokid YodaOS the
+        // TCP/loopback ADB transport kills backgrounded ('&') children at stream close, but
+        // a process in the stream foreground stays alive as long as the socket is open.
+        val launched = conn.execDetach("$AGENT_START_SCRIPT </dev/null >$AGENT_LOG_PATH 2>&1")
+        Log.i(TAG, "startAgent: execDetach launched=$launched")
+        if (!launched) return@withContext Result.Failure("failed to open detached stream for agent")
         Result.Success
     }
 
@@ -309,5 +408,9 @@ class AdbBootstrap(private val context: Context) {
         const val AGENT_ASSET_PATH = "halo-agent.dex"
         /** Where the agent dex lives on-device after [pushAgentDex]. */
         const val AGENT_DEX_PATH = "/data/local/tmp/halo-agent.dex"
+        /** Launcher script written by [startAgent]; survives ADB sessions. */
+        const val AGENT_START_SCRIPT = "/data/local/tmp/halo-start.sh"
+        /** stdout+stderr from the agent process; should have JVM startup lines if healthy. */
+        const val AGENT_LOG_PATH = "/data/local/tmp/halo-agent.log"
     }
 }

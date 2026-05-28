@@ -79,21 +79,25 @@ fun RingPairingScreen(
         }
     }
 
-    // Auto-advance when bootstrap is fully done. "Done" = BLE READY + capability bitmap arrived
-    // (so we know the command-channel is actually responding, not just a stale TLS-only ready).
+    // Auto-advance when bootstrap is fully done. "Done" = BLE READY + capability bitmap arrived.
+    //
+    // Bug fix: the 800 ms delay was inside LaunchedEffect(currentConn, capabilities, ringInfo).
+    // ringInfo updates when HW/FW rev arrive → keys change → old coroutine cancelled mid-delay →
+    // onPaired() is never called. Fix: set Done state in the LaunchedEffect, but fire the actual
+    // advance from scope.launch (not cancelled by key changes). doneScheduled guards double-fire.
+    val doneScheduled = remember { mutableStateOf(false) }
     androidx.compose.runtime.LaunchedEffect(currentConn, capabilities, ringInfo) {
-        // Only act once the user has tapped PAIR (i.e. state is past the Picking screen) AND
-        // we haven't already fired Done. Burn-in fix 2026-05-27: the previous guard was
-        // `!is PairingState.Connecting` which prevented us from advancing past Connecting,
-        // because we re-entered the lambda after the connection state changed to READY but the
-        // guard rejected us at that point. The picker hung forever showing "Connecting 2/3"
-        // even though BLE had already reached READY.
         if (pairingState is PairingState.Picking || pairingState is PairingState.Done) return@LaunchedEffect
         when {
             currentConn == com.halo.ring.core.ble.ConnectionState.READY && capabilities.isNotEmpty() -> {
                 pairingState = PairingState.Done
-                kotlinx.coroutines.delay(800)
-                onPaired()
+                if (!doneScheduled.value) {
+                    doneScheduled.value = true
+                    scope.launch {
+                        kotlinx.coroutines.delay(800)
+                        onPaired()
+                    }
+                }
             }
             currentConn == com.halo.ring.core.ble.ConnectionState.READY ->
                 pairingState = PairingState.ReadingInfo
@@ -198,6 +202,8 @@ fun RingPairingScreen(
                         stringResource(R.string.ring_pairing_done)
                 },
                 onClick = {
+                    // Done state: tap advances immediately instead of waiting for the 800 ms auto-advance.
+                    if (pairingState is PairingState.Done) { onPaired(); return@Cta }
                     if (pairingState !is PairingState.Picking) return@Cta
                     val mac = selected ?: return@Cta
                     val name = deviceList.firstOrNull { it.macAddress == mac }?.advertisedName

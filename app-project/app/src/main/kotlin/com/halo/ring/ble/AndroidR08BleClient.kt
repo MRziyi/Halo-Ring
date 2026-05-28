@@ -583,8 +583,14 @@ class AndroidR08BleClient(
             scheduler.post {
                 when (newState) {
                     BluetoothProfile.STATE_CONNECTED -> {
-                        Log.w(TAG, "GATT connected (status=$status), discovering services")
-                        try { g.discoverServices() } catch (_: SecurityException) {}
+                        // Rokid Glasses' BLE chip stalls service discovery if discoverServices()
+                        // is called immediately after STATE_CONNECTED — observed as 10-20 s hang
+                        // at "Connecting 2/3". 300 ms settle gives the link layer time to finish
+                        // negotiating before the GATT ATT exchange begins. harmless on OnePlus.
+                        Log.w(TAG, "GATT connected (status=$status), discovering services in ${GATT_SETTLE_MS} ms")
+                        scheduler.postDelayed(GATT_SETTLE_MS) {
+                            if (gatt != null) try { g.discoverServices() } catch (_: SecurityException) {}
+                        }
                     }
                     BluetoothProfile.STATE_DISCONNECTED -> {
                         Log.w(TAG, "GATT disconnected (status=$status)")
@@ -942,6 +948,10 @@ class AndroidR08BleClient(
         /** Energy: auto-reconnect re-scan backoff bounds. Base is short so the SPEC §6.5 quirk-drop
          *  reconnect stays snappy (resets on every READY); max caps the worst-case to one short
          *  scan per 30 s when the ring is genuinely gone, instead of a back-to-back scan loop. */
+        /** Settle delay before discoverServices() on Rokid Glasses' BLE chip. Without it, the
+         *  Rokid GATT stack stalls for 10-20 s at STATE_CONNECTED before answering ATT requests.
+         *  macOS/bleak (phase0) doesn't need this — it uses the host BLE stack directly. */
+        private const val GATT_SETTLE_MS = 300L
         private const val RECONNECT_BACKOFF_BASE_MS = 800L
         private const val RECONNECT_BACKOFF_MAX_MS = 30_000L
         /** Safety timeout for [requestVitalsSnapshot]. Burn-in 2026-05-27: bumped from 12s to 30s

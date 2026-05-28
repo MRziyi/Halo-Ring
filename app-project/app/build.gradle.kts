@@ -140,6 +140,11 @@ dependencies {
     // implementation("dev.rikka.shizuku:api:13.1.5")
     // implementation("dev.rikka.shizuku:provider:13.1.5")
 
+    // ZXing pure-Java QR decoder — used by QrCapture to read the ADB pairing QR code.
+    // No Android dependencies; the :core library's ZXing import would work here too, but
+    // keeping it in :app since QrCapture uses Android ImageReader / MediaProjection.
+    implementation("com.google.zxing:core:3.5.3")
+
     // BouncyCastle — needed by :app/.../adb for X.509 cert generation in the ADB pairing flow.
     implementation("org.bouncycastle:bcpkix-jdk18on:1.78.1")
     implementation("org.bouncycastle:bcprov-jdk18on:1.78.1")

@@ -420,6 +420,10 @@
     <string name="wizard_pair_title">配对戒指</string>
     <string name="wizard_pair_body">把戒指从充电座上拿下来。app 会扫描附近的 Halo / R08 戒指。确认 MAC + LED 双闪。</string>
     <string name="wizard_pair_cta">扫描戒指</string>
+    <string name="wizard_ring_reconnect_title">重连戒指</string>
+    <string name="wizard_ring_reconnect_progress">正在重连已配对的戒指…</string>
+    <string name="wizard_ring_reconnect_timeout">戒指没能及时重连，可能只是不在范围内或已休眠——点一下重试。</string>
+    <string name="wizard_ring_reconnect_retry_cta">重连戒指</string>
 
     <string name="wizard_complete_cta">完成</string>
 
@@ -449,8 +453,13 @@
     <string name="wizard_adb_running_title">配对中…</string>
     <string name="wizard_adb_paired_title">已配对</string>
     <string name="wizard_adb_continue_cta">继续</string>
+    <string name="wizard_wifi_off_title">配置完成</string>
+    <string name="wizard_wifi_off_body">请保持 Wi-Fi 开启——每次重启后 agent 需要 Wi-Fi 才能自动恢复。</string>
+    <string name="wizard_a11y_gate_body">请先在系统辅助功能中启用「Halo Ring」——配对码浮窗依赖此服务运行。</string>
     <string name="wizard_adb_failed_title">配对失败</string>
     <string name="wizard_adb_try_again_cta">重试</string>
+    <string name="wizard_adb_reconnect_cta">重新连接 Agent</string>
+    <string name="wizard_adb_reconnecting_title">重新连接中…</string>
     <string name="wizard_a11y_on_title">辅助功能已开</string>
     <string name="wizard_a11y_on_body">按前台 app 自动切换已生效。</string>
     <string name="wizard_a11y_off_title">辅助功能</string>

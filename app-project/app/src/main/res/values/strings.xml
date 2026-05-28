@@ -463,20 +463,34 @@
     <string name="wizard_pair_title">Pair the ring</string>
     <string name="wizard_pair_body">Take the ring off any charger. The app will scan for nearby Halo / R08 rings. Confirm the MAC + LED double-flash.</string>
     <string name="wizard_pair_cta">SCAN FOR RING</string>
+    <string name="wizard_ring_reconnect_title">Reconnect the ring</string>
+    <string name="wizard_ring_reconnect_progress">Reconnecting to your paired ring…</string>
+    <string name="wizard_ring_reconnect_timeout">Ring didn\'t reconnect in time. It may just be out of range or asleep — tap to try again.</string>
+    <string name="wizard_ring_reconnect_retry_cta">RECONNECT RING</string>
 
     <string name="wizard_complete_cta">FINISH</string>
 
     <!-- First-run wizard: short variants used by the on-glasses layout. -->
     <string name="wizard_welcome_begin_cta">BEGIN</string>
     <string name="wizard_adb_intro_title">System access</string>
-    <string name="wizard_adb_intro_body">To let the ring drive the glasses, grant one-time system access — all on-device, no computer:\n1. OPEN WIRELESS DEBUGGING below, turn it ON\n2. Come back, tap START PAIRING\n3. Enter the 6-digit code\nThis survives reboot — you only do it once.</string>
+    <string name="wizard_adb_intro_body">To let the ring drive the glasses, grant one-time system access — all on-device, no computer:\n1. Enable Wireless Debugging (steps below)\n2. Enable Halo Ring in Settings → Accessibility (required once)\n3. Tap START PAIRING — open \"Pair device with pairing code\"\n4. Enter the 6-digit code in the panel that appears\nThis survives reboot — you only do it once.</string>
     <string name="wizard_adb_open_settings_cta">OPEN WIRELESS DEBUGGING</string>
     <string name="wizard_adb_start_pairing_cta">START PAIRING</string>
     <!-- Step indicator + keep-alive step (v0.4 on-device setup). -->
     <string name="wizard_sys_step">System access</string>
     <string name="wizard_sys_devopts_label">Developer Options</string>
+    <string name="wizard_sys_wifi_label">Wi-Fi</string>
     <string name="wizard_sys_wireless_label">Wireless Debugging</string>
     <string name="wizard_sys_enable_devopts_cta">ENABLE DEVELOPER OPTIONS</string>
+    <!-- Wi-Fi gate page (shown between Developer Options and Wireless Debugging). -->
+    <string name="wizard_wifi_title">Enable Wi-Fi</string>
+    <string name="wizard_wifi_body">Wireless ADB needs the Wi-Fi radio on to bind its port. No internet connection required — just the switch. Once the agent is paired, Wi-Fi can be turned off.</string>
+    <string name="wizard_wifi_cta">OPEN WI-FI SETTINGS</string>
+    <!-- Post-pairing success page. -->
+    <string name="wizard_wifi_off_title">Setup complete</string>
+    <string name="wizard_wifi_off_body">Keep Wi-Fi on — the agent needs it to restart after each reboot.</string>
+    <!-- Accessibility gate — shown before any other system-access gate. -->
+    <string name="wizard_a11y_gate_body">Enable \"Halo Ring\" in Accessibility settings first — the pairing code panel runs through this service.</string>
     <string name="wizard_keepalive_step">Keep-alive</string>
     <string name="wizard_pair_step">Pair ring</string>
     <string name="wizard_keepalive_title">Keep it alive</string>
@@ -494,6 +508,8 @@
     <string name="wizard_adb_continue_cta">CONTINUE</string>
     <string name="wizard_adb_failed_title">Pairing failed</string>
     <string name="wizard_adb_try_again_cta">TRY AGAIN</string>
+    <string name="wizard_adb_reconnect_cta">RECONNECT AGENT</string>
+    <string name="wizard_adb_reconnecting_title">Reconnecting…</string>
     <string name="wizard_a11y_on_title">Accessibility on</string>
     <string name="wizard_a11y_on_body">Auto-switch by foreground app is active.</string>
     <string name="wizard_a11y_off_title">Accessibility</string>
@@ -512,7 +528,7 @@
          ADB pairing overlay.
          ════════════════════════════════════════════════════════════════════════ -->
     <string name="adb_pair_title">Pairing code</string>
-    <string name="adb_pair_body">Type the 6-digit code from the dialog above. If you have a keyboard, use the field; otherwise use the number grid below (ring: swipe to navigate, tap to commit).</string>
+    <string name="adb_pair_body">The 6-digit code is in the Wireless Debugging screen. Enter it here — DO NOT press Back (that kills the pairing session). Use the grid below: ring swipe to navigate, TAP to commit. Without a ring: two-finger temple swipe to move focus, single tap to select.</string>
     <string name="adb_pair_submit">PAIR</string>
     <string name="adb_pair_cancel">CANCEL</string>
 

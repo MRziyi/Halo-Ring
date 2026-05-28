@@ -17,6 +17,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -32,26 +33,31 @@ import com.halo.ring.ui.HaloType
 import com.halo.ring.ui.ScreenPadding
 
 /**
- * First-run wizard, v0.4 — **complete on-device setup, no computer, mandatory (no skip)**.
+ * First-run wizard — mandatory, no skip.
  *
- * The whole app is useless without the agent + a paired ring, so the wizard is a hard gate
- * (user mandate 2026-05-27: "skip 无意义，必须经 wizard 才运行"). Each step shows **exactly one
- * actionable button at a time**, strictly sequenced by live state, so the wearer is never given
- * a wall of buttons ("别一上来给太多"):
+ * Interaction paradigm (2026-05-28):
+ *   - ONE button visible at a time.
+ *   - If the app can auto-detect completion → auto-advance (no CONTINUE, no user tap).
+ *   - If completion can't be detected (autostart) → show action button first; after it's
+ *     been tapped, switch to ONLY a CONTINUE button. Never action + CONTINUE together.
  *
- *  1. **System access** — sequential sub-gate:
- *       dev-options OFF  → only "Enable Developer Options" (jump to Build number)
- *       wireless-debug OFF → only "Enable Wireless Debugging"
- *       both ON          → only "Start pairing"
- *       (agent already alive → "✓ done, continue" — no re-pairing)
- *  2. **Keep-alive** — battery exemption (auto-detected) then auto-start, gated in order.
- *  3. **Pair ring** — pick the R0x ring.
+ * Step order:
+ *   1. SYSTEM_ACCESS — gates in sequence:
+ *        a) Accessibility (required for the pairing overlay)
+ *        b) Developer Options
+ *        c) Wi-Fi radio on
+ *        d) Wireless Debugging
+ *        e) ADB pairing → post-pairing Wi-Fi off
+ *   2. KEEP_ALIVE — battery exemption (auto-detected) then autostart (tap → CONTINUE).
+ *   3. PAIR ring — BLE scan.
  */
 @Composable
 fun FirstRunWizardScreen(
     onOpenDeveloperSettings: () -> Unit = {},
     onOpenBuildNumber: () -> Unit = {},
     devOptionsEnabled: Boolean = false,
+    wifiConnected: Boolean = false,
+    onOpenWifiSettings: () -> Unit = {},
     wirelessDebugEnabled: Boolean = false,
     agentReady: Boolean = false,
     onStartAdbPairing: () -> Unit = {},
@@ -63,20 +69,45 @@ fun FirstRunWizardScreen(
     onOpenAutostartSettings: () -> Unit = {},
     onStartRingPairing: () -> Unit = {},
     onCompleted: () -> Unit = {},
+    isReRecovery: Boolean = false,
+    pairedMac: String? = null,
+    ringConnected: Boolean = false,
+    onStartRingReconnect: () -> Unit = {},
+    onStartAdbReconnect: () -> Unit = {},
 ) {
-    @Suppress("UNUSED_EXPRESSION") onOpenAccessibilitySettings
-    @Suppress("UNUSED_EXPRESSION") accessibilityEnabled
     @Suppress("UNUSED_EXPRESSION") onStartRingPairing
 
     HaloRingTheme {
         var step by remember { mutableStateOf(WizardStep.SYSTEM_ACCESS) }
         val focus = remember { FocusRequester() }
-        androidx.compose.runtime.LaunchedEffect(step, adbStatus, batteryExempted, devOptionsEnabled, wirelessDebugEnabled, agentReady) {
+
+        // Re-focus whenever observable state changes so the AR focus ring lands on the
+        // new button after each gate auto-advances.
+        androidx.compose.runtime.LaunchedEffect(
+            step, adbStatus, batteryExempted, devOptionsEnabled,
+            wirelessDebugEnabled, agentReady, accessibilityEnabled, wifiConnected,
+        ) {
             repeat(5) {
                 kotlinx.coroutines.delay(100)
                 val ok = try { focus.requestFocus(); true } catch (_: Throwable) { false }
                 if (ok) return@LaunchedEffect
             }
+        }
+
+        // agentReady = heartbeat fresh from a previous session → skip SYSTEM_ACCESS entirely.
+        // Guard: do NOT fire while adbStatus is non-blank (pairing in progress or Wi-Fi-off page).
+        androidx.compose.runtime.LaunchedEffect(agentReady, adbStatus) {
+            if (step == WizardStep.SYSTEM_ACCESS && agentReady && adbStatus.isBlank()) {
+                kotlinx.coroutines.delay(1500)
+                if (step == WizardStep.SYSTEM_ACCESS && adbStatus.isBlank()) step = WizardStep.KEEP_ALIVE
+            }
+        }
+
+        // Ring already paired AND connected → skip the final step entirely. If paired but
+        // disconnected (common right after a reboot — the BLE link drops while the service
+        // restarts) we DON'T skip; the PAIR step shows the reconnect UI instead.
+        androidx.compose.runtime.LaunchedEffect(step, pairedMac, ringConnected) {
+            if (step == WizardStep.PAIR && pairedMac != null && ringConnected) onCompleted()
         }
 
         Column(
@@ -88,29 +119,45 @@ fun FirstRunWizardScreen(
             Spacer(Modifier.height(14.dp))
             when (step) {
                 WizardStep.SYSTEM_ACCESS -> SystemAccessStep(
+                    accessibilityEnabled = accessibilityEnabled,
                     devOptionsEnabled = devOptionsEnabled,
+                    wifiConnected = wifiConnected,
                     wirelessDebugEnabled = wirelessDebugEnabled,
                     agentReady = agentReady,
                     status = adbStatus,
+                    isReRecovery = isReRecovery,
+                    onOpenAccessibilitySettings = onOpenAccessibilitySettings,
                     onOpenBuildNumber = onOpenBuildNumber,
+                    onOpenWifiSettings = onOpenWifiSettings,
                     onOpenWirelessDebug = onOpenDeveloperSettings,
                     onStartPairing = onStartAdbPairing,
+                    onStartReconnect = onStartAdbReconnect,
                     onNext = { step = WizardStep.KEEP_ALIVE },
                 )
                 WizardStep.KEEP_ALIVE -> KeepAliveStep(
                     batteryExempted = batteryExempted,
+                    isReRecovery = isReRecovery,
                     onRequestBattery = onRequestBatteryExemption,
                     onOpenAutostart = onOpenAutostartSettings,
                     onNext = { step = WizardStep.PAIR },
                 )
-                WizardStep.PAIR -> {
-                    Text(stringResource(R.string.wizard_pair_title), style = HaloType.Title)
-                    Spacer(Modifier.height(6.dp))
-                    Text(stringResource(R.string.wizard_pair_body), style = HaloType.Caption)
-                    Spacer(Modifier.height(10.dp))
-                    // Pairing completes via onPaired (BLE READY + capabilities). No skip button —
-                    // a paired ring is required for the app to do anything.
-                    RingPairingScreen(onPaired = onCompleted)
+                WizardStep.PAIR -> when {
+                    // Paired but disconnected → reconnect (no re-pairing needed).
+                    pairedMac != null && !ringConnected -> RingReconnectStep(
+                        ringConnected = ringConnected,
+                        onReconnect = onStartRingReconnect,
+                        onConnected = onCompleted,
+                    )
+                    // Paired + connected is handled by the skip LaunchedEffect above (renders nothing).
+                    pairedMac != null -> Unit
+                    // Never paired → full BLE pairing.
+                    else -> {
+                        Text(stringResource(R.string.wizard_pair_title), style = HaloType.Title)
+                        Spacer(Modifier.height(6.dp))
+                        Text(stringResource(R.string.wizard_pair_body), style = HaloType.Caption)
+                        Spacer(Modifier.height(10.dp))
+                        RingPairingScreen(onPaired = onCompleted)
+                    }
                 }
             }
         }
@@ -133,7 +180,6 @@ private fun StepIndicator(current: WizardStep) {
     }
 }
 
-/** A ✓/✗ status line. */
 @Composable
 private fun StatusLine(label: String, ok: Boolean) {
     Text(
@@ -142,65 +188,135 @@ private fun StatusLine(label: String, ok: Boolean) {
     )
 }
 
+/**
+ * Sequential sub-gates for system access. Exactly one button visible at a time.
+ *
+ * Gate order (idle path):
+ *   1. Accessibility      → auto-detect → fall through
+ *   2. Developer Options  → auto-detect → fall through
+ *   3. Wi-Fi radio        → auto-detect → fall through
+ *   4. Wireless Debugging → auto-detect → fall through
+ *   5. [START PAIRING]
+ *
+ * Post-pairing:
+ *   Wi-Fi on  → only "TURN OFF WI-FI"
+ *   Wi-Fi off → only "CONTINUE"
+ *
+ * In-progress / error / agentReady states intercept before the gate sequence.
+ */
 @Composable
 private fun SystemAccessStep(
+    accessibilityEnabled: Boolean,
     devOptionsEnabled: Boolean,
+    wifiConnected: Boolean,
     wirelessDebugEnabled: Boolean,
     agentReady: Boolean,
     status: String,
+    isReRecovery: Boolean,
+    onOpenAccessibilitySettings: () -> Unit,
     onOpenBuildNumber: () -> Unit,
+    onOpenWifiSettings: () -> Unit,
     onOpenWirelessDebug: () -> Unit,
     onStartPairing: () -> Unit,
+    onStartReconnect: () -> Unit,
     onNext: () -> Unit,
 ) {
     Text(stringResource(R.string.wizard_adb_intro_title), style = HaloType.Title)
     Spacer(Modifier.height(8.dp))
 
-    // Already set up (agent alive or pairing reported success) → one CONTINUE button, no re-pairing.
-    if (agentReady || status.startsWith("✓")) {
-        Text(stringResource(R.string.wizard_adb_paired_title), style = HaloType.Body.copy(color = HaloColors.Accent))
-        Spacer(Modifier.height(16.dp))
-        Cta(stringResource(R.string.wizard_adb_continue_cta), onClick = onNext)
+    // Agent alive from a previous session → outer LaunchedEffect auto-advances in 1.5 s.
+    if (agentReady) {
+        Text(
+            stringResource(R.string.wizard_adb_paired_title),
+            style = HaloType.Body.copy(color = HaloColors.Accent),
+        )
         return
     }
 
-    // Pairing in progress.
-    if (status.isNotBlank() && !status.startsWith("✗")) {
-        Text(stringResource(R.string.wizard_adb_running_title), style = HaloType.Title)
+    // Pairing / reconnect in progress — show status text, no button.
+    if (status.isNotBlank() && !status.startsWith("✗") && !status.startsWith("✓")) {
+        val runningTitle = if (isReRecovery) R.string.wizard_adb_reconnecting_title
+                           else R.string.wizard_adb_running_title
+        Text(stringResource(runningTitle), style = HaloType.Title)
         Spacer(Modifier.height(10.dp))
         Text(status, style = HaloType.Body)
         return
     }
 
-    // Pairing failed → single TRY AGAIN (no skip).
+    // Pairing / reconnect failed — only TRY AGAIN.
     if (status.startsWith("✗")) {
-        Text(status.removePrefix("✗").trim(), style = HaloType.Body.copy(color = HaloColors.Bad))
+        Text(
+            status.removePrefix("✗").trim(),
+            style = HaloType.Body.copy(color = HaloColors.Bad),
+        )
         Spacer(Modifier.height(16.dp))
-        Cta(stringResource(R.string.wizard_adb_try_again_cta), onClick = onStartPairing)
+        Cta(
+            stringResource(R.string.wizard_adb_try_again_cta),
+            onClick = if (isReRecovery) onStartReconnect else onStartPairing,
+        )
         return
     }
 
-    // Otherwise: the strict sequential sub-gate. Show the live status of both prerequisites,
-    // then EXACTLY ONE button for the next thing the user must do.
-    Text(stringResource(R.string.wizard_adb_intro_body), style = HaloType.Caption)
-    Spacer(Modifier.height(12.dp))
-    StatusLine(stringResource(R.string.wizard_sys_devopts_label), devOptionsEnabled)
-    StatusLine(stringResource(R.string.wizard_sys_wireless_label), wirelessDebugEnabled)
-    Spacer(Modifier.height(16.dp))
+    // Pairing / reconnect succeeded → advance automatically, no button needed.
+    if (status.startsWith("✓")) {
+        androidx.compose.runtime.LaunchedEffect(Unit) { onNext() }
+        return
+    }
 
-    when {
-        !devOptionsEnabled ->
-            Cta(stringResource(R.string.wizard_sys_enable_devopts_cta), onClick = onOpenBuildNumber)
-        !wirelessDebugEnabled ->
-            Cta(stringResource(R.string.wizard_adb_open_settings_cta), onClick = onOpenWirelessDebug)
-        else ->
-            Cta(stringResource(R.string.wizard_adb_start_pairing_cta), onClick = onStartPairing)
+    // ── Idle gate sequence ────────────────────────────────────────────────────────────────
+    // Each unmet gate shows its ONE button and returns. Met gates fall through silently.
+
+    // Gate 1: Accessibility (must be first — the pairing overlay needs this service).
+    if (!accessibilityEnabled) {
+        Text(stringResource(R.string.wizard_a11y_gate_body), style = HaloType.Caption)
+        Spacer(Modifier.height(12.dp))
+        Cta(stringResource(R.string.wizard_a11y_cta_enable), onClick = onOpenAccessibilitySettings)
+        return
+    }
+
+    // Gate 2: Developer Options.
+    if (!devOptionsEnabled) {
+        Cta(stringResource(R.string.wizard_sys_enable_devopts_cta), onClick = onOpenBuildNumber)
+        return
+    }
+
+    // Gate 3: Wi-Fi radio on (needed for ADB to bind its port).
+    if (!wifiConnected) {
+        Text(stringResource(R.string.wizard_wifi_body), style = HaloType.Caption)
+        Spacer(Modifier.height(12.dp))
+        Cta(stringResource(R.string.wizard_wifi_cta), onClick = onOpenWifiSettings)
+        return
+    }
+
+    // Gate 4: Wireless Debugging enabled.
+    if (!wirelessDebugEnabled) {
+        Cta(stringResource(R.string.wizard_adb_open_settings_cta), onClick = onOpenWirelessDebug)
+        return
+    }
+
+    // All prereqs met — single action button (pairing vs reconnect depending on context).
+    if (isReRecovery) {
+        Cta(stringResource(R.string.wizard_adb_reconnect_cta), onClick = onStartReconnect)
+    } else {
+        Cta(stringResource(R.string.wizard_adb_start_pairing_cta), onClick = onStartPairing)
     }
 }
 
+/**
+ * Keep-alive step — two sequential gates.
+ *
+ * Gate 1: battery exemption (auto-detected via PowerManager).
+ *   Not exempted → only "ALLOW BATTERY".
+ *   Exempted     → show ✓, fall through to gate 2 (no CONTINUE for battery).
+ *
+ * Gate 2: autostart (not auto-detectable).
+ *   Not opened → only "OPEN APP INFO".
+ *   Opened     → only "CONTINUE".   ← never both buttons together.
+ */
 @Composable
 private fun KeepAliveStep(
     batteryExempted: Boolean,
+    isReRecovery: Boolean,
     onRequestBattery: () -> Unit,
     onOpenAutostart: () -> Unit,
     onNext: () -> Unit,
@@ -210,9 +326,7 @@ private fun KeepAliveStep(
     Text(stringResource(R.string.wizard_keepalive_body), style = HaloType.Caption)
     Spacer(Modifier.height(14.dp))
 
-    StatusLine(stringResource(R.string.wizard_keepalive_battery_row), batteryExempted)
-
-    // Strict order: battery first (auto-detected), then auto-start, then CONTINUE. One button at a time.
+    // Gate 1: battery exemption — auto-detected, no CONTINUE.
     if (!batteryExempted) {
         Text(stringResource(R.string.wizard_keepalive_battery_desc), style = HaloType.Caption)
         Spacer(Modifier.height(12.dp))
@@ -220,11 +334,71 @@ private fun KeepAliveStep(
         return
     }
 
+    // Battery exempted — show ✓ and advance to autostart gate automatically.
+    StatusLine(stringResource(R.string.wizard_keepalive_battery_row), ok = true)
     Spacer(Modifier.height(10.dp))
-    Text("• " + stringResource(R.string.wizard_keepalive_autostart_row), style = HaloType.Body)
     Text(stringResource(R.string.wizard_keepalive_autostart_desc), style = HaloType.Caption)
     Spacer(Modifier.height(12.dp))
-    Cta(stringResource(R.string.wizard_keepalive_autostart_cta), onClick = onOpenAutostart)
-    Spacer(Modifier.height(10.dp))
-    Cta(stringResource(R.string.wizard_keepalive_done_cta), onClick = onNext)
+
+    // Gate 2: autostart — can't detect. Track whether the user has opened the settings screen.
+    // Before tap: only action button. After tap: only CONTINUE. Never both.
+    // Re-recovery: already done, seed as opened so CONTINUE shows immediately.
+    var autostartOpened by remember { mutableStateOf(isReRecovery) }
+    if (!autostartOpened) {
+        Cta(stringResource(R.string.wizard_keepalive_autostart_cta), onClick = {
+            autostartOpened = true
+            onOpenAutostart()
+        })
+    } else {
+        Cta(stringResource(R.string.wizard_keepalive_done_cta), onClick = onNext)
+    }
+}
+
+/** Short window before we stop showing the indefinite "connecting" text and offer a retry —
+ *  kept brief so the user isn't left staring at a spinner. */
+private const val RING_RECONNECT_TIMEOUT_MS = 8_000L
+
+/**
+ * Ring is paired but the BLE link is down (typical right after a reboot — the link drops while the
+ * service restarts). Auto-fire a reconnect and wait a short window:
+ *   - link comes back → advance.
+ *   - still down after [RING_RECONNECT_TIMEOUT_MS] → show a timeout note + a single TRY AGAIN button.
+ * Reconnect failing occasionally is expected; a retry almost always succeeds, and the service keeps
+ * auto-reconnecting in the background regardless, so this step is best-effort.
+ */
+@Composable
+private fun RingReconnectStep(
+    ringConnected: Boolean,
+    onReconnect: () -> Unit,
+    onConnected: () -> Unit,
+) {
+    val connectedNow by rememberUpdatedState(ringConnected)
+    var attempt by remember { mutableStateOf(0) }
+    var timedOut by remember { mutableStateOf(false) }
+
+    // Link restored → finish.
+    androidx.compose.runtime.LaunchedEffect(ringConnected) {
+        if (ringConnected) onConnected()
+    }
+
+    // Each attempt fires one reconnect and arms a fresh timeout.
+    androidx.compose.runtime.LaunchedEffect(attempt) {
+        timedOut = false
+        onReconnect()
+        kotlinx.coroutines.delay(RING_RECONNECT_TIMEOUT_MS)
+        if (!connectedNow) timedOut = true
+    }
+
+    Text(stringResource(R.string.wizard_ring_reconnect_title), style = HaloType.Title)
+    Spacer(Modifier.height(8.dp))
+    if (!timedOut) {
+        Text(stringResource(R.string.wizard_ring_reconnect_progress), style = HaloType.Body)
+    } else {
+        Text(
+            stringResource(R.string.wizard_ring_reconnect_timeout),
+            style = HaloType.Body.copy(color = HaloColors.Bad),
+        )
+        Spacer(Modifier.height(16.dp))
+        Cta(stringResource(R.string.wizard_ring_reconnect_retry_cta), onClick = { attempt++ })
+    }
 }

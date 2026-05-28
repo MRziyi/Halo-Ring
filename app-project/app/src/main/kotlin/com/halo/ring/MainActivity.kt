@@ -21,8 +21,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
+import com.halo.ring.accessibility.HaloRingAccessibilityService
 import com.halo.ring.adb.AdbBootstrap
-import com.halo.ring.adb.AdbPairingOverlay
 import com.halo.ring.adb.RootBypass
 import com.halo.ring.service.HaloRingService
 import com.halo.ring.ui.AppState
@@ -60,14 +60,16 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var firstRunStore: FirstRunPrefsStore
     private lateinit var adb: AdbBootstrap
-    private var pairingOverlay: AdbPairingOverlay? = null
 
     private val accessibilityEnabledState = kotlinx.coroutines.flow.MutableStateFlow(false)
     private val batteryExemptedState = kotlinx.coroutines.flow.MutableStateFlow(false)
-    /** v0.4 — live status of Developer Options + Wireless Debugging, refreshed on every onResume so
-     *  the wizard shows ✓/✗ and gates "Start pairing" on wireless debug being ON. */
+    /** v0.4 — live status of Developer Options + Wi-Fi + Wireless Debugging. Refreshed on every
+     *  onResume AND by a 500 ms polling loop while the activity is foregrounded so the wizard
+     *  auto-advances the moment a setting is toggled — no tap required. */
     private val devOptionsEnabledState = kotlinx.coroutines.flow.MutableStateFlow(false)
+    private val wifiConnectedState = kotlinx.coroutines.flow.MutableStateFlow(false)
     private val wirelessDebugEnabledState = kotlinx.coroutines.flow.MutableStateFlow(false)
+    private var setupPollJob: kotlinx.coroutines.Job? = null
     /** v0.4 — true when the injection agent is already alive (fresh heartbeat). Lets the wizard's
      *  System-access step show "✓ already set up" instead of forcing the user to re-pair. */
     private val agentReadyState = kotlinx.coroutines.flow.MutableStateFlow(false)
@@ -98,7 +100,10 @@ class MainActivity : AppCompatActivity() {
         val graph = app.graph
         Log.i("Halo", "MainActivity onCreate; profile=${graph.deviceProfile}")
         firstRunStore = FirstRunPrefsStore(applicationContext)
-        adb = AdbBootstrap(applicationContext)
+        adb = graph.adbBootstrap   // process-scoped singleton — shares one loopback connection with the service
+        // Seed state immediately so the wizard renders the correct gates on the very first frame
+        // instead of showing everything as "not done" until the first onResume poll fires.
+        refreshSetupState()
 
         // Android 14 / targetSdk 34 — starting a foreground service of type=connectedDevice
         // requires the matching runtime BLUETOOTH permissions to already be granted, otherwise
@@ -120,18 +125,22 @@ class MainActivity : AppCompatActivity() {
         }
 
         // v0.4 — auto-recovery: if setup was completed before but the injection agent is no longer
-        // alive on startup (WRITE_SECURE_SETTINGS revoked, wireless-debug off, bootRecoverAgent
-        // failed), drop the user straight back into the wizard to re-establish system access
-        // (user ask 2026-05-27 "启动发现掉权限了自动进 wizard"). We wait a grace window first so a
-        // healthy agent that's mid-revival (bootRecoverAgent runs async on service start) doesn't
-        // trigger a spurious wizard. If the agent comes up within the window, agentReadyState flips
-        // and we don't force it.
+        // alive on startup, drop the user back into the wizard. Fast-fail path: if Wi-Fi is off
+        // adbd can't bind its port and bootRecoverAgent cannot possibly succeed, so we show the
+        // wizard immediately. If Wi-Fi is on we give the service's bootRecoverAgent a 3-s window
+        // to revive the agent before triggering the wizard.
         lifecycleScope.launch {
-            if (!firstRunStore.completedFlow.first()) return@launch  // never set up → normal first-run path
-            kotlinx.coroutines.delay(7000)  // give bootRecoverAgent time to revive the agent
-            refreshSetupState()              // refresh agentReadyState from the heartbeat
+            if (!firstRunStore.completedFlow.first()) return@launch
+            if (agentReadyState.value) return@launch  // already alive — all good
+            if (!wifiConnectedState.value) {
+                Log.w("Halo", "Wi-Fi off on start — re-entering wizard immediately")
+                forceWizardState.value = true
+                return@launch
+            }
+            kotlinx.coroutines.delay(3000)
+            refreshSetupState()
             if (!agentReadyState.value) {
-                Log.w("Halo", "system access lost (agent not ready ${7}s after start) — re-entering wizard")
+                Log.w("Halo", "agent not ready 3s after start — re-entering wizard")
                 forceWizardState.value = true
             }
         }
@@ -167,12 +176,15 @@ class MainActivity : AppCompatActivity() {
                     val a11yEnabled by accessibilityEnabledState.collectAsState()
                     val batteryExempted by batteryExemptedState.collectAsState()
                     val devOptionsEnabled by devOptionsEnabledState.collectAsState()
+                    val wifiConnected by wifiConnectedState.collectAsState()
                     val wirelessDebugEnabled by wirelessDebugEnabledState.collectAsState()
                     val agentReady by agentReadyState.collectAsState()
                     FirstRunWizardScreen(
                         onOpenDeveloperSettings = { openWirelessDebuggingSettings() },
                         onOpenBuildNumber = { openAboutForBuildNumber() },
                         devOptionsEnabled = devOptionsEnabled,
+                        wifiConnected = wifiConnected,
+                        onOpenWifiSettings = { openWifiSettings() },
                         wirelessDebugEnabled = wirelessDebugEnabled,
                         agentReady = agentReady,
                         onStartAdbPairing = {
@@ -188,6 +200,18 @@ class MainActivity : AppCompatActivity() {
                         onCompleted = {
                             lifecycleScope.launch { firstRunStore.markCompleted() }
                             forceWizardState.value = false   // clear the Advanced-triggered re-show
+                        },
+                        isReRecovery = forceWizard,
+                        pairedMac = pairedMac,
+                        ringConnected = ringInfo.connected,
+                        onStartRingReconnect = {
+                            graph.bleClient.stop()
+                            graph.bleClient.start()
+                        },
+                        onStartAdbReconnect = {
+                            lifecycleScope.launch {
+                                adb.withRecoveryLock { runAdbReconnect({ adbStatus = it }, { adbStatus = it }) }
+                            }
                         },
                     )
                     return@CompositionLocalProvider
@@ -439,6 +463,19 @@ class MainActivity : AppCompatActivity() {
         Log.w("Halo", "no wireless-debugging settings screen available")
     }
 
+    private fun openWifiSettings() {
+        try {
+            startActivity(Intent(Settings.ACTION_WIFI_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        } catch (_: Exception) { }
+    }
+
+    /** True when the Wi-Fi radio is on. Wireless ADB binds to the Wi-Fi interface; the
+     *  radio must be enabled but an actual internet connection is NOT required. */
+    private fun isWifiConnected(): Boolean {
+        val wm = applicationContext.getSystemService(android.net.wifi.WifiManager::class.java) ?: return false
+        return wm.isWifiEnabled
+    }
+
     /** v0.4 — jump to the About / Device-info screen where "Build number" lives (tap ×7 to unlock
      *  Developer Options). We can't focus the row itself — Android forbids cross-app focus control
      *  of the system Settings UI — but this lands the user one screen away. If we already hold
@@ -492,7 +529,7 @@ class MainActivity : AppCompatActivity() {
             if (RootBypass.isRootAvailable()) {
                 when (val r = adb.installKeyViaRoot()) {
                     is AdbBootstrap.Result.Success -> {
-                        runRootedBootstrap(report)
+                        adb.withRecoveryLock { runRootedBootstrap(report) }
                         return@launch
                     }
                     is AdbBootstrap.Result.Failure -> {
@@ -503,7 +540,7 @@ class MainActivity : AppCompatActivity() {
             } else {
                 report("No root — opening pairing code entry.")
             }
-            // No root or root bypass failed → fall through to the manual code flow.
+            // No root or root bypass failed → fall through to overlay code entry.
             startOverlayPairingFlow(report)
         }
     }
@@ -530,53 +567,101 @@ class MainActivity : AppCompatActivity() {
             is AdbBootstrap.Result.Failure -> return report("✗ ${r.message}")
             else -> Unit
         }
-        // Let the agent's setsid session detach before we tear down the ADB transport — see
-        // PairingTestReceiver comment for the same pattern. Without this beat the agent dies
-        // between startAgent and disconnect.
-        kotlinx.coroutines.delay(800)
+        report("Verifying agent…")
+        for (i in 0..14) {
+            kotlinx.coroutines.delay(200)
+            if (adb.checkAgentAlive()) return report("✓ Agent running (via root bypass).")
+        }
         adb.disconnect()
-        report("✓ Agent running (via root bypass).")
+        report("✗ Agent didn't start. Check halo-agent.log on device.")
     }
 
+    /**
+     * Overlay-based code entry.
+     *
+     * TYPE_APPLICATION_OVERLAY is suppressed by Settings' HIDE_NON_SYSTEM_OVERLAY_WINDOWS.
+     * TYPE_ACCESSIBILITY_OVERLAY is explicitly exempt — only visible when the accessibility
+     * service is running. If the service is connected, the overlay is created there with
+     * TYPE_ACCESSIBILITY_OVERLAY; otherwise we surface an actionable error.
+     */
     private fun startOverlayPairingFlow(report: (String) -> Unit) {
-        if (!AdbPairingOverlay.hasPermission(this)) {
-            report("✗ Allow \"Display over other apps\" for Halo Ring, then try again.")
-            try { startActivity(AdbPairingOverlay.permissionIntent(this)) }
-            catch (e: Exception) { Log.w("Halo", "open overlay perm settings failed: ${e.message}") }
+        if (!isWifiConnected()) {
+            report("✗ Enable Wi-Fi first — wireless ADB needs the Wi-Fi interface (no internet required).")
+            try { startActivity(Intent(Settings.ACTION_WIFI_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+            catch (_: Exception) { }
             return
         }
 
-        val overlay = pairingOverlay ?: AdbPairingOverlay(applicationContext).also { pairingOverlay = it }
+        val a11y = HaloRingAccessibilityService.instance
+        if (a11y == null) {
+            report("✗ Enable \"Halo Ring\" in Settings → Accessibility first, then tap TRY AGAIN.")
+            try { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+            catch (_: Exception) { }
+            return
+        }
 
-        report("Open Wireless debugging → Pair with code, then type the code below.")
-        overlay.show(
+        report("Open Wireless Debugging → \"Pair device with pairing code\" and enter the 6-digit code below.")
+        a11y.showPairingOverlay(
             onSubmit = { code ->
                 lifecycleScope.launch {
-                    runAdbBootstrap(code, overlay::updateStatus) { final ->
-                        // Final state from runAdbBootstrap also flows back to the wizard surface
-                        // so the user sees the result after the overlay dismisses.
-                        report(final)
-                        overlay.hide()
+                    adb.withRecoveryLock {
+                        runAdbBootstrap(code, a11y::updatePairingStatus) { final ->
+                            report(final)
+                            a11y.hidePairingOverlay()
+                        }
                     }
                 }
             },
             onCancel = { report("") },
         )
-        // Drop the user into Settings so the system pairing dialog opens on top, with our
-        // overlay underneath. (Actually: our overlay window is TYPE_APPLICATION_OVERLAY which
-        // floats above Activities — including the Settings dialog. Good.)
-        try {
-            startActivity(Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-        } catch (e: Exception) {
-            Log.w("Halo", "open dev settings failed: ${e.message}")
+        for (action in listOf("android.settings.ADB_WIFI_SETTINGS",
+                              Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)) {
+            try { startActivity(Intent(action).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); break }
+            catch (_: Exception) { }
         }
     }
 
     /**
+     * Re-recovery path: connect (keypair already exists) → push agent dex → grant → start agent.
+     * No SPAKE2 pairing code required. Used when the agent died after a previous successful setup.
+     */
+    private suspend fun runAdbReconnect(
+        progress: (String) -> Unit,
+        done: (String) -> Unit,
+    ) {
+        progress("Connecting…")
+        when (val r = adb.connect()) {
+            is AdbBootstrap.Result.Failure -> return done("✗ ${r.message}")
+            else -> Unit
+        }
+        progress("Pushing agent…")
+        when (val r = adb.pushAgentDex()) {
+            is AdbBootstrap.Result.Failure -> return done("✗ ${r.message}")
+            else -> Unit
+        }
+        when (val r = adb.grantWriteSecureSettings()) {
+            is AdbBootstrap.Result.Failure ->
+                Log.i("Halo", "pm grant skipped: ${r.message}")
+            else -> Unit
+        }
+        progress("Starting agent…")
+        when (val r = adb.startAgent()) {
+            is AdbBootstrap.Result.Failure -> return done("✗ ${r.message}")
+            else -> Unit
+        }
+        progress("Verifying agent…")
+        for (i in 0..14) {
+            kotlinx.coroutines.delay(200)
+            if (adb.checkAgentAlive()) return done("✓ Agent running.")
+        }
+        adb.disconnect()
+        done("✗ Agent didn't start. Check halo-agent.log on device.")
+    }
+
+    /**
      * Run pair → connect → push agent dex → grant → start agent. Reports incremental progress
-     * via [progress] (drives the overlay's status text) and the terminal state via [done] (drives
-     * the wizard's status text after the overlay closes). The `pm grant` step is allowed to
-     * fail — some vendors (OnePlus, Xiaomi) strip `GRANT_RUNTIME_PERMISSIONS` from shell.
+     * via [progress] (drives the overlay status text) and the terminal state via [done].
+     * The `pm grant` step is allowed to fail — some vendors strip GRANT_RUNTIME_PERMISSIONS.
      */
     private suspend fun runAdbBootstrap(
         code: String,
@@ -585,7 +670,7 @@ class MainActivity : AppCompatActivity() {
     ) {
         progress("Discovering…")
         val ep = adb.discoverPairingEndpoint()
-            ?: return done("✗ Pairing service not found. Open \"Pair with code\" and try again.")
+            ?: return done("✗ Pairing service not found. Open \"Pair with code\" and tap TRY AGAIN.")
 
         progress("Pairing…")
         when (val r = adb.pairWithCode(code, ep)) {
@@ -612,9 +697,15 @@ class MainActivity : AppCompatActivity() {
             is AdbBootstrap.Result.Failure -> return done("✗ ${r.message}")
             else -> Unit
         }
-        kotlinx.coroutines.delay(800)  // see comment in runRootedBootstrap
+        // Poll for the agent's abstract socket — up to 3 s. On success, leave the ADB connection
+        // open: the agent runs in the shell foreground and dies the moment we disconnect.
+        progress("Verifying agent…")
+        for (i in 0..14) {
+            kotlinx.coroutines.delay(200)
+            if (adb.checkAgentAlive()) return done("✓ Agent running.")
+        }
         adb.disconnect()
-        done("✓ Agent running.")
+        done("✗ Agent didn't start. Check halo-agent.log on device.")
     }
 
     private fun requestBatteryExemption() {
@@ -638,6 +729,14 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         isInForeground.set(true)
         refreshSetupState()
+        // Poll every 500 ms so the wizard reacts instantly when a setting is changed (e.g. the
+        // user enables Wi-Fi from the quick-settings shade without leaving Halo Ring).
+        setupPollJob = lifecycleScope.launch {
+            while (true) {
+                kotlinx.coroutines.delay(500)
+                refreshSetupState()
+            }
+        }
         // v0.3 P1 (Doc/19 §3.P1) / v0.4 (Doc/20 §3): publish our activity ref so the gesture
         // pipeline can dispatch base-gesture KeyEvents into this window. Compose handles
         // DPAD_CENTER / BACK / DPAD_LEFT/RIGHT natively on the focused element.
@@ -658,18 +757,29 @@ class MainActivity : AppCompatActivity() {
         ) ?: ""
         accessibilityEnabledState.value = enabledList.split(':').any { it == expectedSvc }
 
-        // v0.4 — Developer Options + Wireless Debugging live status (global settings are readable
-        // without WRITE_SECURE_SETTINGS). Drives the wizard's ✓/✗ + the pairing-step gate.
+        // v0.4 — Developer Options + Wi-Fi + Wireless Debugging live status.
         devOptionsEnabledState.value = try {
             android.provider.Settings.Global.getInt(
                 contentResolver, android.provider.Settings.Global.DEVELOPMENT_SETTINGS_ENABLED, 0) == 1
         } catch (_: Exception) { false }
+        wifiConnectedState.value = isWifiConnected()
         wirelessDebugEnabledState.value = try {
             android.provider.Settings.Global.getInt(contentResolver, "adb_wifi_enabled", 0) == 1
         } catch (_: Exception) { false }
 
+        // Auto-re-enable wireless debugging when Wi-Fi is on and we hold WRITE_SECURE_SETTINGS.
+        // Covers the common case after reboot: the OEM clears adb_wifi_enabled when Wi-Fi was off
+        // at boot. Once the user turns Wi-Fi on, we flip it back silently and the wizard advances.
+        if (wifiConnectedState.value && !wirelessDebugEnabledState.value) {
+            try {
+                android.provider.Settings.Global.putInt(contentResolver, "adb_wifi_enabled", 1)
+                wirelessDebugEnabledState.value = true
+                Log.i("Halo", "auto-re-enabled adb_wifi_enabled (Wi-Fi on + WRITE_SECURE_SETTINGS)")
+            } catch (_: Exception) { /* no WRITE_SECURE_SETTINGS yet — user must enable manually */ }
+        }
+
         // Agent liveness: the heartbeat file is world-readable (-rw-rw-rw-) and the agent rewrites
-        // it every 5 s. Fresh (< 30 s) ⇒ agent up ⇒ system access already done.
+        // it every 20 s (P1-7). Fresh (< 30 s) ⇒ agent up ⇒ system access already done.
         agentReadyState.value = try {
             val hb = java.io.File("/data/local/tmp/halo.agent.heartbeat")
             hb.exists() && (System.currentTimeMillis() - hb.lastModified()) < 30_000L
@@ -679,6 +789,8 @@ class MainActivity : AppCompatActivity() {
     override fun onPause() {
         super.onPause()
         isInForeground.set(false)
+        setupPollJob?.cancel()
+        setupPollJob = null
         // v0.3 P1: clear the dispatcher's activity ref so the gesture pipeline falls back to
         // the no-op dispatcher while we're backgrounded. Out-of-app gesture handling will go
         // through the agent (Phase 1b — out of scope for v0.3 P1).
@@ -687,8 +799,6 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        pairingOverlay?.destroy()
-        pairingOverlay = null
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
