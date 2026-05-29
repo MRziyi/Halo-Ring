@@ -122,15 +122,11 @@ class HaloRingService : Service() {
                 Log.i(TAG, "ring impact ${"%.1f".format(spatial.peakG)} g")
             is com.halo.ring.core.sensor.AccelProcessor.SpatialEvent.PostureChanged ->
                 Log.d(TAG, "ring posture: ${spatial.posture}")
-            is com.halo.ring.core.sensor.AccelProcessor.SpatialEvent.WristShake -> {
-                // v0.4: route the air-gesture into the gesture pipeline like a ring gesture. The
-                // emit lambda runs on the scheduler thread (AccelProcessor.onSample is called from
-                // the BLE-events subscriber), so calling onGesture directly is thread-safe.
-                Log.i(TAG, "wrist-shake → Gesture.WRIST_SHAKE")
-                serviceScope.launch(kotlinx.coroutines.Dispatchers.Unconfined) {
-                    interactionRouter.onGesture(com.halo.ring.core.gesture.Gesture.WRIST_SHAKE)
-                }
-            }
+            is com.halo.ring.core.sensor.AccelProcessor.SpatialEvent.WristShake ->
+                // WRIST_SHAKE gesture is dropped for now (firmware shake needs appType=7, which is
+                // mutually exclusive with the touch gestures — see R08Protocol.TOUCH_MODE). Keep the
+                // detector running for free-fall/posture; just don't route shake to a Gesture yet.
+                Log.d(TAG, "accel wrist-shake (unrouted)")
         }
     }
     /** P1-5: when ringInfo derived fields (estimatedConnIntervalMs / intervalMode / activeBackendId)
@@ -305,9 +301,14 @@ class HaloRingService : Service() {
             // out-of-app it lands on whichever Activity is foreground via the temple-broadcast
             // path (C2 / SystemBroadcastReceiver) or the agent. Custom gestures (TRIPLE_TAP etc.)
             // continue to flow through profile → ActionRouter → executor backend below.
-            // Doc/18 §6 — pushed-profile stack lookup. The router consults this BEFORE the
-            // wearer's active profile so overlay-app bindings win while their HUD is up.
-            r.pushedProfileLookup = { gesture -> graph.profileStack.lookup(gesture) }
+            // Doc/18 §7 — exclusive plugin overlay. When a plugin's HUD is up it owns the ring:
+            // the router forwards every gesture to the plugin and lets nothing leak to the
+            // underlying app. expireIfStale releases a crashed/hung plugin on the next gesture.
+            r.overlayCaptures = {
+                if (graph.overlayController.expireIfStale(graph.scheduler.nowMs())) onOverlayChanged(false)
+                graph.overlayController.isActive()
+            }
+            r.forwardOverlayGesture = { gesture -> forwardOverlayGesture(gesture) }
         }
 
         // ── 2. install the HUD overlay (after router so it can dispatch into it) ────────────────
@@ -376,8 +377,15 @@ class HaloRingService : Service() {
                     // need to know whether SWIPE / LONG_PRESS frames are arriving at all.
                     Log.i(TAG, "raw gesture: ${event.raw}")
                     if (!interactionRouter.screenOn) {
-                        // Screen-off fast path: bypass synthesizer (LONG_PRESS = wake in ~50-80 ms).
-                        serviceScope.launch { interactionRouter.onRawWhileScreenOff(event.raw) }
+                        // Screen-off fast path: a raw-matchable wake gesture (LONG_PRESS / SWIPE)
+                        // fires in ~50-80 ms without the synthesizer. If the wake gesture is a
+                        // synthesized one (DOUBLE_TAP, the current default), onRawWhileScreenOff
+                        // returns false (not consumed) and we feed the synthesizer so it can emit
+                        // DOUBLE_TAP → wake (handled in InteractionRouter.onGesture while off).
+                        serviceScope.launch {
+                            val consumed = interactionRouter.onRawWhileScreenOff(event.raw)
+                            if (!consumed) synthesizer.onRaw(event.raw)
+                        }
                     } else {
                         synthesizer.onRaw(event.raw)
                     }
@@ -444,7 +452,10 @@ class HaloRingService : Service() {
                 is RingEvent.TargetReached -> {
                     hud?.show(HudEvent.TargetReached)
                 }
-                is RingEvent.RingGameKey -> Log.i(TAG, "wrist-shake (RING_GAME_KEY)")
+                is RingEvent.RingGameKey ->
+                    // Firmware wrist-shake (0x73 sub=0x29). Only ever fires in appType=7 (Game) mode,
+                    // which we don't use (it would disable the touch gestures). Won't fire in practice.
+                    Log.d(TAG, "RING_GAME_KEY (unrouted — appType=7 not enabled)")
                 is RingEvent.SportTick -> {
                     // Live HR + duration during a workout. Pushed into the sport-session flow.
                     val prev = graph.vitalsSnapshotFlow.value
@@ -556,7 +567,10 @@ class HaloRingService : Service() {
         }
         cleanup += wearUnsub
 
-        // ── 6. profile changes → HUD + ring LED + synthesizer config swap ─────────────────────
+        // ── 6. profile changes → HUD + synthesizer config swap ────────────────────────────────
+        // Ring-LED blink on switch is OFF by default now (user 2026-05-28: "模式切换别闪灯了，默认把亮灯
+        // 关掉" — needless battery, and switches are frequent). The HUD prompt is the feedback channel.
+        // The "Ring LED feedback" toggle (default off) can re-enable it.
         val modeUnsub = graph.modeManager.observe { profile ->
             graph.scheduler.post {
                 Log.i(TAG, "active profile: ${profile.name}")
@@ -712,8 +726,12 @@ class HaloRingService : Service() {
         // The a11y service may already be running (from a previous app session) or come online
         // later. The listener is process-wide, so we set it unconditionally — when the service
         // binds (or re-binds) it'll start delivering events to us.
-        HaloRingAccessibilityService.foregroundPackageListener = { pkg ->
-            graph.scheduler.post { graph.modeManager.onForegroundPackage(pkg) }
+        HaloRingAccessibilityService.foregroundPackageListener = { pkg, activity ->
+            graph.scheduler.post {
+                // Freeze profile inference while a plugin overlay owns the ring — the underlying
+                // app's profile must not churn under the HUD; it re-asserts when the overlay releases.
+                if (!graph.overlayController.isActive()) graph.modeManager.onForegroundPackage(pkg, activity)
+            }
         }
         cleanup += { HaloRingAccessibilityService.foregroundPackageListener = null }
 
@@ -721,12 +739,9 @@ class HaloRingService : Service() {
         // Three pieces:
         //   (a) PluginRegistry's package-event receiver — invalidates the discovery cache on
         //       plugin install/uninstall/replace so the next Action Picker open sees fresh state.
-        //   (b) An additional PACKAGE_REMOVED watch that drops every ProfileStack frame owned by
-        //       the removed package — Doc/18 §6.4: "auto-pop if the owner package's process
-        //       dies" (the spec allows generalising "dies" to "uninstalled", which is the
-        //       irrecoverable case; in-process death is harder to detect cheaply, so we settle
-        //       for the uninstall signal as the safest auto-prune trigger).
-        //   (c) PluginBroadcastReceiver itself for the PROFILE_PUSH / PROFILE_POP intents.
+        //   (b) A PACKAGE_REMOVED watch that releases the overlay if its owner is uninstalled
+        //       (in-process crash is caught by the keepalive timeout in OverlayController.expireIfStale).
+        //   (c) PluginBroadcastReceiver itself for the OVERLAY_ACTIVATE / OVERLAY_DEACTIVATE intents.
         graph.pluginRegistry.registerPackageEventReceiver()
         cleanup += { graph.pluginRegistry.unregisterPackageEventReceiver() }
         // Eager discovery on service start so the Settings root row badge ("External plugins  N
@@ -744,9 +759,9 @@ class HaloRingService : Service() {
                 if (intent?.action != Intent.ACTION_PACKAGE_REMOVED) return
                 val pkg = intent.data?.schemeSpecificPart ?: return
                 graph.scheduler.post {
-                    val dropped = graph.profileStack.dropOwner(pkg)
-                    if (dropped > 0) {
-                        Log.i(TAG, "auto-popped $dropped pushed profile(s) — $pkg uninstalled")
+                    if (graph.overlayController.deactivateOwner(pkg)) {
+                        Log.i(TAG, "released overlay — $pkg uninstalled")
+                        onOverlayChanged(false)
                     }
                 }
             }
@@ -757,12 +772,15 @@ class HaloRingService : Service() {
         cleanup += { try { unregisterReceiver(pluginUninstallReceiver) } catch (_: IllegalArgumentException) {} }
 
         val pluginBroadcast = com.halo.ring.plugin.PluginBroadcastReceiver(
-            stack = graph.profileStack,
-            onStackChanged = { /* nothing extra for now; the next gesture lookup picks up the change */ },
+            overlay = graph.overlayController,
+            pm = packageManager,
+            onOverlayChanged = { activated -> graph.scheduler.post { onOverlayChanged(activated) } },
         )
         val pluginFilter = IntentFilter().apply {
-            addAction(com.halo.ring.plugin.PluginBroadcastReceiver.ACTION_PROFILE_PUSH)
-            addAction(com.halo.ring.plugin.PluginBroadcastReceiver.ACTION_PROFILE_POP)
+            addAction(com.halo.ring.plugin.PluginBroadcastReceiver.ACTION_OVERLAY_ACTIVATE)
+            addAction(com.halo.ring.plugin.PluginBroadcastReceiver.ACTION_OVERLAY_DEACTIVATE)
+            addAction(com.halo.ring.plugin.PluginBroadcastReceiver.ACTION_PROFILE_PUSH)   // legacy
+            addAction(com.halo.ring.plugin.PluginBroadcastReceiver.ACTION_PROFILE_POP)    // legacy
         }
         try {
             // RECEIVER_EXPORTED on Android 14+ — receiver MUST opt in to receiving from external
@@ -941,6 +959,34 @@ class HaloRingService : Service() {
         if (worn) lastWornMs = graph.scheduler.nowMs()
         Log.i(TAG, "wear state from ring touch-IC: worn=$worn")
         reconcilePower()
+    }
+
+    /** Doc/18 §7 — overlay activated / released. Runs on the scheduler thread. Shows the activation
+     *  HUD (overlay app name) on activate; on release, re-shows the underlying profile so the wearer
+     *  sees the ring is theirs again. (The underlying [ModeManager] profile was never changed — the
+     *  overlay is a router-layer takeover — so there's nothing to restore beyond the HUD cue.) */
+    private fun onOverlayChanged(activated: Boolean) {
+        val ov = graph.overlayController.active()
+        if (activated && ov != null) {
+            Log.i(TAG, "overlay ACTIVE — ${ov.ownerPackage}/${ov.profileId} owns the ring")
+            hud?.show(HudEvent.ProfileSwitched(ov.displayName))
+        } else if (ov == null) {
+            Log.i(TAG, "overlay released → back to ${graph.modeManager.active().name}")
+            hud?.show(HudEvent.ProfileSwitched(graph.modeManager.active().name))
+        }
+    }
+
+    /** Forward a raw ring gesture to the active overlay plugin (Doc/18 §7). Explicit broadcast to the
+     *  owner package only; the plugin assigns meaning + updates its own HUD. No-op if released. */
+    private fun forwardOverlayGesture(gesture: com.halo.ring.core.gesture.Gesture) {
+        val owner = graph.overlayController.ownerPackage() ?: return
+        val i = Intent(com.halo.ring.plugin.PluginBroadcastReceiver.ACTION_OVERLAY_GESTURE).apply {
+            setPackage(owner)
+            putExtra("gesture", gesture.name)
+            putExtra("from_package", packageName)
+        }
+        try { sendBroadcast(i) } catch (e: Exception) { Log.w(TAG, "overlay forward failed: ${e.message}") }
+        Log.i(TAG, "overlay gesture → $owner: ${gesture.name}")
     }
 
     private fun reconcilePower() {

@@ -101,8 +101,13 @@ interface FeatureIntents {
     /** Wake the everyday voice/chat AI (Rokid Chat / RayNeo Gemini). Distinct from [askVisualAI]
      *  which is camera-grounded VQA. */
     fun openAIAssistant(): List<InjectionPrimitive>
+    /** Wake the glasses' **native** system AI agent (Rokid: Sprite AI via ACTION_AI_START broadcast).
+     *  Distinct from [openAIAssistant], which opens a specific chat app/page. */
+    fun wakeSystemAI(): List<InjectionPrimitive>
     fun askVisualAI(): List<InjectionPrimitive>
     fun openTranslate(): List<InjectionPrimitive>
+    /** Rokid live-caption / 字幕 page. Empty on devices without one. */
+    fun openSubtitle(): List<InjectionPrimitive>
     fun openChat(): List<InjectionPrimitive>
     fun openMusic(): List<InjectionPrimitive>
     fun openSettings(): List<InjectionPrimitive>

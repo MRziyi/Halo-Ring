@@ -98,8 +98,10 @@ class RayNeoActionMapper(private val intents: FeatureIntents) : GlassActionMappe
         GlassAction.OpenCamera     -> intents.openCamera()
         GlassAction.TakePhoto      -> intents.takePhoto()
         GlassAction.OpenAIAssistant -> intents.openAIAssistant()
+        GlassAction.WakeSystemAI   -> intents.wakeSystemAI()
         GlassAction.AskVisualAI    -> intents.askVisualAI()
         GlassAction.OpenTranslate  -> intents.openTranslate()
+        GlassAction.OpenSubtitle   -> intents.openSubtitle()
         GlassAction.OpenChat       -> intents.openChat()
         GlassAction.OpenMusic      -> intents.openMusic()
         GlassAction.OpenSettings   -> intents.openSettings()
@@ -167,6 +169,7 @@ class RayNeoFeatureIntents : FeatureIntents {
     // mis-routed. On-device discovery in Doc/11 §B6.
     override fun askVisualAI()   = emptyList<InjectionPrimitive>()
     override fun openTranslate() = emptyList<InjectionPrimitive>()
+    override fun openSubtitle()  = emptyList<InjectionPrimitive>()   // no RayNeo equivalent yet
     override fun openChat()      = emptyList<InjectionPrimitive>()
     /**
      * Best-effort "wake the assistant" on X3 Pro. RayNeo bundles Google Gemini (West) / a domestic
@@ -183,6 +186,12 @@ class RayNeoFeatureIntents : FeatureIntents {
      * verification recipe.
      */
     override fun openAIAssistant() = listOf(
+        InjectionPrimitive.Shell("am start -a android.speech.action.VOICE_SEARCH_HANDS_FREE"),
+    )
+    /** RayNeo has no documented native-assistant broadcast equivalent to Rokid's ACTION_AI_START;
+     *  reuse the hands-free voice-search entry as the best-effort "system AI" until on-device
+     *  discovery finds the RayNeo-specific trigger. */
+    override fun wakeSystemAI() = listOf(
         InjectionPrimitive.Shell("am start -a android.speech.action.VOICE_SEARCH_HANDS_FREE"),
     )
     override fun openMusic() = listOf(

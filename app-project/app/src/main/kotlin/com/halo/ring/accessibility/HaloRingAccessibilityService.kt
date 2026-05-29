@@ -93,8 +93,26 @@ class HaloRingAccessibilityService : AccessibilityService() {
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event?.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
             val pkg = event.packageName?.toString()
-            Log.v(TAG, "TYPE_WINDOW_STATE_CHANGED pkg=$pkg")
-            foregroundPackageListener?.invoke(pkg)
+            // IGNORE our own windows (the MainActivity + the HUD overlay). Critical: when we show the
+            // "ProfileSwitched" HUD, that overlay fires its own TYPE_WINDOW_STATE_CHANGED with our
+            // package — which would otherwise be read as "foreground changed to Halo Ring" and revert
+            // the profile to the Navigation fallback ~150 ms after every switch (a feedback loop that
+            // left the ring stuck in Navigation: long-press slept, music-tap did nothing). Our app
+            // isn't a profile context anyway. (root-caused on-device 2026-05-28)
+            // The activity class — needed to tell apart Rokid Sprite "apps" (camera / music /
+            // translate / chat …) which are all ONE package (com.rokid.os.sprite.launcher) but
+            // different activities. Without this, package-only matching never fires for them.
+            val activity = event.className?.toString()
+            // Only react to real ACTIVITY transitions. TYPE_WINDOW_STATE_CHANGED also fires for
+            // popups / dialogs / dropdowns / IME whose className is a widget (PopupWindow, a View,
+            // a Dialog) — those would match no profile trigger and revert us to the Navigation
+            // fallback ~250 ms after every switch (observed: launcher sub-windows kept knocking
+            // Media/Camera back to Navigation, so long-press slept and music-tap did nothing).
+            // Heuristic: a top-level Activity class ends in "Activity". (root-caused 2026-05-28)
+            if (pkg != null && pkg != packageName && activity != null && activity.endsWith("Activity")) {
+                Log.v(TAG, "TYPE_WINDOW_STATE_CHANGED pkg=$pkg activity=$activity")
+                foregroundPackageListener?.invoke(pkg, activity)
+            }
         }
         if (btActive) stepBtInternetFlow()
     }
@@ -343,7 +361,7 @@ class HaloRingAccessibilityService : AccessibilityService() {
             private set
 
         /** Subscribed by the service so [com.halo.ring.core.action.ModeManager.onForegroundPackage]
-         *  can run for auto-profile-switch. */
-        @Volatile var foregroundPackageListener: ((String?) -> Unit)? = null
+         *  can run for auto-profile-switch. Args: (package, activityClass). */
+        @Volatile var foregroundPackageListener: ((String?, String?) -> Unit)? = null
     }
 }

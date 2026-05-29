@@ -77,8 +77,8 @@ class GestureSynthesizer(
     fun onRaw(raw: RawGesture, nowMs: Long = scheduler.nowMs()) {
         when (raw) {
             RawGesture.LONG_PRESS -> onLongPress()
-            RawGesture.SWIPE_UP   -> onSwipe(plain = Gesture.SWIPE_UP,   doubleTapCombo = Gesture.DOUBLE_TAP_SWIPE_UP,   longPressCombo = Gesture.LONG_PRESS_SWIPE_UP)
-            RawGesture.SWIPE_DOWN -> onSwipe(plain = Gesture.SWIPE_DOWN, doubleTapCombo = Gesture.DOUBLE_TAP_SWIPE_DOWN, longPressCombo = Gesture.LONG_PRESS_SWIPE_DOWN)
+            RawGesture.SWIPE_UP   -> onSwipe(plain = Gesture.SWIPE_UP,   tapCombo = Gesture.TAP_SWIPE_UP,   doubleTapCombo = Gesture.DOUBLE_TAP_SWIPE_UP,   longPressCombo = Gesture.LONG_PRESS_SWIPE_UP)
+            RawGesture.SWIPE_DOWN -> onSwipe(plain = Gesture.SWIPE_DOWN, tapCombo = Gesture.TAP_SWIPE_DOWN, doubleTapCombo = Gesture.DOUBLE_TAP_SWIPE_DOWN, longPressCombo = Gesture.LONG_PRESS_SWIPE_DOWN)
             RawGesture.TOUCH      -> onTouch(nowMs)
         }
     }
@@ -179,7 +179,7 @@ class GestureSynthesizer(
         }
     }
 
-    private fun onSwipe(plain: Gesture, doubleTapCombo: Gesture, longPressCombo: Gesture) {
+    private fun onSwipe(plain: Gesture, tapCombo: Gesture, doubleTapCombo: Gesture, longPressCombo: Gesture) {
         // Long-press combo takes priority over double-tap combo (more "specific" sequence).
         if (inLpFollowupWindow) {
             lpFollowupTimer.cancel(); lpFollowupTimer = NoopCancellable
@@ -197,6 +197,18 @@ class GestureSynthesizer(
             tapCount = 0
             tapTimer.cancel(); tapTimer = NoopCancellable
             emit(doubleTapCombo)
+            return
+        }
+        // Single-tap-then-swipe → TAP_SWIPE_* (user 2026-05-28). Fires when exactly one TAP is still
+        // pending (its multi-tap window hasn't expired) and a swipe arrives. Only when combos are on
+        // and the tap is NOT optimistic (optimistic already emitted the bare TAP, so a tap-combo
+        // would double-fire). A bare swipe with no pending tap falls through to `plain` (instant —
+        // keeps base-gesture nav snappy).
+        if (tapCount == 1 && config.awaitCombos && !config.optimisticSingleTap) {
+            tapTimer.cancel(); tapTimer = NoopCancellable
+            tapCount = 0
+            lastTapAtMs = Long.MIN_VALUE
+            emit(tapCombo)
             return
         }
         flushPendingTapBeforeDefiniteGesture()

@@ -96,8 +96,8 @@ object GlassActionCodec {
         GlassAction.MediaPlayPause, GlassAction.MediaPrev, GlassAction.MediaNext,
         // features
         GlassAction.OpenCamera, GlassAction.TakePhoto,
-        GlassAction.OpenAIAssistant, GlassAction.AskVisualAI,
-        GlassAction.OpenTranslate, GlassAction.OpenChat, GlassAction.OpenMusic,
+        GlassAction.OpenAIAssistant, GlassAction.WakeSystemAI, GlassAction.AskVisualAI,
+        GlassAction.OpenTranslate, GlassAction.OpenSubtitle, GlassAction.OpenChat, GlassAction.OpenMusic,
         GlassAction.OpenSettings, GlassAction.OpenGallery,
         // system pseudo-actions
         GlassAction.ScreenSleep, GlassAction.ScreenWake,

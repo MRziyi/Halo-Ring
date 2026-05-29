@@ -61,8 +61,10 @@ class InteractionRouterTest {
 
     // ── screen-off fast path ───────────────────────────────────────────────────────────────────
 
-    @Test fun `screen-off wake gesture fires ScreenWake and is consumed`() = runBlocking<Unit> {
+    @Test fun `screen-off raw-matchable wake gesture fires ScreenWake on the fast path`() = runBlocking<Unit> {
+        // A raw-matchable wake gesture (LONG_PRESS / SWIPE) still fires on the zero-latency fast path.
         val (ir, _, _, b) = fixture(screenOn = false)
+        ir.systemGestures = SystemGestures(wake = Gesture.LONG_PRESS)
         val rawSeen = mutableListOf<Pair<RawGesture, Boolean>>()
         ir.onScreenOffGesture = { raw, woke -> rawSeen += raw to woke }
         val consumed = ir.onRawWhileScreenOff(RawGesture.LONG_PRESS)
@@ -71,14 +73,32 @@ class InteractionRouterTest {
         assertEquals(listOf(RawGesture.LONG_PRESS to true), rawSeen)
     }
 
-    @Test fun `screen-off non-wake raw is silently dropped`() = runBlocking<Unit> {
+    @Test fun `screen-off non-wake raw is silently dropped (raw-matchable wake)`() = runBlocking<Unit> {
         val (ir, _, _, b) = fixture(screenOn = false)
+        ir.systemGestures = SystemGestures(wake = Gesture.LONG_PRESS)
         val seen = mutableListOf<Pair<RawGesture, Boolean>>()
         ir.onScreenOffGesture = { r, w -> seen += r to w }
         val consumed = ir.onRawWhileScreenOff(RawGesture.TOUCH)
         assertTrue(consumed)
         assertTrue(b.dispatched.isEmpty())
         assertEquals(listOf(RawGesture.TOUCH to false), seen)
+    }
+
+    @Test fun `screen-off with a synthesized wake gesture defers to the synthesizer`() = runBlocking<Unit> {
+        // Default wake is DOUBLE_TAP, which can't be matched from a single raw — onRawWhileScreenOff
+        // returns false (not consumed) so the caller feeds the synthesizer, and onGesture fires wake
+        // when the synth emits DOUBLE_TAP while the screen is still off.
+        val (ir, _, _, b) = fixture(screenOn = false)   // default wake = DOUBLE_TAP
+        assertEquals(false, ir.onRawWhileScreenOff(RawGesture.TOUCH))
+        assertTrue(b.dispatched.isEmpty())
+        ir.onGesture(Gesture.DOUBLE_TAP)   // synth emits this with screen still off
+        assertEquals(listOf<GlassAction>(GlassAction.ScreenWake), b.dispatched)
+    }
+
+    @Test fun `screen-off non-wake synthesized gesture is dropped`() = runBlocking<Unit> {
+        val (ir, _, _, b) = fixture(screenOn = false)   // default wake = DOUBLE_TAP
+        ir.onGesture(Gesture.SWIPE_UP)
+        assertTrue(b.dispatched.isEmpty())
     }
 
     @Test fun `when screen is on the screen-off path returns false (not consumed)`() = runBlocking<Unit> {
@@ -88,12 +108,14 @@ class InteractionRouterTest {
 
     // ── system layer ───────────────────────────────────────────────────────────────────────────
 
-    @Test fun `TRIPLE_TAP cycles the profile and never reaches the backend`() = runBlocking<Unit> {
+    @Test fun `TRIPLE_TAP takes a screenshot system-wide and never cycles the profile`() = runBlocking<Unit> {
+        // 2026-05-28: TRIPLE_TAP = Screenshot, shared across every profile via systemSlots. It doesn't
+        // cycle the profile (profiles are auto-only) and falls through to the profile binding.
         val (ir, mm, _, b) = fixture()
         val firstActive = mm.active().id
         ir.onGesture(Gesture.TRIPLE_TAP)
-        assertTrue(mm.active().id != firstActive, "profile should have cycled")
-        assertTrue(b.dispatched.isEmpty(), "system-level cycle must not hit the backend")
+        assertEquals(firstActive, mm.active().id, "profile must NOT cycle on triple-tap")
+        assertEquals(listOf<GlassAction>(GlassAction.Screenshot), b.dispatched)
     }
 
     @Test fun `LONG_PRESS routes to ScreenSleep system action when screen on - v04 screen-toggle`() = runBlocking<Unit> {
@@ -196,12 +218,11 @@ class InteractionRouterTest {
     }
 
     @Test fun `inAppShortCircuit is NOT consulted for in-app pseudo-actions`() = runBlocking<Unit> {
-        // PeekHud / ProfileCycle — handled by the router itself (no dispatch() call). The
-        // dispatch() function early-returns for these so the in-app shortcut isn't even given the
-        // chance to handle them. (ForceReconnect used to be in this list; it was retired from the
-        // system slot in audit-pass 2026-05-14w in favour of OpenAIAssistant, which IS routed
-        // through dispatch() because it's a real Intent-launching action.)
+        // PeekHud / ProfileCycle — handled by the router itself (no dispatch() call). The dispatch()
+        // function early-returns for these so the in-app shortcut isn't even given the chance to
+        // handle them. They have no default gesture now, so bind them explicitly to exercise it.
         val (ir, _, _, b) = fixture()
+        ir.systemGestures = SystemGestures(profileCycle = Gesture.TRIPLE_TAP, peekHud = Gesture.QUADRUPLE_TAP)
         val seen = mutableListOf<GlassAction>()
         ir.inAppShortCircuit = { seen += it; true }
         ir.onGesture(Gesture.TRIPLE_TAP)    // ProfileCycle, handled before dispatch()
@@ -210,13 +231,12 @@ class InteractionRouterTest {
         assertTrue(b.dispatched.isEmpty())
     }
 
-    @Test fun `DOUBLE_LONG_PRESS triggers OpenAIAssistant via the standard dispatch path`() = runBlocking<Unit> {
-        // Audit-pass 2026-05-14w: the DOUBLE_LONG_PRESS system slot now points at
-        // GlassAction.OpenAIAssistant (was ForceReconnect). It's routed through dispatch() so
-        // the per-flavor FeatureIntents impl can handle the actual launch — distinct from PeekHud
-        // / ProfileCycle which the router handles itself.
+    @Test fun `DOUBLE_LONG_PRESS is free now — routes to the profile (None) and dispatches nothing`() = runBlocking<Unit> {
+        // 2026-05-28: DOUBLE_LONG_PRESS is no longer the aiAssistant system slot (that moved to
+        // TRIPLE_TAP → WakeSystemAI). It falls through to the profile, where it's unbound (None),
+        // so nothing is dispatched. Users can rebind it (e.g. to a plugin call) via the picker.
         val (ir, _, _, b) = fixture()
         ir.onGesture(Gesture.DOUBLE_LONG_PRESS)
-        assertEquals(listOf<GlassAction>(GlassAction.OpenAIAssistant), b.dispatched)
+        assertTrue(b.dispatched.isEmpty())
     }
 }

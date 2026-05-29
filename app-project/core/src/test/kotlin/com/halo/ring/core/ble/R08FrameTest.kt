@@ -173,8 +173,8 @@ class R08FrameTest {
         assertEquals(0x3E.toByte(), R08Protocol.TOUCH_ENABLE[15])
         // TOUCH_DISABLE: 3B 01 00 01 00 → sum = 3D
         assertEquals(0x3D.toByte(), R08Protocol.TOUCH_DISABLE[15])
-        // TOUCH_MODE: 3B 02 00 09 01 → sum = 47
-        assertEquals(0x47.toByte(), R08Protocol.TOUCH_MODE[15])
+        // TOUCH_MODE: 3B 02 00 09 0A (sleepMin bumped 1→10) → sum = 3B+02+09+0A = 0x50
+        assertEquals(0x50.toByte(), R08Protocol.TOUCH_MODE[15])
         // BATTERY_QUERY: 03 + 14×00 → sum = 03
         assertEquals(0x03.toByte(), R08Protocol.BATTERY_QUERY[15])
         // FIND_DEVICE (FindRing): 50 55 AA → sum = 0x50+0x55+0xAA = 0x14F → 0x4F

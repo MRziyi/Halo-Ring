@@ -93,10 +93,10 @@ class AppGraph private constructor(
      *  in onCreate so the cache invalidates on plugin install/uninstall; UI screens read via
      *  [com.halo.ring.plugin.PluginRegistry.plugins] (StateFlow) for snappy recomposition. */
     val pluginRegistry: com.halo.ring.plugin.PluginRegistry,
-    /** Doc/18 §6 — overlay-app profile stack. Pure-JVM state in :core; the service plus the
-     *  [com.halo.ring.plugin.PluginBroadcastReceiver] are the only writers. The router consults
-     *  this BEFORE the active KeyMapProfile on every gesture (still after system gestures). */
-    val profileStack: com.halo.ring.core.plugin.ProfileStack,
+    /** Doc/18 §7 — exclusive plugin overlay state. Pure-JVM in :core; the service +
+     *  [com.halo.ring.plugin.PluginBroadcastReceiver] are the only writers. When active, the router
+     *  forwards every gesture to the plugin and nothing leaks to the underlying app. */
+    val overlayController: com.halo.ring.core.plugin.OverlayController,
     /**
      * Live stream of recognised gestures, published by the foreground service's
      * `InteractionRouter.onGestureRecognized` callback. Consumers (the interactive
@@ -185,7 +185,7 @@ class AppGraph private constructor(
                 latencyLogger = LatencyLogger(capacity = 200),
                 vitalsLogger = VitalsLogger(capacity = 500),
                 pluginRegistry = com.halo.ring.plugin.PluginRegistry(context.applicationContext),
-                profileStack = com.halo.ring.core.plugin.ProfileStack(),
+                overlayController = com.halo.ring.core.plugin.OverlayController(),
                 recognisedGestureFlow = MutableSharedFlow(extraBufferCapacity = 8),
                 lastRecognisedFlow = MutableStateFlow(null),
                 ringCapabilitiesFlow = MutableStateFlow(emptySet()),

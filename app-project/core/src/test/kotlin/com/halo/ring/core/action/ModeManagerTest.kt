@@ -58,6 +58,26 @@ class ModeManagerTest {
         assertEquals(DefaultProfiles.READER.id, mm.active().id, "auto-switch should fire after lock")
     }
 
+    @Test fun `auto-switch matches on the foreground ACTIVITY when the package alone can't`() {
+        // Rokid Sprite case: every page is the same package but a distinct activity. The trigger is
+        // an activity-class prefix, so matching must use the className, not just the package.
+        val sprite = "com.rokid.os.sprite.launcher"
+        val mm = ModeManager(
+            listOf(
+                DefaultProfiles.NAVIGATION,
+                DefaultProfiles.MEDIA.copy(triggerPackages = listOf("$sprite.page.music")),
+            ),
+            DefaultProfiles.NAVIGATION.id,
+            FakeClock().supplier,
+        )
+        // Package alone (bare launcher) must NOT switch — it's the home/other pages.
+        mm.onForegroundPackage(sprite, "$sprite.main.SpriteMainActivity")
+        assertEquals(DefaultProfiles.NAVIGATION.id, mm.active().id)
+        // Same package, but the music page activity → Media activates.
+        mm.onForegroundPackage(sprite, "$sprite.page.music.MusicPageActivity")
+        assertEquals(DefaultProfiles.MEDIA.id, mm.active().id)
+    }
+
     @Test fun `switchTo also arms the manual lock`() {
         val clock = FakeClock()
         val mm = ModeManager(threeProfiles(), DefaultProfiles.NAVIGATION.id, clock.supplier)

@@ -569,6 +569,7 @@ class MainActivity : AppCompatActivity() {
                 Log.i("Halo", "pm grant skipped (vendor restriction): ${r.message}")
             else -> Unit
         }
+        adb.grantOverlayPermission()   // best-effort: lets the HUD overlay render (else hud is null)
         if (!adb.isOnPersistentTcp()) {
             report("Enabling offline control…")
             when (val r = adb.migrateToPersistentTcp()) {
@@ -663,6 +664,7 @@ class MainActivity : AppCompatActivity() {
                 Log.i("Halo", "pm grant skipped: ${r.message}")
             else -> Unit
         }
+        adb.grantOverlayPermission()   // best-effort: lets the HUD overlay render (else hud is null)
         progress("Starting agent…")
         when (val r = adb.startAgent()) {
             is AdbBootstrap.Result.Failure -> return done("✗ ${r.message}")
@@ -706,6 +708,7 @@ class MainActivity : AppCompatActivity() {
                 Log.i("Halo", "pm grant skipped (vendor restriction): ${r.message}")
             else -> Unit
         }
+        adb.grantOverlayPermission()   // best-effort: lets the HUD overlay render (else hud is null)
         // Move off the Wi-Fi-bound wireless transport onto the persistent loopback port so the
         // agent survives Wi-Fi off / leaving the AP / reboot. No-op if we already came up on it.
         if (!adb.isOnPersistentTcp()) {

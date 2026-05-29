@@ -515,6 +515,8 @@
     <string name="gesture_swipe_up">上滑</string>
     <string name="gesture_swipe_down">下滑</string>
     <string name="gesture_long_press">长按</string>
+    <string name="gesture_tap_swipe_up">单击 + 上滑</string>
+    <string name="gesture_tap_swipe_down">单击 + 下滑</string>
     <string name="gesture_double_tap_swipe_up">双击 + 上滑</string>
     <string name="gesture_double_tap_swipe_down">双击 + 下滑</string>
     <string name="gesture_long_press_swipe_up">长按 + 上滑</string>
@@ -546,8 +548,10 @@
     <string name="action_open_camera">相机</string>
     <string name="action_take_photo">拍照</string>
     <string name="action_open_ai_assistant">AI 助手</string>
+    <string name="action_wake_system_ai">系统 AI（Sprite）</string>
     <string name="action_visual_ai">视觉 AI</string>
     <string name="action_open_translate">翻译</string>
+    <string name="action_open_subtitle">字幕</string>
     <string name="action_open_chat">对话</string>
     <string name="action_open_music">音乐</string>
     <string name="action_open_settings">设置</string>

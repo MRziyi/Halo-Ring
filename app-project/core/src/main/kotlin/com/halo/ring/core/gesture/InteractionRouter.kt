@@ -69,15 +69,15 @@ class InteractionRouter(
      */
     var inAppShortCircuit: ((GlassAction) -> Boolean)? = null,
     /**
-     * Doc/18 §6 — overlay-pushed profile stack lookup. Consulted AFTER system gestures + modal
-     * layer but BEFORE the wearer's active [com.halo.ring.core.action.KeyMapProfile]. Return null
-     * if nothing in the pushed stack binds this gesture; the router falls through to the active
-     * profile. Wired in the foreground service: `{ g -> graph.profileStack.lookup(g) }`.
-     *
-     * Null when no pushed-stack subsystem is plumbed (e.g. unit tests that don't care about
-     * external plugins) — degrades to identical pre-Doc/18 behaviour.
+     * Doc/18 §7 — exclusive plugin OVERLAY. Returns true while a plugin's HUD overlay is active and
+     * owns the ring. When true, [onGesture] forwards EVERY gesture to the plugin via
+     * [forwardOverlayGesture] and lets nothing leak to the underlying app (no base-key passthrough,
+     * no profile routing). Wired in the service: `{ graph.overlayController.isActive() }`.
      */
-    var pushedProfileLookup: ((Gesture) -> GlassAction?)? = null,
+    var overlayCaptures: () -> Boolean = { false },
+    /** Forward a raw gesture to the active overlay plugin (the service broadcasts it). The plugin
+     *  interprets it + updates its own HUD; Halo Ring never assigns semantics. */
+    var forwardOverlayGesture: (Gesture) -> Unit = {},
     /**
      * v0.3 P1 (Doc/19 §3.P1): dispatches a system-level KeyEvent when the active profile's
      * [GestureConfig.useSystemKeyEvents] is true and the gesture is one of the 4 BASE gestures
@@ -104,6 +104,11 @@ class InteractionRouter(
             onScreenOffGesture?.invoke(raw, false)
             return true  // wake disabled → drop everything, return consumed
         }
+        // If the wake gesture is a single raw event (LONG_PRESS / SWIPE), match it here on the
+        // zero-latency fast path. If it's a *synthesized* gesture (e.g. DOUBLE_TAP), we can't match
+        // a single raw — return false so the caller feeds the synthesizer, and [onGesture] fires
+        // wake when the synth emits it (with screen still off).
+        if (!isRawMatchable(wake)) return false
         val matched = matchesRaw(raw, wake)
         if (matched) dispatch(GlassAction.ScreenWake)
         onScreenOffGesture?.invoke(raw, matched)
@@ -116,17 +121,35 @@ class InteractionRouter(
      */
     suspend fun onGesture(gesture: Gesture) {
         if (!screenOn) {
-            // Belt-and-braces: if a stale gesture sneaks through after the screen went off, drop.
+            // Screen off: the only thing that does anything is the (synthesized) wake gesture
+            // (e.g. DOUBLE_TAP, which the raw fast path can't match). Everything else is dropped so
+            // a hand brushing the ring while you sleep can't trigger actions.
+            if (gesture == systemGestures.wake) {
+                onGestureRecognized?.invoke(gesture, GlassAction.ScreenWake)
+                dispatch(GlassAction.ScreenWake)
+            }
             return
         }
+        // 0a. EXCLUSIVE plugin overlay (Doc/18 §7). When a plugin's HUD is up it owns the ring
+        //     entirely: forward the raw gesture to the plugin and swallow it here — nothing reaches
+        //     the system layer, base-key passthrough, or the wearer's profile, so the underlying app
+        //     (music / launcher) never sees a page-flip or click. Highest priority after wake.
+        if (overlayCaptures()) {
+            forwardOverlayGesture(gesture)
+            onGestureRecognized?.invoke(gesture, GlassAction.None)   // HUD-hint / telemetry only
+            return
+        }
+        // 0. system screen-sleep (LONG_PRESS) — but ONLY in the fallback profile (Navigation).
+        //    In app profiles the same gesture belongs to the app (e.g. Media → next track,
+        //    Camera → start recording), so we let it fall through to the profile there.
+        //    (user 2026-05-28: "长按锁屏应该是 navigation 的 profile 的，其他 profile 可以利用这个".)
+        if (gesture == systemGestures.sleep && modeManager.isFallbackActive()) {
+            onGestureRecognized?.invoke(gesture, GlassAction.ScreenSleep)
+            dispatch(GlassAction.ScreenSleep); return
+        }
         // 1. system-level overrides. Note: `wake` is NOT intercepted while on — it's only meaningful
-        //    on the screen-off fast path. So a profile that binds LONG_PRESS (= default wake) to
-        //    Menu / VolumeUp / Home / Back still gets fired here normally.
+        //    on the screen-off fast path.
         when (gesture) {
-            systemGestures.sleep          -> {
-                onGestureRecognized?.invoke(gesture, GlassAction.ScreenSleep)
-                dispatch(GlassAction.ScreenSleep); return
-            }
             systemGestures.profileCycle   -> {
                 modeManager.cycleNext()
                 onSystemAction(GlassAction.ProfileCycle)
@@ -138,13 +161,12 @@ class InteractionRouter(
                 onGestureRecognized?.invoke(gesture, GlassAction.PeekHud); return
             }
             systemGestures.aiAssistant    -> {
-                // Routes through the standard dispatch path so the per-flavor `FeatureIntents`
-                // impl handles the actual launch (Rokid ChatPageActivity / RayNeo
-                // VOICE_SEARCH_HANDS_FREE best-effort). Same path used when a profile binds
-                // OpenAIAssistant via the picker. Audit-pass 2026-05-14w.
-                onSystemAction(GlassAction.OpenAIAssistant)
-                onGestureRecognized?.invoke(gesture, GlassAction.OpenAIAssistant)
-                dispatch(GlassAction.OpenAIAssistant); return
+                // Launch the glasses' native AI agent (Rokid: Sprite AI via ACTION_AI_START
+                // broadcast). Routes through the standard dispatch path so the per-flavor strategy
+                // mapper handles the actual trigger. Default gesture TRIPLE_TAP (user 2026-05-28).
+                onSystemAction(GlassAction.WakeSystemAI)
+                onGestureRecognized?.invoke(gesture, GlassAction.WakeSystemAI)
+                dispatch(GlassAction.WakeSystemAI); return
             }
             else -> Unit
         }
@@ -201,17 +223,8 @@ class InteractionRouter(
             }
         }
 
-        // 3. pushed-profile stack (Doc/18 §6) — overlay-app bindings take precedence over the
-        //    wearer's chosen profile while their overlay is up. A null lookup means "fall through
-        //    to the active profile" — keeps every gesture not bound by the overlay working
-        //    normally. System gestures already returned above; this layer can never override them.
-        pushedProfileLookup?.invoke(gesture)?.let { pushedAction ->
-            onGestureRecognized?.invoke(gesture, pushedAction)
-            if (pushedAction is GlassAction.None) return
-            if (pushedAction.isModalEntry()) { onEnterModal(pushedAction); return }
-            dispatch(pushedAction)
-            return
-        }
+        // (Plugin overlays are handled exclusively at §0a above — there is no per-gesture
+        //  fall-through overlay layer anymore; an overlay either owns the whole ring or isn't active.)
 
         // 4. profile
         val action = modeManager.active().actionFor(gesture)
@@ -252,6 +265,13 @@ class InteractionRouter(
         Gesture.SWIPE_DOWN  -> raw == RawGesture.SWIPE_DOWN
         // TAP would also match RawGesture.TOUCH, but a single touch is a terrible wake gesture
         // (every accidental brush wakes the screen). Don't support it.
+        else -> false
+    }
+
+    /** Whether a wake-gesture can be matched directly from a single [RawGesture] on the screen-off
+     *  fast path. Synthesized gestures (taps/combos) can't — they need the synthesizer to run. */
+    private fun isRawMatchable(slot: Gesture): Boolean = when (slot) {
+        Gesture.LONG_PRESS, Gesture.SWIPE_UP, Gesture.SWIPE_DOWN -> true
         else -> false
     }
 }

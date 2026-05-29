@@ -78,6 +78,8 @@ fun gestureFriendlyRes(g: Gesture): Int = when (g) {
     Gesture.SWIPE_UP              -> com.halo.ring.R.string.gesture_swipe_up
     Gesture.SWIPE_DOWN            -> com.halo.ring.R.string.gesture_swipe_down
     Gesture.LONG_PRESS            -> com.halo.ring.R.string.gesture_long_press
+    Gesture.TAP_SWIPE_UP          -> com.halo.ring.R.string.gesture_tap_swipe_up
+    Gesture.TAP_SWIPE_DOWN        -> com.halo.ring.R.string.gesture_tap_swipe_down
     Gesture.DOUBLE_TAP_SWIPE_UP   -> com.halo.ring.R.string.gesture_double_tap_swipe_up
     Gesture.DOUBLE_TAP_SWIPE_DOWN -> com.halo.ring.R.string.gesture_double_tap_swipe_down
     Gesture.LONG_PRESS_SWIPE_UP   -> com.halo.ring.R.string.gesture_long_press_swipe_up
@@ -112,8 +114,10 @@ fun actionFriendlyRes(a: GlassAction): Int = when (a) {
     GlassAction.OpenCamera     -> com.halo.ring.R.string.action_open_camera
     GlassAction.TakePhoto      -> com.halo.ring.R.string.action_take_photo
     GlassAction.OpenAIAssistant -> com.halo.ring.R.string.action_open_ai_assistant
+    GlassAction.WakeSystemAI   -> com.halo.ring.R.string.action_wake_system_ai
     GlassAction.AskVisualAI    -> com.halo.ring.R.string.action_visual_ai
     GlassAction.OpenTranslate  -> com.halo.ring.R.string.action_open_translate
+    GlassAction.OpenSubtitle   -> com.halo.ring.R.string.action_open_subtitle
     GlassAction.OpenChat       -> com.halo.ring.R.string.action_open_chat
     GlassAction.OpenMusic      -> com.halo.ring.R.string.action_open_music
     GlassAction.OpenSettings   -> com.halo.ring.R.string.action_open_settings

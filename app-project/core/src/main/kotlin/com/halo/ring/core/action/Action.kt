@@ -44,8 +44,16 @@ sealed interface GlassAction {
      *  from [AskVisualAI] (which is camera-grounded VQA). Most-used AI entry point for both flavors;
      *  default system gesture is DOUBLE_LONG_PRESS. Audit-pass 2026-05-14w. */
     data object OpenAIAssistant : GlassAction { override val needs = Capability.LAUNCH_INTENT }
+    /** Wake the glasses' **own/native** AI agent — the system assistant the hardware itself exposes
+     *  (Rokid: Sprite AI via the `ACTION_AI_START` broadcast, same as the system's long-press-temple
+     *  wake). Distinct from [OpenAIAssistant] (which opens a specific chat app/page). Default system
+     *  gesture is TRIPLE_TAP (user 2026-05-28). */
+    data object WakeSystemAI : GlassAction { override val needs = Capability.LAUNCH_INTENT }
     data object AskVisualAI  : GlassAction { override val needs = Capability.LAUNCH_INTENT }
     data object OpenTranslate: GlassAction { override val needs = Capability.LAUNCH_INTENT }
+    /** Rokid live-caption / 字幕 (Sprite AccessibilityPageActivity). Unlike the Sprite camera, this
+     *  page launches + stays when started externally. No RayNeo equivalent yet. */
+    data object OpenSubtitle : GlassAction { override val needs = Capability.LAUNCH_INTENT }
     data object OpenChat     : GlassAction { override val needs = Capability.LAUNCH_INTENT }
     data object OpenMusic    : GlassAction { override val needs = Capability.LAUNCH_INTENT }
     data object OpenSettings : GlassAction { override val needs = Capability.LAUNCH_INTENT }

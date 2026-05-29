@@ -20,24 +20,29 @@ enum class RawGesture {
  */
 enum class Gesture {
     TAP,
-    DOUBLE_TAP,
-    TRIPLE_TAP,              // default = system ProfileCycle
-    QUADRUPLE_TAP,           // default = system PeekHud
+    DOUBLE_TAP,              // base = Back; when screen OFF, = system ScreenWake (synthesized)
+    TRIPLE_TAP,              // system = Screenshot (user 2026-05-28)
+    QUADRUPLE_TAP,           // DISABLED (user 2026-05-28: too complex) — never emitted; GestureConfig.enableQuadrupleTap=false
     SWIPE_UP,
     SWIPE_DOWN,
-    LONG_PRESS,              // when screen off, also = system ScreenWake (fast path bypasses synth)
-    DOUBLE_TAP_SWIPE_UP,
-    DOUBLE_TAP_SWIPE_DOWN,
+    LONG_PRESS,              // when screen on (Navigation only), = system ScreenSleep
+    // Single-tap-then-swipe (user 2026-05-28: "单击上/单击下"). Easier than the double-tap-swipe
+    // combos; takes over the primary combo actions (Nav: camera / AI · Media: prev / next track).
+    TAP_SWIPE_UP,
+    TAP_SWIPE_DOWN,
+    DOUBLE_TAP_SWIPE_UP,     // freed to user-custom (was camera)
+    DOUBLE_TAP_SWIPE_DOWN,   // freed to user-custom (was AI)
     LONG_PRESS_SWIPE_UP,
-    LONG_PRESS_SWIPE_DOWN,   // default = system ScreenSleep
-    DOUBLE_LONG_PRESS,       // default = system ForceReconnect
+    LONG_PRESS_SWIPE_DOWN,
+    DOUBLE_LONG_PRESS,
 
     /**
-     * v0.4 — air gesture from the accelerometer (`0xA1` ch3 → [com.halo.ring.core.sensor.AccelProcessor]).
-     * NOT synthesised from touch by [GestureSynthesizer]; the foreground service injects it directly
-     * into [InteractionRouter.onGesture] when AccelProcessor emits a WristShake. Routes through the
-     * active profile like any custom gesture. Requires the accel stream ON (Settings → Vitals →
-     * Spatial features). A no-touch "shake to dismiss / back / AI" input.
+     * Air gesture from the accelerometer. **Currently UNROUTED** (user 2026-05-28: "暂时去掉甩手").
+     * The firmware-native shake (`0x73 sub=0x29`) requires appType=7, which is mutually exclusive
+     * with the touch gestures (appType=9) on RT08 — so it can't coexist with the core 4 gestures.
+     * The only coexisting source would be the `0xA1` accel stream (energy cost, lower rate); not
+     * wired up for now. Kept in the enum (+ AccelProcessor still detects it) for easy future restore.
+     * Not bound in any default profile and hidden from the picker.
      */
     WRIST_SHAKE,
 }
@@ -93,15 +98,18 @@ data class GestureConfig(
     val optimisticSingleTap: Boolean = false,
     val awaitCombos: Boolean = true,
     val enableTripleTap: Boolean = true,
-    val enableQuadrupleTap: Boolean = true,
+    // Disabled by default (user 2026-05-28: "4击用不上，操作太复杂"). ≥4 taps now collapse to
+    // TRIPLE_TAP. QUADRUPLE_TAP is no longer emitted, bound, or offered in the picker.
+    val enableQuadrupleTap: Boolean = false,
 
     val awaitLongPressCombos: Boolean = true,
-    // On-glasses tuning 2026-05-27: 400 → 120 → 280 → 60 ms. The user found bare LONG_PRESS
-    // "长得要命" (deathly slow) at 280 ms and asked for 60 ms — near-instant after the firmware's
-    // ~600 ms hold floor. Trade-off: LONG_PRESS_SWIPE / DOUBLE_LONG_PRESS combos need the follow-up
-    // within 60 ms (very tight, effectively off). DOUBLE_TAP_SWIPE combos are unaffected — they use
-    // the separate `comboWindowMs` (400 ms), which the user confirmed feels good.
-    val longPressFollowupWindowMs: Long = 60,
+    // On-glasses tuning: 400 → 120 → 280 → 60 → 30 ms. The user kept finding bare LONG_PRESS too
+    // slow and asked to halve the follow-up window each time; now 30 ms — effectively instant after
+    // the firmware's hold-to-register floor (which is the real, unchangeable latency: the ring only
+    // emits 0x73 sub=0x2D LONG_PRESS after the hold completes — SPEC v3 §5.2.1). Trade-off:
+    // LONG_PRESS_SWIPE / DOUBLE_LONG_PRESS combos need the follow-up within 30 ms, i.e. off in
+    // practice. DOUBLE_TAP_SWIPE combos are unaffected — they use the separate `comboWindowMs`.
+    val longPressFollowupWindowMs: Long = 30,
     val enableDoubleLongPress: Boolean = true,
 
     val minRawIntervalMs: Long = 0,

@@ -89,8 +89,10 @@ class RokidActionMapper(private val intents: FeatureIntents) : GlassActionMapper
         GlassAction.OpenCamera     -> intents.openCamera()
         GlassAction.TakePhoto      -> intents.takePhoto()
         GlassAction.OpenAIAssistant -> intents.openAIAssistant()
+        GlassAction.WakeSystemAI   -> intents.wakeSystemAI()
         GlassAction.AskVisualAI    -> intents.askVisualAI()
         GlassAction.OpenTranslate  -> intents.openTranslate()
+        GlassAction.OpenSubtitle   -> intents.openSubtitle()
         GlassAction.OpenChat       -> intents.openChat()
         GlassAction.OpenMusic      -> intents.openMusic()
         GlassAction.OpenSettings   -> intents.openSettings()
@@ -128,16 +130,34 @@ class RokidActionMapper(private val intents: FeatureIntents) : GlassActionMapper
 /** From rokid-docs `yodaos/docs/apps/sprite-launcher.md` (§12.1). */
 class RokidFeatureIntents : FeatureIntents {
     private val launcher = "com.rokid.os.sprite.launcher"
+
+    /**
+     * Open the **Rokid Sprite** camera (user wants Rokid's, not AOSP Camera2).
+     * ⚠️ On-device caveat (2026-05-28): launching `CameraPageActivity` by component bounces back to
+     * the Sprite home in all external-launch tests (am start ±flags, launcher cmd broadcast) — the
+     * Sprite camera's proper entry is the app-grid or a companion-phone BLE scene command, neither
+     * reachable from our app. If it bounces in real use too, the only camera that *stays* is AOSP
+     * Camera2 (`am start -a android.media.action.STILL_IMAGE_CAMERA`) — swap back to that if needed.
+     */
     override fun openCamera() = listOf(InjectionPrimitive.StartActivity("$launcher/.page.camera.CameraPageActivity"))
-    override fun takePhoto() = listOf(
-        InjectionPrimitive.StartActivity("$launcher/.page.camera.CameraPageActivity"),
-        InjectionPrimitive.Key(android.view.KeyEvent.KEYCODE_CAMERA),
-    )
+
+    /**
+     * The camera ignores synthetic key/touch injection (only the real hardware shutter captures) and
+     * there's no exported headless-capture intent, so a gesture can't snap a photo directly.
+     * `takePhoto` therefore just **opens the camera** (same as [openCamera]); the Camera profile
+     * auto-activates (HUD shows "Camera") and the wearer shutters with the temple/hardware key.
+     */
+    override fun takePhoto() = openCamera()
     /** Everyday voice/chat AI — Rokid Sprite's ChatPageActivity. Distinct from visual AI which
      *  takes a camera frame as context (`askVisualAI`). Audit-pass 2026-05-14w. */
     override fun openAIAssistant() = listOf(InjectionPrimitive.StartActivity("$launcher/.page.chat.ChatPageActivity"))
+    /** The glasses' **native** AI agent — same as the system's long-press-temple wake. Sends the
+     *  Sprite AI start broadcast (`bare-metal-docs/01-key-events.md`: ACTION_AI_START). */
+    override fun wakeSystemAI() = listOf(InjectionPrimitive.Broadcast("com.android.action.ACTION_AI_START"))
     override fun askVisualAI() = listOf(InjectionPrimitive.Broadcast("com.rokid.visualaidemo.ACTION_START"))
     override fun openTranslate() = listOf(InjectionPrimitive.StartActivity("$launcher/.page.translate.TranslatePageActivity"))
+    /** Rokid 字幕 / live caption — Sprite AccessibilityPageActivity (verified: launches + stays). */
+    override fun openSubtitle() = listOf(InjectionPrimitive.StartActivity("$launcher/.page.accessibility.AccessibilityPageActivity"))
     /** Sprite Chat page — same as `openAIAssistant()`. Kept distinct so user-bindable bindings can
      *  reference the "open the chat UI explicitly" semantic vs the more abstract "wake AI" one. */
     override fun openChat() = listOf(InjectionPrimitive.StartActivity("$launcher/.page.chat.ChatPageActivity"))

@@ -3,30 +3,46 @@ package com.halo.ring.plugin
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.util.Log
-import com.halo.ring.core.plugin.PluginBindingsParser
-import com.halo.ring.core.plugin.ProfileStack
+import com.halo.ring.core.plugin.OverlayController
 
 /**
- * Receives Doc/18 §6 `PROFILE_PUSH` / `PROFILE_POP` broadcasts from external plugin apps and
- * forwards them onto a [ProfileStack]. Registered programmatically by `HaloRingService.onCreate`
- * (not in the manifest) because the receiver needs a live reference to the service's stack +
- * scheduler thread for thread-safe mutation.
+ * Receives Doc/18 §7 overlay activate/deactivate broadcasts from external plugin apps and drives the
+ * [OverlayController]. Registered programmatically by `HaloRingService.onCreate` (not the manifest)
+ * because it needs a live reference to the service's controller + scheduler thread.
  *
- * Permission: the matching intent-filter is registered with `Context.RECEIVER_EXPORTED` and
- * gated by `com.halo.ring.permission.PUSH_PROFILE` (signature|privileged level) so only apps
- * the wearer trusts (signed by Halo Ring's key, or privileged ROM installs) can push frames.
+ * ## Protocol (Doc/18 §7)
+ *  - `com.halo.ring.action.OVERLAY_ACTIVATE`  extras: `owner_package`, `profile_id`, (opt `display_name`)
+ *    → the plugin's HUD is up; it now owns the ring exclusively. Re-send while up as a keepalive.
+ *  - `com.halo.ring.action.OVERLAY_DEACTIVATE` extras: `owner_package`, `profile_id`
+ *    → HUD closed; release the ring back to the underlying profile.
+ *
+ * Halo Ring forwards each captured gesture back to the owner via `com.halo.ring.action.OVERLAY_GESTURE`
+ * (extra `gesture` = the raw [com.halo.ring.core.gesture.Gesture] name). The plugin assigns meaning.
+ *
+ * Back-compat: the legacy `PROFILE_PUSH` / `PROFILE_POP` (the old binding-stack protocol) are mapped
+ * onto activate/deactivate so an un-updated plugin still toggles the overlay (its bindings_json is
+ * ignored — gestures are forwarded raw now).
+ *
+ * Permission: registered with `RECEIVER_EXPORTED` + gated by `com.halo.ring.permission.PUSH_PROFILE`
+ * (signature|privileged) so only trusted apps can take over the ring.
  */
 class PluginBroadcastReceiver(
-    private val stack: ProfileStack,
-    /** Posted by the receiver on every mutation so the service can re-check the active profile.
-     *  Runs on whatever thread the broadcast lands on; the lambda body is expected to marshal
-     *  to the scheduler thread before touching pipeline state. */
-    private val onStackChanged: () -> Unit,
+    private val overlay: OverlayController,
+    private val pm: PackageManager,
+    /** Posted on every mutation. The lambda marshals to the scheduler thread before touching state
+     *  (HUD, foreground-inference freeze, etc.). `activated` = true for a new activation. */
+    private val onOverlayChanged: (activated: Boolean) -> Unit,
 ) : BroadcastReceiver() {
 
     companion object {
         private const val TAG = "PluginBroadcast"
+        const val ACTION_OVERLAY_ACTIVATE   = "com.halo.ring.action.OVERLAY_ACTIVATE"
+        const val ACTION_OVERLAY_DEACTIVATE = "com.halo.ring.action.OVERLAY_DEACTIVATE"
+        /** Outgoing: Halo Ring → plugin, one per captured gesture while the overlay is active. */
+        const val ACTION_OVERLAY_GESTURE    = "com.halo.ring.action.OVERLAY_GESTURE"
+        // Legacy (old binding-stack protocol) — still accepted, mapped to activate/deactivate.
         const val ACTION_PROFILE_PUSH = "com.halo.ring.action.PROFILE_PUSH"
         const val ACTION_PROFILE_POP  = "com.halo.ring.action.PROFILE_POP"
         const val PERMISSION_PUSH_PROFILE = "com.halo.ring.permission.PUSH_PROFILE"
@@ -34,58 +50,41 @@ class PluginBroadcastReceiver(
 
     override fun onReceive(context: Context, intent: Intent) {
         when (intent.action) {
-            ACTION_PROFILE_PUSH -> handlePush(intent)
-            ACTION_PROFILE_POP  -> handlePop(intent)
+            ACTION_OVERLAY_ACTIVATE, ACTION_PROFILE_PUSH  -> handleActivate(intent)
+            ACTION_OVERLAY_DEACTIVATE, ACTION_PROFILE_POP -> handleDeactivate(intent)
             else -> Log.w(TAG, "ignored unknown action: ${intent.action}")
         }
     }
 
-    private fun handlePush(intent: Intent) {
-        val profileId = intent.getStringExtra("profile_id")?.takeIf { it.isNotEmpty() } ?: run {
-            Log.w(TAG, "PROFILE_PUSH missing profile_id"); return
-        }
+    private fun handleActivate(intent: Intent) {
         val owner = intent.getStringExtra("owner_package")?.takeIf { it.isNotEmpty() } ?: run {
-            Log.w(TAG, "PROFILE_PUSH missing owner_package"); return
+            Log.w(TAG, "OVERLAY_ACTIVATE missing owner_package"); return
         }
-        val bindingsJson = intent.getStringExtra("bindings_json").orEmpty()
-        val bindings = PluginBindingsParser.parse(bindingsJson)
-        if (bindings.isEmpty()) {
-            Log.w(TAG, "PROFILE_PUSH from $owner/$profileId has no valid bindings — pushing empty frame anyway (caller may want fall-through-only behaviour)")
+        val profileId = intent.getStringExtra("profile_id")?.takeIf { it.isNotEmpty() } ?: "overlay"
+        val displayName = intent.getStringExtra("display_name")?.takeIf { it.isNotEmpty() }
+            ?: appLabel(owner)
+        val isNew = synchronized(overlay) {
+            overlay.activate(owner, profileId, displayName, System.currentTimeMillis())
         }
-        synchronized(stack) {
-            stack.push(ProfileStack.PushedProfile(
-                profileId = profileId,
-                ownerPackage = owner,
-                bindings = bindings,
-                pushedAtMs = System.currentTimeMillis(),
-            ))
-        }
-        Log.i(TAG, "PROFILE_PUSH $owner/$profileId — ${bindings.size} bindings, depth=${stack.size()}")
-        onStackChanged()
+        Log.i(TAG, "OVERLAY_ACTIVATE $owner/$profileId (new=$isNew)")
+        onOverlayChanged(isNew)
     }
 
-    private fun handlePop(intent: Intent) {
-        // Spec leaves owner_package optional on POP because the sender knows its own identity;
-        // we derive it from the calling package via the intent's sender if not provided. (For
-        // signed-permission senders we trust the extra.)
-        val profileId = intent.getStringExtra("profile_id")?.takeIf { it.isNotEmpty() } ?: run {
-            Log.w(TAG, "PROFILE_POP missing profile_id"); return
-        }
+    private fun handleDeactivate(intent: Intent) {
         val owner = intent.getStringExtra("owner_package")?.takeIf { it.isNotEmpty() }
-        val removed = synchronized(stack) {
-            if (owner != null) {
-                stack.pop(owner, profileId)
-            } else {
-                // Fall back: pop ANY frame with matching profile_id (rare, only fires when the
-                // caller omits owner_package — well-behaved senders include it).
-                val before = stack.size()
-                stack.snapshot().firstOrNull { it.profileId == profileId }?.let {
-                    stack.pop(it.ownerPackage, profileId)
-                }
-                before > stack.size()
+        val profileId = intent.getStringExtra("profile_id")?.takeIf { it.isNotEmpty() }
+        val removed = synchronized(overlay) {
+            when {
+                owner != null && profileId != null -> overlay.deactivate(owner, profileId)
+                owner != null                      -> overlay.deactivateOwner(owner)
+                else                               -> false
             }
         }
-        Log.i(TAG, "PROFILE_POP $owner/$profileId — removed=$removed, depth=${stack.size()}")
-        if (removed) onStackChanged()
+        Log.i(TAG, "OVERLAY_DEACTIVATE $owner/$profileId removed=$removed")
+        if (removed) onOverlayChanged(false)
     }
+
+    private fun appLabel(pkg: String): String = try {
+        pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString()
+    } catch (_: Exception) { pkg }
 }

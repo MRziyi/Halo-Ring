@@ -8,12 +8,14 @@ class SystemGesturesTest {
 
     @Test fun `defaults match the design's recommended slots`() {
         val sg = SystemGestures()
-        // v0.4: LONG_PRESS is BOTH wake (screen off) and sleep (screen on) — a screen-toggle.
-        assertEquals(Gesture.LONG_PRESS, sg.wake)
+        // 2026-05-28: DOUBLE_TAP wakes (screen off), LONG_PRESS sleeps (Navigation only). Profiles
+        // are auto-inferred so profile-cycle has no gesture; peek-HUD removed; TRIPLE_TAP is left
+        // UNBOUND (reserved for the user's own future custom binding).
+        assertEquals(Gesture.DOUBLE_TAP, sg.wake)
         assertEquals(Gesture.LONG_PRESS, sg.sleep)
-        assertEquals(Gesture.TRIPLE_TAP,        sg.profileCycle)
-        assertEquals(Gesture.QUADRUPLE_TAP,     sg.peekHud)
-        assertEquals(Gesture.DOUBLE_LONG_PRESS, sg.aiAssistant)
+        assertNull(sg.profileCycle)
+        assertNull(sg.peekHud)
+        assertNull(sg.aiAssistant)
     }
 
     @Test fun `withSlot rebinds the targeted slot, leaves the others`() {
@@ -50,24 +52,23 @@ class SystemGesturesTest {
 
     @Test fun `conflict reports the slot already bound to a gesture`() {
         val sg = SystemGestures()  // defaults
-        // TRIPLE_TAP is bound to PROFILE_CYCLE in the defaults.
-        assertEquals(SystemGestures.Slot.PROFILE_CYCLE, sg.conflict(Gesture.TRIPLE_TAP))
+        // DOUBLE_TAP is bound to WAKE in the defaults.
+        assertEquals(SystemGestures.Slot.WAKE, sg.conflict(Gesture.DOUBLE_TAP))
     }
 
     @Test fun `conflict returns null for a gesture that is free`() {
         val sg = SystemGestures()
-        // None of the defaults use a bare DOUBLE_TAP.
-        assertNull(sg.conflict(Gesture.DOUBLE_TAP))
+        // None of the defaults use a bare SWIPE_UP (wake=DOUBLE_TAP, sleep=LONG_PRESS, ai=TRIPLE_TAP).
+        assertNull(sg.conflict(Gesture.SWIPE_UP))
     }
 
     @Test fun `conflict excludes the slot the user is rebinding`() {
-        // Self-conflict check: rebinding PROFILE_CYCLE to its current value (TRIPLE_TAP) should NOT
-        // report a conflict, because the user hasn't actually changed anything. (Uses TRIPLE_TAP
-        // rather than LONG_PRESS, since v0.4 intentionally binds LONG_PRESS to BOTH wake + sleep.)
+        // Self-conflict check: rebinding WAKE to its current value (DOUBLE_TAP) should NOT report a
+        // conflict, because the user hasn't actually changed anything.
         val sg = SystemGestures()
-        assertNull(sg.conflict(Gesture.TRIPLE_TAP, exclude = SystemGestures.Slot.PROFILE_CYCLE))
-        // But asking "is TRIPLE_TAP bound to anything but PROFILE_CYCLE?" should still say no.
-        assertEquals(SystemGestures.Slot.PROFILE_CYCLE, sg.conflict(Gesture.TRIPLE_TAP))
+        assertNull(sg.conflict(Gesture.DOUBLE_TAP, exclude = SystemGestures.Slot.WAKE))
+        // But asking "is DOUBLE_TAP bound to anything but WAKE?" should still say no.
+        assertEquals(SystemGestures.Slot.WAKE, sg.conflict(Gesture.DOUBLE_TAP))
     }
 
     @Test fun `conflict reports the FIRST matching slot in declaration order`() {

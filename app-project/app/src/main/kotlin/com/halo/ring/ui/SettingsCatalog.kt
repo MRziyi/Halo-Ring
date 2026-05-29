@@ -65,8 +65,10 @@ object SettingsCatalog {
         Entry(GlassAction.OpenCamera,     ActionGroup.FEATURE),
         Entry(GlassAction.TakePhoto,      ActionGroup.FEATURE),
         Entry(GlassAction.OpenAIAssistant, ActionGroup.FEATURE),
+        Entry(GlassAction.WakeSystemAI,   ActionGroup.FEATURE),
         Entry(GlassAction.AskVisualAI,    ActionGroup.FEATURE),
         Entry(GlassAction.OpenTranslate,  ActionGroup.FEATURE),
+        Entry(GlassAction.OpenSubtitle,   ActionGroup.FEATURE),
         Entry(GlassAction.OpenChat,       ActionGroup.FEATURE),
         Entry(GlassAction.OpenMusic,      ActionGroup.FEATURE),
         Entry(GlassAction.OpenSettings,   ActionGroup.FEATURE),
@@ -82,7 +84,8 @@ object SettingsCatalog {
         Entry(GlassAction.ScreenSleep,    ActionGroup.SYSTEM),
         Entry(GlassAction.ScreenWake,     ActionGroup.SYSTEM),
         Entry(GlassAction.PeekHud,        ActionGroup.SYSTEM),
-        Entry(GlassAction.ProfileCycle,   ActionGroup.SYSTEM),
+        // ProfileCycle removed from the picker (2026-05-28): profiles are inferred automatically
+        // from the foreground app; there is no manual switching.
         Entry(GlassAction.ForceReconnect, ActionGroup.SYSTEM),
 
         // Unbind

@@ -47,6 +47,7 @@ fun ProfileEditorScreen(
         )
         val systemValueText = stringResource(R.string.profile_editor_system_value)
         Gesture.values().forEach { gesture ->
+            if (gesture in HIDDEN_GESTURES) return@forEach
             val isSystem = gesture in SYSTEM_SLOTS
             val action = profile.actionFor(gesture)
             // Audit-pass 2026-05-13t: SettingsCatalog.entryFor was returning a hard-coded English
@@ -78,9 +79,16 @@ fun ProfileEditorScreen(
     }
 }
 
+// TRIPLE_TAP is the only fully system-owned gesture now (→ WakeSystemAI, intercepted before the
+// profile). LONG_PRESS_SWIPE_DOWN / DOUBLE_LONG_PRESS are free again (2026-05-28) and bindable —
+// e.g. to a plugin call via the picker → External apps.
 private val SYSTEM_SLOTS = setOf(
     Gesture.TRIPLE_TAP,
+)
+
+// Gestures removed from the vocabulary for now (2026-05-28): QUADRUPLE_TAP (too complex) and
+// WRIST_SHAKE (firmware shake is mutually exclusive with touch gestures). Hidden from the editor.
+private val HIDDEN_GESTURES = setOf(
     Gesture.QUADRUPLE_TAP,
-    Gesture.LONG_PRESS_SWIPE_DOWN,
-    Gesture.DOUBLE_LONG_PRESS,
+    Gesture.WRIST_SHAKE,
 )

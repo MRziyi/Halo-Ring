@@ -6,37 +6,37 @@ import com.halo.ring.core.action.GlassAction
  * Five global gestures that intercept *before* the active profile (and before any modal). Persisted
  * as user settings. Defaults from R08-Remote-Design.md §23.3.
  *
- * - [wake]            : when **screen off**, this gesture is recognised on a fast path and triggers
- *                       [GlassAction.ScreenWake]. All other gestures are silently dropped.
- *                       Default = [Gesture.LONG_PRESS] — fast (no synthesizer window), distinct,
- *                       and importantly doesn't collide with the ring's own "double-tap to wake"
- *                       (wake-swallow only consumes TOUCH events, not LONG_PRESS).
- * - [sleep]           : when **screen on**, this gesture turns the screen off. Defaults to
- *                       [Gesture.LONG_PRESS_SWIPE_DOWN] — deliberate, no false positives.
- * - [profileCycle]    : cycle to the next [com.halo.ring.core.action.KeyMapProfile]. Default
- *                       [Gesture.TRIPLE_TAP]. Also triggers the 5s manual-lock for auto-switch.
- * - [peekHud]         : show the status HUD overlay for ~2s. Read-only — no state change. Default
- *                       [Gesture.QUADRUPLE_TAP].
- * - [aiAssistant]     : wake the everyday voice / chat AI ([GlassAction.OpenAIAssistant]). Default
- *                       [Gesture.DOUBLE_LONG_PRESS] — high-value, deliberate, low-false-positive.
- *                       **Replaced the legacy `forceReconnect` system slot in audit-pass
- *                       2026-05-14w**: BLE auto-reconnect handles 99% of disconnects, so the slot
- *                       is better spent on a high-value daily action. Force-reconnect lives on as
- *                       a button in Settings → Ring (it's a once-in-a-blue-moon recovery action,
- *                       not a gesture-class operation).
+ * - [wake]            : when **screen off**, triggers [GlassAction.ScreenWake]; everything else is
+ *                       dropped. Default = [Gesture.DOUBLE_TAP] (user 2026-05-28). DOUBLE_TAP can't
+ *                       match on the raw fast path, so the router lets the synthesizer run while the
+ *                       screen is off and fires wake when it emits DOUBLE_TAP (see InteractionRouter).
+ * - [sleep]           : when **screen on**, this gesture turns the screen off. Default
+ *                       [Gesture.LONG_PRESS].
+ * - [profileCycle]    : cycle profiles. Default `null` — profiles are inferred fully automatically
+ *                       from the foreground app; there is no manual switch (user 2026-05-28).
+ * - [peekHud]         : show the status HUD overlay. Default `null` (QUADRUPLE_TAP removed 2026-05-28).
+ * - [aiAssistant]     : if set, [GlassAction.WakeSystemAI] (Sprite AI via ACTION_AI_START). Default
+ *                       `null` — TRIPLE_TAP is reserved for the user's own future custom binding.
  *
  * Empty `wake`/`sleep` ⇒ feature disabled (still possible via the OS auto-sleep timer).
  */
 data class SystemGestures(
-    val wake: Gesture?            = Gesture.LONG_PRESS,
-    // v0.4 (user 2026-05-27): LONG_PRESS is BOTH wake (screen off) and sleep (screen on) — one easy
-    // screen-toggle. Sleep is very common and LONG_PRESS_SWIPE_DOWN was too fiddly; LONG_PRESS→Menu
-    // was a no-op on Rokid anyway. The system layer runs before the profile, so this SHADOWS any
-    // per-profile LONG_PRESS binding while the screen is on (rebind the SLEEP slot to restore it).
+    // user 2026-05-28: wake the screen with DOUBLE_TAP (not long-press). When the screen is off the
+    // synthesizer runs and a DOUBLE_TAP fires ScreenWake; when on, DOUBLE_TAP is the base Back. (A
+    // double-tap can't match on the raw fast path, so the router lets the synth handle it — see
+    // InteractionRouter.onRawWhileScreenOff / onGesture.)
+    val wake: Gesture?            = Gesture.DOUBLE_TAP,
+    // LONG_PRESS turns the screen off (when on). Sleep is very common; LONG_PRESS→Menu was a no-op
+    // on Rokid anyway. The system layer runs before the profile, so this SHADOWS any per-profile
+    // LONG_PRESS binding while the screen is on (rebind the SLEEP slot to restore it).
     val sleep: Gesture?           = Gesture.LONG_PRESS,
-    val profileCycle: Gesture?    = Gesture.TRIPLE_TAP,
-    val peekHud: Gesture?         = Gesture.QUADRUPLE_TAP,
-    val aiAssistant: Gesture?     = Gesture.DOUBLE_LONG_PRESS,
+    // No gesture for profile-cycle: profiles are inferred fully automatically from the foreground
+    // app (user 2026-05-28: "全部由系统自动推断，用户手动不能切换"). Peek-HUD's gesture (QUADRUPLE_TAP)
+    // was removed too. TRIPLE_TAP is intentionally left UNBOUND — reserved for the user's own future
+    // custom binding ("三击操作留空吧，我之后会预定义"). The everyday AI lives on DOUBLE_TAP_SWIPE_DOWN.
+    val profileCycle: Gesture?    = null,
+    val peekHud: Gesture?         = null,
+    val aiAssistant: Gesture?     = null,
 ) {
     /** Used by the settings UI for "is this slot pointing at <gesture>?" lookups. */
     fun gestureFor(slot: Slot): Gesture? = when (slot) {

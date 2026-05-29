@@ -388,17 +388,26 @@ private fun PeekContent(p: HudEvent.Peek) {
 
 @Composable
 private fun ProfileSwitchedContent(p: HudEvent.ProfileSwitched) {
+    // Redesigned 2026-05-28: profiles are now auto-inferred (never manually cycled), so the old
+    // "↻ → … (cycle)" rotate icon + wording is gone. The icon shows the profile's *content* — what
+    // app context you're in — and we just name the mode.
     Row(verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text("↻ →", style = HaloType.Body.copy(color = HaloColors.Accent,
-            fontSize = 11.sp))
+        horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(profileIconByName(p.newMode), style = HaloType.Body.copy(fontSize = 14.sp))
         Text(profileFriendlyTextByName(p.newMode), style = HaloType.Body.copy(
-            fontSize = 11.sp,
-        ))
-        Text(androidx.compose.ui.res.stringResource(com.halo.ring.R.string.hud_profile_cycle), style = HaloType.Caption.copy(
-            fontSize = 10.sp,
+            fontSize = 11.sp, color = HaloColors.Accent,
         ))
     }
+}
+
+/** A content glyph per built-in profile (matches DefaultProfiles ids). Falls back to a neutral dot
+ *  for custom profiles. The icon shows *what context you're in*, not "switching". */
+private fun profileIconByName(name: String): String = when (name.lowercase()) {
+    "media"      -> "🎵"
+    "camera"     -> "📷"
+    "reader"     -> "📖"
+    "navigation" -> "🧭"
+    else         -> "●"
 }
 
 @Composable

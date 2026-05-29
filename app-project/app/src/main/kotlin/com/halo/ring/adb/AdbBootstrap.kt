@@ -409,6 +409,20 @@ class AdbBootstrap(private val context: Context) {
     }
 
     /**
+     * Grant SYSTEM_ALERT_WINDOW (the "draw over other apps" appop) so the HUD overlay can be created.
+     * Without it `Settings.canDrawOverlays` is false and every `hud?.show()` is a silent no-op — the
+     * user sees no profile-switch / status prompts (root-caused 2026-05-28). It's an appop, so we use
+     * `appops set` (shell uid via the agent), not `pm grant`. Best-effort: log + continue on failure.
+     */
+    suspend fun grantOverlayPermission(): Result = withContext(Dispatchers.IO) {
+        val conn = connection ?: return@withContext Result.Failure("not connected")
+        val pkg = context.packageName
+        val out = conn.exec("appops set $pkg SYSTEM_ALERT_WINDOW allow")
+        if (out.isBlank() || out.contains("Success", ignoreCase = true)) Result.Success
+        else Result.Failure("appops set returned: ${out.trim()}")
+    }
+
+    /**
      * True if the agent's Unix abstract socket is reachable on this device.
      * Use as a cheap liveness probe during and after a bootstrap session.
      */

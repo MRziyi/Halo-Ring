@@ -146,64 +146,77 @@ no ACK — fire and forget per Doc/18 §5.3.
 
 ---
 
-## 5. Profile push / pop (overlay apps)
+## 5. Exclusive overlay (HUD takeover) — Doc/18 §7 model
 
-Optional. Use when your overlay UI needs gestures interpreted differently while it's visible
-(canonical example: Constellation's HUD card needs `SWIPE_UP/DOWN` to move focus, `TAP` to
-activate, `DOUBLE_TAP` to dismiss — regardless of the wearer's profile bindings).
+**Supersedes the old `PROFILE_PUSH` binding-stack** (removed 2026-05-29 with `ProfileStack` /
+`PluginBindingsParser`). Use when your app shows an on-glasses HUD (over any app or the home) and
+the ring must drive **only that HUD** while it's up.
+
+### The model
+While your overlay is active it behaves like an exclusive profile:
+- it's **not** inferred from the foreground app — **you signal** activation/deactivation;
+- it is **exclusive**: [`InteractionRouter`](../app-project/core/src/main/kotlin/com/halo/ring/core/gesture/InteractionRouter.kt)
+  (§0a) forwards **every** ring gesture to you and lets **nothing** leak to the underlying app — no
+  base-key passthrough, no page-flip, no system gestures (even `TRIPLE_TAP`/`LONG_PRESS` are
+  captured). Profile auto-inference is frozen meanwhile.
+- **you own all semantics + on-HUD prompts.** Halo Ring forwards **raw gesture names**, never
+  `action_id`s — so you may remap a gesture's meaning per HUD-state without telling us.
+
+State lives in [`OverlayController`](../app-project/core/src/main/kotlin/com/halo/ring/core/plugin/OverlayController.kt)
+(single-active; pure-JVM, unit-tested).
+
+### Wire protocol
+All gated by `PUSH_PROFILE` (signature|privileged — co-signed plugins only).
+
+**You → Halo Ring** (`setPackage("com.halo.ring.rokid")` / `.rayneo`):
+
+| Action | Extras | When |
+|---|---|---|
+| `com.halo.ring.action.OVERLAY_ACTIVATE` | `owner_package` (req), `profile_id` (opt, default `overlay`), `display_name` (opt) | HUD shown. **Re-send every ~20–30 s as keepalive.** |
+| `com.halo.ring.action.OVERLAY_DEACTIVATE` | `owner_package` (req), `profile_id` (opt) | HUD closed. |
+
+**Halo Ring → You** (explicit broadcast to your package):
+
+| Action | Extras |
+|---|---|
+| `com.halo.ring.action.OVERLAY_GESTURE` | `gesture` = a [`Gesture`](../app-project/core/src/main/kotlin/com/halo/ring/core/gesture/Gestures.kt) name; `from_package` |
 
 ```kotlin
-// Push when overlay opens:
-context.sendBroadcast(Intent("com.halo.ring.action.PROFILE_PUSH").apply {
-    setPackage("com.halo.ring")
-    putExtra("profile_id", "constellation_hud")
+// Activate when your HUD opens (refresh ~every 25 s while up):
+context.sendBroadcast(Intent("com.halo.ring.action.OVERLAY_ACTIVATE").apply {
+    setPackage("com.halo.ring.rokid")
     putExtra("owner_package", "com.constellation.glass")
-    putExtra("bindings_json", """
-        {
-          "SWIPE_UP":   {"type":"external","package":"com.constellation.glass","action_id":"hud_focus_prev"},
-          "SWIPE_DOWN": {"type":"external","package":"com.constellation.glass","action_id":"hud_focus_next"},
-          "TAP":        {"type":"external","package":"com.constellation.glass","action_id":"hud_activate"},
-          "DOUBLE_TAP": {"type":"external","package":"com.constellation.glass","action_id":"hud_dismiss"}
-        }
-    """.trimIndent())
-})
-
-// Pop when overlay closes:
-context.sendBroadcast(Intent("com.halo.ring.action.PROFILE_POP").apply {
-    setPackage("com.halo.ring")
     putExtra("profile_id", "constellation_hud")
-    putExtra("owner_package", "com.constellation.glass")  // recommended; can omit but include for safety
+    putExtra("display_name", "Constellation")
 })
+// Deactivate when it closes:
+context.sendBroadcast(Intent("com.halo.ring.action.OVERLAY_DEACTIVATE").apply {
+    setPackage("com.halo.ring.rokid"); putExtra("owner_package", "com.constellation.glass")
+})
+// Receive forwarded gestures:
+class OverlayGestureReceiver : BroadcastReceiver() {
+    override fun onReceive(c: Context, i: Intent) {
+        when (i.getStringExtra("gesture")) { "TAP" -> approve(); "DOUBLE_TAP" -> dismiss(); /* … */ }
+    }
+}
 ```
 
-### 5.1 Stack semantics — [`ProfileStack`](../app-project/core/src/main/kotlin/com/halo/ring/core/plugin/ProfileStack.kt)
+The forwardable gesture vocabulary is the [`Gesture`](../app-project/core/src/main/kotlin/com/halo/ring/core/gesture/Gestures.kt)
+enum (TAP, DOUBLE_TAP, SWIPE_UP/DOWN, LONG_PRESS, TAP_SWIPE_*, DOUBLE_TAP_SWIPE_*, LONG_PRESS_SWIPE_*,
+TRIPLE_TAP, DOUBLE_LONG_PRESS). No left/right swipe (SPEC v3). Map a dismiss gesture (suggest
+`DOUBLE_TAP`) so the wearer can always exit.
 
-- **LIFO**: newest push wins for any gesture it binds.
-- **Fall-through**: unbound gestures consult the next-newest frame, then the wearer's profile.
-- **System gestures bypass the stack entirely** — `TRIPLE_TAP`, `QUADRUPLE_TAP`, `LP+SWIPE_*`,
-  `DOUBLE_LONG_PRESS` always do what the wearer's [System Gestures](05-interaction-design.md)
-  settings say. Same priority order as before — overlay can never lock the wearer out.
-- **Re-push replaces**: pushing the same `(owner, profileId)` again drops the previous entry +
-  lands the new bindings on top. Saves a `POP` + `PUSH` round-trip when an overlay updates its
-  map without dismissing.
-- **Auto-pop on uninstall**: if the owning plugin is uninstalled, all its frames drop. Halo
-  Ring's [`HaloRingService`](../app-project/app/src/main/kotlin/com/halo/ring/service/HaloRingService.kt)
-  observes `ACTION_PACKAGE_REMOVED` and calls `ProfileStack.dropOwner(pkg)`. (Per-process
-  death is not directly detected in v1 — uninstall is the safest auto-prune signal.)
+### Lifecycle / safety
+- **Single-active**: a new activate from another owner replaces the prior.
+- **Keepalive timeout 60 s** (`OverlayController.DEFAULT_TIMEOUT_MS`): no re-activate within the
+  window → auto-release (a crashed/hung plugin can't lock the wearer out).
+- **Uninstall**: `ACTION_PACKAGE_REMOVED` of the owner releases the overlay.
+- **HUD cue**: `display_name` flashes on activate; the underlying mode name on release.
 
-### 5.2 `bindings_json` parser — [`PluginBindingsParser`](../app-project/core/src/main/kotlin/com/halo/ring/core/plugin/ProfileStack.kt)
-
-Hand-rolled JSON parser in `:core` (avoids an `org.json` dependency in the pure-JVM module).
-**Forgiving by design**:
-- Unknown gesture names → skipped.
-- Non-`external` types → skipped (v1 only supports `external`; future versions may add `builtin`).
-- Missing `package` / `action_id` → entry skipped.
-- Missing `label` → falls back to `action_id`.
-- Compact aliases recognised: `LP`, `DT`, `DT+SWIPE_UP`, `LP+SWIPE_DOWN`, `QUAD_TAP`, `2xLP`,
-  etc. — see the parser's `parseGesture` map.
-
-Empty results don't fail the push — a frame with no bindings is legal (acts as a barrier; falls
-through for everything).
+### Legacy alias
+The removed `PROFILE_PUSH` / `PROFILE_POP` actions are still accepted and mapped onto
+activate/deactivate (so an un-migrated plugin still toggles the overlay), **but `bindings_json` is
+ignored** and the old `hud_*` TRIGGERs are no longer sent — migrate to `OVERLAY_GESTURE`.
 
 ---
 

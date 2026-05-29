@@ -263,8 +263,19 @@ object R08Protocol {
     val TOUCH_DISABLE: ByteArray = command(OP_TOUCH_CONTROL, byteArrayOf(0x01, 0x00, 0x01, 0x00))
     /** TouchControl: write the touch-sleep variant with **hidden appType=9** so the firmware reports
      *  all four atomic gestures (SWIPE_UP/DOWN, TAP, LONG_PRESS) as `SUB_TOUCH_GESTURE` pushes.
-     *  Sent ~500 ms after TOUCH_ENABLE; without this, the touch IC is on but never reports. */
-    val TOUCH_MODE: ByteArray    = command(OP_TOUCH_CONTROL, byteArrayOf(0x02, 0x00, TOUCH_APP_REPORT_ALL_GESTURES.toByte(), 0x01))
+     *  Sent ~500 ms after TOUCH_ENABLE; without this, the touch IC is on but never reports.
+     *
+     *  4th byte = `sleepMin` (SPEC §4.10 `[2,0,appType,sleepMin]`): how long the touch IC stays
+     *  awake before sleeping. Bumped 1 → 10 min (user 2026-05-28: "现在有点经常睡眠") so the ring
+     *  stops dozing off so often. Trade-off: a longer-awake touch IC costs a bit more battery; tune
+     *  this byte if it's too aggressive. */
+    val TOUCH_MODE: ByteArray    = command(OP_TOUCH_CONTROL, byteArrayOf(0x02, 0x00, TOUCH_APP_REPORT_ALL_GESTURES.toByte(), 0x0A))
+    // NOTE: the firmware wrist-shake event (SUB_RING_GAME_KEY 0x29) requires appType=7 (Game), and
+    // the four touch gestures (SUB_TOUCH_GESTURE 0x2D) require appType=9 (REPORT_ALL_GESTURES).
+    // appType is a single-slot mode selector — per SPEC v3 §4.10/§5.2 + on-device test (a dual-touch
+    // [2,2,9,7] write did NOT produce shake), these are mutually exclusive on RT08. We keep the four
+    // gestures (appType=9); the firmware shake is therefore unavailable. Any wrist-shake would have
+    // to come from the 0xA1 accel stream (SPEC §6.3) instead. See feedback-spec-v3-ground-truth.
 
     /** Battery query — response arrives as a `03 <pct> <charging>` notify. Optional now that we
      *  also subscribe to `SUB_BATTERY_STATE` pushes; use only on first connect + on user demand. */

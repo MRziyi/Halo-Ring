@@ -137,11 +137,26 @@ class GestureSynthesizerTest {
 
     // ── flush-before-definite-gesture (preserves ordering) ───────────────────────────────────────
 
-    @Test fun `pending single tap is flushed before a following swipe`() {
+    @Test fun `tap then swipe within the window forms a TAP_SWIPE combo`() {
+        // 2026-05-28: single-tap-then-swipe is now the TAP_SWIPE_* combo (user "单击上/单击下").
         val (syn, _, out) = fixture(GestureConfig(optimisticSingleTap = false))
         syn.onRaw(RawGesture.TOUCH, nowMs = 0)
         syn.onRaw(RawGesture.SWIPE_UP, nowMs = 50)     // arrives before the multi-tap window expires
+        assertEquals(listOf(Gesture.TAP_SWIPE_UP), out)
+    }
+
+    @Test fun `tap then swipe AFTER the window is a separate TAP then SWIPE`() {
+        val (syn, sched, out) = fixture(GestureConfig(optimisticSingleTap = false))
+        syn.onRaw(RawGesture.TOUCH, nowMs = 0)
+        sched.advanceBy(500)                            // tap window expires → bare TAP commits
+        syn.onRaw(RawGesture.SWIPE_UP, nowMs = 600)
         assertEquals(listOf(Gesture.TAP, Gesture.SWIPE_UP), out)
+    }
+
+    @Test fun `bare swipe with no pending tap stays instant`() {
+        val (syn, _, out) = fixture(GestureConfig(optimisticSingleTap = false))
+        syn.onRaw(RawGesture.SWIPE_DOWN, nowMs = 0)
+        assertEquals(listOf(Gesture.SWIPE_DOWN), out)   // no latency for base-nav swipes
     }
 
     // ── wake swallow (ring auto-sleep + double-tap to wake) ──────────────────────────────────────
@@ -200,8 +215,10 @@ class GestureSynthesizerTest {
 
     // ── QUADRUPLE_TAP (§24) ──────────────────────────────────────────────────────────────────────
 
+    // QUADRUPLE_TAP is disabled by default now (2026-05-28); these exercise the still-present
+    // synth path by explicitly re-enabling the flag.
     @Test fun `quadruple tap emits QUADRUPLE_TAP and nothing else`() {
-        val (syn, sched, out) = fixture(GestureConfig(optimisticSingleTap = false))
+        val (syn, sched, out) = fixture(GestureConfig(optimisticSingleTap = false, enableQuadrupleTap = true))
         syn.onRaw(RawGesture.TOUCH, nowMs = 0)
         syn.onRaw(RawGesture.TOUCH, nowMs = 100)
         syn.onRaw(RawGesture.TOUCH, nowMs = 200)
@@ -212,10 +229,17 @@ class GestureSynthesizerTest {
 
     @Test fun `five taps cap to QUADRUPLE_TAP`() {
         // Counts above 4 are clamped — extra taps don't roll over into a fresh TAP.
-        val (syn, sched, out) = fixture(GestureConfig(optimisticSingleTap = false))
+        val (syn, sched, out) = fixture(GestureConfig(optimisticSingleTap = false, enableQuadrupleTap = true))
         repeat(5) { syn.onRaw(RawGesture.TOUCH, nowMs = it * 100L) }
         sched.advanceBy(500)
         assertEquals(listOf(Gesture.QUADRUPLE_TAP), out)
+    }
+
+    @Test fun `default config (quad disabled) collapses 4 taps to TRIPLE_TAP`() {
+        val (syn, sched, out) = fixture(GestureConfig(optimisticSingleTap = false))
+        repeat(4) { syn.onRaw(RawGesture.TOUCH, nowMs = it * 100L) }
+        sched.advanceBy(500)
+        assertEquals(listOf(Gesture.TRIPLE_TAP), out)
     }
 
     @Test fun `with enableQuadrupleTap=false a 4th tap collapses to TRIPLE_TAP`() {

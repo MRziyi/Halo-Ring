@@ -149,18 +149,19 @@ class InteractionRouterModalTest {
         assertNull(ir.activeModal)
     }
 
-    @Test fun `system gestures preempt active modal — TRIPLE_TAP still cycles profile`() = runBlocking<Unit> {
-        val (ir, mm, b, _) = fixture()
-        val before = mm.active().id
+    @Test fun `LONG_PRESS sleep preempts an active modal in the fallback profile`() = runBlocking<Unit> {
+        // System sleep (LONG_PRESS, fallback profile only) runs before the modal layer, so the modal
+        // never sees it and the screen-sleep dispatches. (Replaces the old TRIPLE_TAP-cycles-profile
+        // test — TRIPLE_TAP is now unbound/reserved.)
+        val (ir, _, b, _) = fixture()  // default active = Navigation (the fallback)
         val modal = ScriptedModal(ArrayDeque(listOf(GlassAction.None)))
         ir.activeModal = modal
 
-        ir.onGesture(Gesture.TRIPLE_TAP)
+        ir.onGesture(Gesture.LONG_PRESS)
 
         assertSame(modal, ir.activeModal, "modal stays alive — system gesture didn't exit it")
-        assertTrue(modal.seenGestures.isEmpty(), "modal should never see TRIPLE_TAP — system layer wins")
-        assertTrue(mm.active().id != before, "profile cycled")
-        assertTrue(b.dispatched.isEmpty())
+        assertTrue(modal.seenGestures.isEmpty(), "modal should never see LONG_PRESS — system layer wins")
+        assertEquals(listOf<GlassAction>(GlassAction.ScreenSleep), b.dispatched)
     }
 
     @Test fun `profile-bound EnterVolumeModal action calls onEnterModal and never reaches backend`() = runBlocking<Unit> {

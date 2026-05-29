@@ -570,6 +570,8 @@
     <string name="gesture_swipe_up">Swipe up</string>
     <string name="gesture_swipe_down">Swipe down</string>
     <string name="gesture_long_press">Long press</string>
+    <string name="gesture_tap_swipe_up">Tap + swipe up</string>
+    <string name="gesture_tap_swipe_down">Tap + swipe down</string>
     <string name="gesture_double_tap_swipe_up">Double-tap + swipe up</string>
     <string name="gesture_double_tap_swipe_down">Double-tap + swipe down</string>
     <string name="gesture_long_press_swipe_up">Long-press + swipe up</string>
@@ -603,8 +605,10 @@
     <string name="action_open_camera">Camera</string>
     <string name="action_take_photo">Photo</string>
     <string name="action_open_ai_assistant">AI assistant</string>
+    <string name="action_wake_system_ai">System AI (Sprite)</string>
     <string name="action_visual_ai">Visual AI</string>
     <string name="action_open_translate">Translate</string>
+    <string name="action_open_subtitle">Subtitle</string>
     <string name="action_open_chat">Chat</string>
     <string name="action_open_music">Music</string>
     <string name="action_open_settings">Settings</string>

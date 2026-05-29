@@ -28,6 +28,10 @@ class ModeManager(
     fun active(): KeyMapProfile = profiles[activeIndex]
     fun all(): List<KeyMapProfile> = profiles.toList()
 
+    /** True when the active profile is the default fallback (Navigation). Used by the router to
+     *  decide whether LONG_PRESS = system screen-sleep (fallback only) vs an app-profile binding. */
+    fun isFallbackActive(): Boolean = active().id == DefaultProfiles.DEFAULT_FALLBACK_ID
+
     /** Subscribe to "active profile changed". Called with the new profile after every switch. */
     fun observe(onChange: (KeyMapProfile) -> Unit): () -> Unit {
         listeners += onChange
@@ -54,21 +58,28 @@ class ModeManager(
     /**
      * Called by the AccessibilityBackend with the current foreground package name.
      *
-     * Audit-pass 2026-05-14w: matching is now **prefix-based** so a partial package name in
-     * `triggerPackages` covers related apps (e.g. `com.spotify` matches both `com.spotify.music`
-     * and `com.spotify.tv.android`; `com.rokid.os.sprite.launcher.page.music` matches the
-     * fully-qualified component pkg).
+     * Matching is **prefix-based against the package AND the foreground activity class** (2026-05-28):
+     * a trigger matches if either the package or the activity starts with it. Activity matching is
+     * what makes Rokid Sprite pages work — they're all `com.rokid.os.sprite.launcher` but the trigger
+     * `com.rokid.os.sprite.launcher.page.music` matches the `MusicPageActivity` class. Plain apps still
+     * match by package prefix (`com.spotify` matches `com.spotify.music`).
      *
      * **Fallback to default**: when the foreground pkg matches nothing AND the active profile is
      * not the default-fallback ([DefaultProfiles.DEFAULT_FALLBACK_ID], normally "navigation"),
      * switch back to the fallback. This means leaving Spotify and going back to the system
      * launcher correctly drops Media → Navigation instead of leaving us stuck on Media.
      */
-    fun onForegroundPackage(pkg: String?) {
+    fun onForegroundPackage(pkg: String?, activity: String? = null) {
         if (pkg == null) return
         if (nowMs() < manualLockUntilMs) return  // user just chose; respect them
+        // Match a trigger against the package OR the foreground activity class. The activity match
+        // is essential on Rokid: every Sprite "app" (camera/music/translate/chat) shares the one
+        // package com.rokid.os.sprite.launcher but has a distinct activity, so a trigger like
+        // "com.rokid.os.sprite.launcher.page.music" can only be hit via the activity class.
+        fun matches(trigger: String) =
+            pkg.startsWith(trigger) || (activity?.startsWith(trigger) == true)
         val match = profiles.firstOrNull { p ->
-            p.id != active().id && p.triggerPackages.any { trigger -> pkg.startsWith(trigger) }
+            p.id != active().id && p.triggerPackages.any { trigger -> matches(trigger) }
         }
         if (match != null) {
             activeIndex = profiles.indexOf(match)

@@ -29,7 +29,9 @@ data class FeedbackPrefs(
     /** Show recognised gesture in the HUD for ~800 ms after each. Off by default; on briefly after pairing. */
     val gestureHintHud: Boolean = false,
     val clickSoundOnModeSwitch: Boolean = true,
-    val ringLedFeedback: Boolean = true,
+    // Off by default (2026-05-28): the ring LED no longer blinks on profile switch unless the user
+    // opts in here — it was needless battery drain given how often profiles auto-switch now.
+    val ringLedFeedback: Boolean = false,
     val hudPosition: HudPosition = HudPosition.TOP_RIGHT,
     val hudDurationMs: Int = 2000,
     /** Auto-enable [gestureHintHud] for the first 5 minutes after pairing. */
