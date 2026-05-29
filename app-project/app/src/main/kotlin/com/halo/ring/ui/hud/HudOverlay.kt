@@ -173,6 +173,7 @@ class HudOverlay(
         is HudEvent.Disconnected      -> 4_000L         // §3 (was: persistent — see kdoc)
         is HudEvent.SportTick         -> 8_000L         // C5: long enough to glance at, ticks again
         is HudEvent.RingDropped       -> 2_500L         // C6: short — usually a false positive
+        is HudEvent.Notice            -> 2_500L         // BT-internet result — long enough to read
         else                          -> defaultDurationMs
     }
 
@@ -305,6 +306,7 @@ fun HudPill(event: HudEvent) {
         is HudEvent.TargetReached        -> HaloColors.Accent
         is HudEvent.SportTick            -> HaloColors.Accent
         is HudEvent.RingDropped          -> HaloColors.Bad
+        is HudEvent.Notice               -> if (event.bad) HaloColors.Bad else HaloColors.Accent
     }
     // Disconnected gets slightly larger padding because it carries a two-line message (status +
     // reconnect hint); the rest are single-line pills. The variable's old name `centered` referred
@@ -342,6 +344,12 @@ fun HudPill(event: HudEvent) {
             is HudEvent.RingDropped -> Text(
                 androidx.compose.ui.res.stringResource(com.halo.ring.R.string.hud_ring_dropped, event.ringId),
                 style = HaloType.RowVal.copy(color = HaloColors.Bad, fontSize = 11.sp),
+            )
+            is HudEvent.Notice -> Text(
+                event.text,
+                style = HaloType.RowVal.copy(
+                    color = if (event.bad) HaloColors.Bad else HaloColors.Accent, fontSize = 11.sp,
+                ),
             )
         }
     }

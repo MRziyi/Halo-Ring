@@ -52,6 +52,7 @@ enum class SettingsSection(val titleRes: Int, val group: SettingsGroup) {
 
     // More group — less-frequently-touched config.
     POWER(R.string.settings_section_power, SettingsGroup.MORE),
+    BT_INTERNET(R.string.settings_section_bt_internet, SettingsGroup.MORE),
     FEEDBACK(R.string.settings_section_feedback, SettingsGroup.MORE),
     LANGUAGE(R.string.settings_section_language, SettingsGroup.MORE),
     STATUS(R.string.settings_section_status, SettingsGroup.MORE),

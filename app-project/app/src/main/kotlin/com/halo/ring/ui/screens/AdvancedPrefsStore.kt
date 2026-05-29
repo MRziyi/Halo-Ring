@@ -21,6 +21,7 @@ class AdvancedPrefsStore(private val context: Context) {
         val DebugHud = booleanPreferencesKey("debug_hud_enabled")
         val Latency  = booleanPreferencesKey("latency_measurement_enabled")
         val Spatial  = booleanPreferencesKey("spatial_mode_enabled")
+        val BtInternetAutoBoot = booleanPreferencesKey("bt_internet_auto_boot")
     }
 
     val flow: Flow<AdvancedPrefs> = context.advancedPrefsDataStore.data.map { p ->
@@ -28,6 +29,7 @@ class AdvancedPrefsStore(private val context: Context) {
             debugHudEnabled           = p[Keys.DebugHud] ?: false,
             latencyMeasurementEnabled = p[Keys.Latency]  ?: false,
             spatialModeEnabled        = p[Keys.Spatial]  ?: false,
+            btInternetAutoBoot        = p[Keys.BtInternetAutoBoot] ?: false,
         )
     }
 
@@ -36,6 +38,7 @@ class AdvancedPrefsStore(private val context: Context) {
             p[Keys.DebugHud] = prefs.debugHudEnabled
             p[Keys.Latency]  = prefs.latencyMeasurementEnabled
             p[Keys.Spatial]  = prefs.spatialModeEnabled
+            p[Keys.BtInternetAutoBoot] = prefs.btInternetAutoBoot
         }
     }
 }

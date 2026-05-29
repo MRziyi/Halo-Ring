@@ -350,6 +350,18 @@ class MainActivity : AppCompatActivity() {
                     emptyMsg = getString(R.string.advanced_export_vitals_empty),
                 )
             }
+            AdvancedAction.OPEN_ANDROID_SETTINGS        -> openSettings(Settings.ACTION_SETTINGS)
+            AdvancedAction.BT_INTERNET_CONNECT_NOW      -> {
+                val a11y = com.halo.ring.accessibility.HaloRingAccessibilityService.instance
+                if (a11y == null) {
+                    openSettings(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+                    android.widget.Toast.makeText(
+                        this, getString(R.string.bt_internet_need_a11y), android.widget.Toast.LENGTH_LONG,
+                    ).show()
+                } else {
+                    a11y.startBtInternetFlow()
+                }
+            }
         }
     }
 

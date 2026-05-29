@@ -61,6 +61,10 @@ sealed interface HudEvent {
      * gesture was unmapped.
      */
     data class GestureRecognised(val gesture: Gesture, val resolvedAction: GlassAction) : HudEvent
+
+    /** Free-text notice (e.g. the Bluetooth-internet flow's success / failure message). Reuses the
+     *  gesture-hint pill styling. 2.5 s. [bad] tints it warn-coloured for failures. */
+    data class Notice(val text: String, val bad: Boolean = false) : HudEvent
 }
 
 /** Pick a string-resource id for a gesture's friendly localized name. Doc/08-ui-design.md §10.3.

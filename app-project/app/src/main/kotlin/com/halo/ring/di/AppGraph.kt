@@ -126,6 +126,10 @@ class AppGraph private constructor(
      *  combo to resolve. (Burn-in fix 2026-05-27: previously Test Arena only saw post-synthesis
      *  gestures, so a TAP appeared ~280 ms after the user tapped — perceptibly laggy.) */
     val rawAtomicGestureFlow: MutableSharedFlow<com.halo.ring.core.gesture.RawGesture>,
+    /** HUD notices posted from outside the foreground service (e.g. the accessibility service's
+     *  Bluetooth-internet flow). The service collects this and forwards to its [HudOverlay] so
+     *  there's a single HUD owner. */
+    val hudNoticeFlow: MutableSharedFlow<com.halo.ring.ui.hud.HudEvent>,
 ) {
     /**
      * Best-effort detection of which input source the wearer is using right now. Drives the
@@ -186,6 +190,7 @@ class AppGraph private constructor(
                 lastRecognisedFlow = MutableStateFlow(null),
                 ringCapabilitiesFlow = MutableStateFlow(emptySet()),
                 rawAtomicGestureFlow = MutableSharedFlow(extraBufferCapacity = 16),
+                hudNoticeFlow = MutableSharedFlow(extraBufferCapacity = 4),
             )
         }
 

@@ -28,6 +28,9 @@ data class AdvancedPrefs(
     val latencyMeasurementEnabled: Boolean = false,
     /** v0.4: surfaced in Vitals (C6) not Advanced; preserved for DataStore back-compat. */
     val spatialModeEnabled: Boolean = false,
+    /** When true, re-enable the phone's Bluetooth "Internet access" (PAN) on every boot via the
+     *  accessibility UI flow — Android resets that toggle on reboot. Off by default. */
+    val btInternetAutoBoot: Boolean = false,
 )
 
 enum class AdvancedAction {
@@ -36,6 +39,10 @@ enum class AdvancedAction {
     REOPEN_ADB_WIZARD,
     EXPORT_LATENCY_LOG,
     EXPORT_VITALS_LOG,
+    /** Run the accessibility UI flow that re-enables the phone's Bluetooth "Internet access". */
+    BT_INTERNET_CONNECT_NOW,
+    /** Open the Android system Settings app. */
+    OPEN_ANDROID_SETTINGS,
 }
 
 /**

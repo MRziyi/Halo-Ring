@@ -31,6 +31,8 @@ sealed interface SubScreen {
      *  RingScreen "PAIR" CTA or from the first-run wizard's pair step. (burn-in fix 2026-05-27) */
     object RingPairing : SubScreen
     object Power : SubScreen
+    /** Settings → Bluetooth internet — re-enable the phone's BT "Internet access" (manual + on-boot). */
+    object BluetoothInternet : SubScreen
     object Advanced : SubScreen
     object About : SubScreen
     object VitalsPrefs : SubScreen

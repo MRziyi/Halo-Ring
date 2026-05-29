@@ -331,6 +331,10 @@ class HaloRingService : Service() {
             null
         }
 
+        // Forward HUD notices posted from elsewhere in the process (the accessibility service's
+        // Bluetooth-internet flow) so the foreground service stays the single HUD owner.
+        serviceScope.launch { graph.hudNoticeFlow.collect { hud?.show(it) } }
+
         // ── 3. subscribe BLE events ────────────────────────────────────────────────────────────
         subs += graph.bleClient.events().subscribe { event, nowMs ->
             // Already on the scheduler thread (AndroidR08BleClient.onNotify reposts before fanning out).
@@ -849,7 +853,49 @@ class HaloRingService : Service() {
                 Log.w(TAG, "Wi-Fi callback registration failed: ${e.message}")
             }
         }
+
+        // ── 13. Bluetooth-internet auto-reconnect on boot ─────────────────────────────────────
+        // Android resets the phone's "Internet access" (PAN) toggle on every reboot. If the user
+        // opted in (Settings → Bluetooth internet → auto on boot), replay the toggle via the
+        // accessibility UI flow once things have settled (BT reconnect + a11y service bound).
+        serviceScope.launch {
+            if (!graph.advancedPrefs.flow.first().btInternetAutoBoot) return@launch
+            // Wait until the phone is fully connected as a MEDIA device (A2DP/HFP), not just
+            // ACL-linked. Only then does it move into the top "Media devices" category and grow the
+            // settings gear the UI flow clicks — right after a reboot it briefly sits under "Other
+            // devices" with no gear. Waiting here (no UI) means Settings opens already-ready, so the
+            // flow finishes fast instead of staring at the list. Poll up to ~90 s.
+            var waited = 0
+            while (waited < 90_000 &&
+                !(isMediaDeviceConnected() && com.halo.ring.accessibility.HaloRingAccessibilityService.instance != null)) {
+                kotlinx.coroutines.delay(3_000); waited += 3_000
+            }
+            val a11y = com.halo.ring.accessibility.HaloRingAccessibilityService.instance
+            when {
+                a11y == null -> Log.w(TAG, "btInternet auto-boot: accessibility service off — skipping")
+                !isMediaDeviceConnected() -> Log.w(TAG, "btInternet auto-boot: phone not media-connected within 90s — skipping")
+                else -> {
+                    // Small settle so the UI promotes the phone into "Media devices" before we look.
+                    kotlinx.coroutines.delay(2_000)
+                    Log.i(TAG, "btInternet auto-boot: phone media-connected, replaying Internet-access toggle")
+                    a11y.startBtInternetFlow(returnToApp = false)
+                }
+            }
+        }
     }
+
+    /** True if the phone is fully connected as a media device — which is when it moves into the top
+     *  "Media devices" category and grows a settings gear. The glasses are the RECEIVER, so the
+     *  relevant profiles are the sink/client roles A2DP_SINK(11) and HEADSET_CLIENT(16), NOT the
+     *  source roles A2DP(2)/HEADSET(1). */
+    private fun isMediaDeviceConnected(): Boolean = try {
+        val adapter = getSystemService(android.bluetooth.BluetoothManager::class.java)?.adapter ?: return false
+        val connected = android.bluetooth.BluetoothProfile.STATE_CONNECTED
+        adapter.getProfileConnectionState(11) == connected ||  // A2DP_SINK
+        adapter.getProfileConnectionState(16) == connected ||  // HEADSET_CLIENT
+        adapter.getProfileConnectionState(android.bluetooth.BluetoothProfile.A2DP) == connected ||
+        adapter.getProfileConnectionState(android.bluetooth.BluetoothProfile.HEADSET) == connected
+    } catch (e: Exception) { Log.w(TAG, "isMediaDeviceConnected: ${e.message}"); false }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
 

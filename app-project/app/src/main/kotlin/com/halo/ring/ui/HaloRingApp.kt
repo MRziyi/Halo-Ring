@@ -25,6 +25,7 @@ import com.halo.ring.ui.screens.ActionPickerScreen
 import com.halo.ring.ui.screens.AdvancedAction
 import com.halo.ring.ui.screens.AdvancedPrefs
 import com.halo.ring.ui.screens.AdvancedScreen
+import com.halo.ring.ui.screens.BluetoothInternetScreen
 import com.halo.ring.ui.screens.AppLanguage
 import com.halo.ring.ui.screens.LanguageScreen
 import com.halo.ring.ui.screens.FeedbackPrefField
@@ -187,6 +188,7 @@ fun HaloRingApp(
                         SettingsSection.SYSTEM_GESTURES  -> SubScreen.SystemGestures
                         SettingsSection.RING             -> SubScreen.Ring
                         SettingsSection.POWER            -> SubScreen.Power
+                        SettingsSection.BT_INTERNET      -> SubScreen.BluetoothInternet
                         SettingsSection.ADVANCED         -> SubScreen.Advanced
                         SettingsSection.ABOUT            -> SubScreen.About
                         SettingsSection.VITALS_PREFS     -> SubScreen.VitalsPrefs
@@ -326,6 +328,13 @@ fun HaloRingApp(
                             onActiveProfileUpdated = onProfileUpdated,
                         )
                     }
+
+                    SubScreen.BluetoothInternet -> BluetoothInternetScreen(
+                        autoBootOn = advancedPrefs.btInternetAutoBoot,
+                        onToggleAutoBoot = { onAdvancedPrefsChanged(advancedPrefs.copy(btInternetAutoBoot = !advancedPrefs.btInternetAutoBoot)) },
+                        onConnectNow = { onAdvancedAction(AdvancedAction.BT_INTERNET_CONNECT_NOW) },
+                        onOpenAndroidSettings = { onAdvancedAction(AdvancedAction.OPEN_ANDROID_SETTINGS) },
+                    )
 
                     SubScreen.Advanced -> AdvancedScreen(
                         prefs = advancedPrefs,
