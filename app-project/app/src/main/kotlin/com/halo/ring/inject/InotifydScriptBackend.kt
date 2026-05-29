@@ -19,7 +19,7 @@ import java.io.RandomAccessFile
  * process dies or was never bootstrapped — but the user has at least run the one-shot ADB
  * bootstrap that installed our `inotifyd` helper script under `/data/local/tmp/`.
  *
- * Architecture (Doc/04 §5.1, mirrored from the `小猪遥控戒指` reference app but event-driven):
+ * Architecture (Doc/04 §5.1 — a file-trigger + shell pattern, but event-driven via inotifyd):
  *
  *     :app                                   :device (shell uid, persistent)
  *     ─────                                  ──────────────────────────────────

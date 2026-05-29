@@ -240,7 +240,7 @@ object R08Protocol {
     const val TOUCH_APP_GAME      = 0x07
     const val TOUCH_APP_HEART     = 0x08
     /** Hidden magic value — NOT exposed by the QRing UI. Required for `SUB_TOUCH_GESTURE` reporting
-     *  (the open-source `小猪遥控戒指` v2 client is the only other implementation that uses this). */
+     *  (recovered by on-device reverse-engineering of the touch-IC init handshake). */
     const val TOUCH_APP_REPORT_ALL_GESTURES = 0x09
 
     // ─── 0x77 PhoneSport sub-actions ───────────────────────────────────────────────────────────

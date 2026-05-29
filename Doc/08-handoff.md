@@ -1,12 +1,12 @@
-# 13 — Handoff & State Snapshot
+# 08 — Handoff & State Snapshot
 
 > **For the next agent picking up this project.** This is a **point-in-time state snapshot**.
-> Keep it short. Forward planning lives in [Doc/20 v0.4 design](20-v0.4-design.md). Chronological
+> Keep it short. Forward planning lives in [Doc/11 v0.4 design](11-v0.4-design.md). Chronological
 > audit history lives in [`_archive/13-handoff-pre-v0.4.md`](_archive/13-handoff-pre-v0.4.md) +
 > the git log + the audit-pass memories.
 
 Last updated: 2026-05-28 (v0.4 implemented + validated on real Rokid Glasses; on-glasses iteration
-round done — see [Doc/20 §17](20-v0.4-design.md) for the shipped status + deltas).
+round done — see [Doc/11 §17](11-v0.4-design.md) for the shipped status + deltas).
 
 ---
 
@@ -22,7 +22,7 @@ The project's twin pillars (locked 2026-05-27 by Zack):
 
 1. **Gesture device** — 4 base gestures mirror the temple touchpad (system KeyEvents); a
    **13-gesture vocabulary** on top includes custom taps/long-press/combos **plus the v0.4
-   `WRIST_SHAKE` air-gesture** (accelerometer), editable per-profile + extendable via the Doc/18
+   `WRIST_SHAKE` air-gesture** (accelerometer), editable per-profile + extendable via the Doc/10
    Plugin Protocol. **Custom gestures are the project's headline value-add — none get removed.**
 2. **Full SPEC v3 protocol coverage** — every BLE capability reverse-engineered in
    [`R08-dev/phase0/SPEC v3.md`](../../R08-dev/phase0/SPEC%20v3.md) (1797 lines) is exposed:
@@ -44,7 +44,7 @@ The project's twin pillars (locked 2026-05-27 by Zack):
 - `:app:assembleRokidRelease` — R8 shrink, ~4 MB
 - `.github/workflows/build-apks.yml` + `core-tests.yml` — CI on push / PR / `v*` tag
 - **The entire v0.4 refactor + on-glasses iteration is UNCOMMITTED in the working tree** (HEAD is
-  still `19f2824` audit-pass-y). This is the big closeout commit. See [Doc/20 §17](20-v0.4-design.md)
+  still `19f2824` audit-pass-y). This is the big closeout commit. See [Doc/11 §17](11-v0.4-design.md)
   for the full change list. `git status` in Halo-Ring shows ~40 modified + 6 new + 5 deleted +
   9 doc renames.
 
@@ -85,8 +85,8 @@ this unit.
 
 ### 2.1 v0.4 is SHIPPED — what's left
 
-**[Doc/20 v0.4 design](20-v0.4-design.md)** is the canonical record. Its phases **C1–C7 are all
-done + glasses-validated** (see Doc/20 §17 for the shipped status + the on-glasses deltas:
+**[Doc/11 v0.4 design](11-v0.4-design.md)** is the canonical record. Its phases **C1–C7 are all
+done + glasses-validated** (see Doc/11 §17 for the shipped status + the on-glasses deltas:
 dual-axis swipe, LONG_PRESS screen-toggle, WRIST_SHAKE, per-gesture sounds, energy backoff + accel
 gating, CompositeSystemKeyDispatcher, wizard rework, Fast dropped).
 
@@ -102,7 +102,7 @@ gating, CompositeSystemKeyDispatcher, wizard rework, Fast dropped).
 3. **Home dashboard redesign + IA reorg** (decided: dashboard home ✅, plugins → More ✅). The
    Config Activity root is still a settings menu; restore the old designed Vitals-hero landing (big
    HR/SpO₂ + ring status + MEASURE NOW) per [`ui-mockup.html`](ui-mockup.html), and move Plugins out
-   of the top-level group into More. See Doc/20 §17 "still queued".
+   of the top-level group into More. See Doc/11 §17 "still queued".
 
 ### 2.2 Phone vs glasses debugging discipline (v0.4)
 
@@ -125,7 +125,7 @@ Once Rokid Glasses arrive, **UI iteration moves to the glasses**.
 - The ring has **no left/right swipes** — only up, down, touch, long-press.
 - v0.3 mental model was "ring = remap any gesture to anything"; v0.4 mental model is
   "**ring = wireless extension of the temple touchpad**" — 4 base gestures hard-locked to system
-  KeyEvents, 8 custom gestures fully programmable. See [Doc/20 §2.3](20-v0.4-design.md#23-the-mental-model-invariant).
+  KeyEvents, 8 custom gestures fully programmable. See [Doc/11 §2.3](11-v0.4-design.md#23-the-mental-model-invariant).
 
 ### 3.2 Decisions that look small but matter
 
@@ -154,7 +154,7 @@ Designed exceptions:
 | Symptom | First place to look |
 |---|---|
 | Gesture not recognised | `GestureSynthesizerTest.kt` — every documented behaviour is asserted |
-| Action not firing | `InteractionRouter` layer ordering — see [Doc/05 §5](05-interaction-design.md) |
+| Action not firing | `InteractionRouter` layer ordering — see [Doc/04 §5](04-interaction-design.md) |
 | HUD not appearing | `SYSTEM_ALERT_WINDOW` permission granted? `HudOverlay.ensureViewInstalled` falls gracefully on `WindowManager.BadTokenException` |
 | Build issues | Compose / Kotlin / AGP version drift; bump in `build.gradle.kts` |
 | Ring connects then drops | SPEC §6.5 fw quirk — auto-reconnect handles it; check intervals in `PowerPolicy` |
@@ -191,12 +191,12 @@ Designed exceptions:
 
 ## 5. Where to look for…
 
-- **Forward plan / next sprint**: [Doc/20 v0.4 design](20-v0.4-design.md)
+- **Forward plan / next sprint**: [Doc/11 v0.4 design](11-v0.4-design.md)
 - **BLE protocol bytes**: [`R08-dev/phase0/SPEC v3.md`](../../R08-dev/phase0/SPEC%20v3.md) (canonical) + [Doc/02](02-hardware-and-protocol.md) (Halo-Ring integration notes)
-- **Gesture vocabulary + state machine**: [Doc/05](05-interaction-design.md)
-- **UI design + HUD**: [Doc/08](08-ui-design.md)
-- **Plugin protocol** (Constellation integrates here): [Doc/18](18-plugin-protocol.md)
-- **Architecture (modules / strategies / backends)**: [Doc/04](04-architecture.md)
+- **Gesture vocabulary + state machine**: [Doc/04](04-interaction-design.md)
+- **UI design + HUD**: [Doc/05](05-ui-design.md)
+- **Plugin protocol** (Constellation integrates here): [Doc/10](10-plugin-protocol.md)
+- **Architecture (modules / strategies / backends)**: [Doc/03](03-architecture.md)
 - **Audit-pass chronology + pre-v0.4 priority tables**: [`_archive/13-handoff-pre-v0.4.md`](_archive/13-handoff-pre-v0.4.md) + git log + auto-memory at `~/.claude/projects/-Users-Zack-Code-Projects-R08-dev/memory/`
 - **Rokid bare-metal SDK** (KeyEvent constants, broadcast actions): `~/Code/Projects/Constellation/reference/rokid-glass/bare-metal-docs/`
 - **Constellation-Glass design** (the philosophy v0.4 borrows from): `~/Code/Projects/Constellation-Glass/Doc/GLASS-CLIENT-DESIGN.md`
@@ -231,4 +231,4 @@ ActionRouter → ExecutorBackend → injection`. Synthesizer is testable with `F
 A: Two pillars (gesture device + SPEC v3 coverage). Anything serving them stays (Profile Editor,
 Action Picker, Vitals dashboard, Plugin Protocol). Anything that's phone-style-app cruft on
 glasses goes (5-step Wizard, GuidedTour, InAppFocusController, full-screen Status/About). See
-[Doc/20 §3-4](20-v0.4-design.md).
+[Doc/11 §3-4](11-v0.4-design.md).

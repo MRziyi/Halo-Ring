@@ -1,7 +1,7 @@
-# 10 — Developer Guide
+# 07 — Developer Guide
 
 How to build, test, and extend the codebase. For end users see
-[09-user-manual.md](09-user-manual.md).
+[06-user-manual.md](06-user-manual.md).
 
 ---
 
@@ -25,11 +25,11 @@ Halo-Ring/                         ← repo root (this is the canonical Halo Rin
       src/main/.../service/        ← HaloRingService — foreground service host
       src/main/.../ble/            ← AndroidR08BleClient — Android BluetoothGatt impl
       src/main/.../inject/         ← AppProcessAgentBackend + AccessibilityBackend
-      src/main/.../plugin/         ← Doc/18 plugin discovery + trigger + push/pop receiver
+      src/main/.../plugin/         ← Doc/10 plugin discovery + trigger + push/pop receiver
       src/main/.../runtime/        ← AndroidScheduler (HandlerThread for the gesture pipeline)
       src/rokid/ + src/rayneo/     ← flavor-specific device strategies
     agent/                         ← the app_process injection agent
-    test-plugin/                   ← Doc/18 reference plugin (validation + plugin-author example)
+    test-plugin/                   ← Doc/10 reference plugin (validation + plugin-author example)
   .github/                         ← CI: build-apks (release pipeline) + core-tests
   LICENSE / COPYRIGHT.md / COMMERCIAL-LICENSE.md / CONTRIBUTING.md
 ```
@@ -122,7 +122,7 @@ cp agent/build/halo-agent.dex app/src/main/assets/halo-agent.dex
    - "does it not fire when an interfering sequence happens"
    - "does it interact correctly with optimistic-tap / await-combos"
 4. Add a default binding in profiles, or leave the slot unbound (`GlassAction.None`).
-5. Update [05-interaction-design.md](05-interaction-design.md) §2 and [09](09-user-manual.md) §4.
+5. Update [04-interaction-design.md](04-interaction-design.md) §2 and [09](06-user-manual.md) §4.
 
 ## 7. Adding support for a new glasses platform
 
@@ -131,7 +131,7 @@ Suppose Glasses-C ships and we want to support it. The work:
 1. **Platform research**: Android version? Display? Input model (focus + DPAD keys, or focus +
    MotionEvent gestures, or something else)? System launcher package + key Activities? ADB
    bootstrap process? Wear detection mechanism? Write up the findings analogous to
-   [Doc/04 §8](04-architecture.md#8-target-platforms).
+   [Doc/03 §8](03-architecture.md#8-target-platforms).
 2. **Add a Gradle product flavor**: in [`app/build.gradle.kts`](../app-project/app/build.gradle.kts) add `glasses-c` flavor.
 3. **Implement the four strategies** in `app/src/glassesC/...`:
    - `GlassesCDisplayAdapter`
@@ -141,7 +141,7 @@ Suppose Glasses-C ships and we want to support it. The work:
 4. Wire them in `app/src/glassesC/.../DeviceFlavorBindings.kt`.
 5. Extend [`DeviceProfile`](../app-project/core/src/main/kotlin/com/halo/ring/core/DeviceProfile.kt) and
    [`AppGraph.detectDeviceProfile()`](../app-project/app/src/main/kotlin/com/halo/ring/di/AppGraph.kt) with the new profile.
-6. Verify per the smoke-check sequence in [Doc/13 §1.4](13-handoff.md) (former verification checklists archived under `_archive/11-verification-checklists.md`).
+6. Verify per the smoke-check sequence in [Doc/08 §1.4](08-handoff.md) (former verification checklists archived under `_archive/11-verification-checklists.md`).
 
 ## 8. Adding a new executor backend
 
@@ -172,7 +172,7 @@ The synthesiser is intentionally simple. Common extensions:
 | New tunable | Add field to `GestureConfig`, plumb through |
 | New raw event (e.g. firmware update adds left/right swipe) | Add to `RawGesture` enum; add a branch in `onRaw`; update `R08Frame.parse` |
 | New combo | Mirror an existing combo's pattern (new follow-up timer + state flag + cancel logic) |
-| Stateful "modes" within a profile | This is what the **modal layer** is for — see [05](05-interaction-design.md) §6 |
+| Stateful "modes" within a profile | This is what the **modal layer** is for — see [05](04-interaction-design.md) §6 |
 
 Whatever you do, **add tests**. The state machine has subtle interactions (e.g. flush-pending-tap
 ordering) that are hard to keep right without a comprehensive test suite. Better to over-test
@@ -251,7 +251,7 @@ re-verify a byte sequence against actual ring firmware.
 When you change something hot-path (BLE callback, scheduler, agent), confirm you didn't regress:
 
 - **Latency**: Enable Debug HUD → Latency measurement mode → do 20 of each gesture → check 95th
-  percentile against the targets in [Doc/04 §7.1](04-architecture.md#71-end-to-end-latency-budget).
+  percentile against the targets in [Doc/03 §7.1](03-architecture.md#71-end-to-end-latency-budget).
 - **Power**: Run resident with ring connected, glasses worn, no interaction, for 30 min. Check
   glasses' battery stats and the ring's reported battery delta. Compare to baseline.
 - **Reliability**: 100 of each gesture, 60 cm distance, count drops + false positives.

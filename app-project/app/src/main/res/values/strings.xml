@@ -389,7 +389,7 @@
     <string name="about_phase0_probe">Phase-0 probe</string>
     <string name="about_show_guide">Show operation guide</string>
     <string name="about_credits_label">Credits</string>
-    <string name="about_credits_body">• Touch + gesture protocol reverse-engineered from `com.ring.r08remote` v2\n• Broader R02-family commands from `tahnok/colmi_r02_client`\n• RF03 SoC + firmware research: `atc1441/ATC_RF03_Ring`\n• Rokid platform docs: `buildwithfenna/rokid-docs`\n• Mercury SDK example: `Quad-Labs/RayDesk`</string>
+    <string name="about_credits_body">• Ring touch + gesture protocol: original first-hand reverse-engineering\n• Rokid platform docs: `buildwithfenna/rokid-docs`\n• RayNeo Mercury SDK example: `Quad-Labs/RayDesk`</string>
     <string name="about_source_label">Source &amp; contact</string>
     <string name="about_source_body">Halo Ring · 环意 is open source under the GNU AGPLv3.\nFor personal use it is, and will always be, free.\n\nRepository:  github.com/MRziyi/Halo-Ring\nAuthor:      ziyi-zhang.vercel.app\n\nIf you paid anyone for this app, you were scammed. The official build is always at the URL above; verify the package signing certificate matches.</string>
     <string name="about_docs_label">Documentation</string>

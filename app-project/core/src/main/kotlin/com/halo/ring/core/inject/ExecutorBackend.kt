@@ -12,7 +12,7 @@ import com.halo.ring.core.action.GlassAction
  *    Provides NAVIGATE / KEY_EVENT / TAP_SWIPE / LAUNCH_INTENT / SHELL / BACK / HOME / RECENTS.
  *  - `ShizukuBackend`         — same capability set, via Shizuku's binder. Only if user installed it.
  *  - `InotifydScriptBackend`  — fall-back: write a command file → inotifyd-triggered shell runs `input`/`am`.
- *  - `PollScriptBackend`      — last-resort 小猪-style 0.05s polling script.
+ *  - `PollScriptBackend`      — last-resort 0.05s polling script.
  *  - `AccessibilityBackend`   — only BACK / HOME / RECENTS / NOTIFICATIONS. Doesn't need ADB.
  *    Also feeds foreground-package events back to [com.halo.ring.core.action.ModeManager.onForegroundPackage].
  */

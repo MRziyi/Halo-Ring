@@ -74,11 +74,30 @@ name and visual identity in a fork requires either obvious "fork-of" framing
 (e.g. "MyFork — based on Halo Ring") OR a separate trademark license. This
 mirrors how Linux, Firefox, and PostgreSQL handle their marks.
 
+## Documentation & the reverse-engineered protocol spec
+
+The design docs in [Doc/](Doc/) — including the reverse-engineered BLE protocol
+specification [Doc/09-r08-ble-protocol-spec.md](Doc/09-r08-ble-protocol-spec.md)
+— are creative works licensed under the **same AGPLv3** as the code. Raw
+interoperability facts (a byte value, an opcode number) are not themselves
+copyrightable, but the spec's **specific expression** — its selection,
+arrangement, wording, examples, and the particular documented constants — is an
+original work. Reproducing the specification, or distributing software derived
+from it, carries the same copyleft obligation as the code: publish your
+corresponding source under AGPLv3, or obtain a commercial license. The published
+spec also contains verification provenance that lets the author distinguish an
+independent re-implementation from a copy of this work.
+
 ## Third-party components
 
-Halo Ring incorporates research and code from third-party projects, each
-under its own license. See [refs/README.md](refs/README.md) and the credits
-block in the historical README (commit history) for the full attribution.
+Halo Ring links against third-party **libraries** at build time, each under its
+own license: AndroidX / Jetpack Compose, Kotlin coroutines, BouncyCastle, a
+prebuilt BoringSSL (consumed via Prefab), and ZXing; the RayNeo flavor
+additionally links the RayNeo **Mercury** AR SDK (`app/libs/mercury-release.aar`).
+
+The reverse-engineered QRing R08 BLE protocol is **original, first-hand work** —
+no other application's research or source was used as a reference. No third-party
+application source code is incorporated into this repository.
 
 ## Why this license
 

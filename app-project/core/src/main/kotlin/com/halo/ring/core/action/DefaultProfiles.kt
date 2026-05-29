@@ -41,12 +41,12 @@ object DefaultProfiles {
         id = "navigation",
         name = "Navigation",
         gestureConfig = GestureConfig(
-            multiTapWindowMs = 300,
+            multiTapWindowMs = 220,        // 300 → 220 (2026-05-29): faster bare TAP, double-tap still reliable
             comboWindowMs = 400,
             optimisticSingleTap = false,
             awaitCombos = true,
             awaitLongPressCombos = true,
-            longPressFollowupWindowMs = 60,
+            longPressFollowupWindowMs = 40, // 60 → 40 (2026-05-29): snappier long-press, LP-combos still detectable
             enableTripleTap = true,
             enableDoubleLongPress = true,
         ),
@@ -76,12 +76,12 @@ object DefaultProfiles {
         id = "media",
         name = "Media",
         gestureConfig = GestureConfig(
-            multiTapWindowMs = 300,
+            multiTapWindowMs = 220,                // 300 → 220 (2026-05-29): faster play/pause tap
             comboWindowMs = 400,
             optimisticSingleTap = false,           // keep double-tap = exit reliable
             awaitCombos = true,
             awaitLongPressCombos = true,
-            longPressFollowupWindowMs = 60,
+            longPressFollowupWindowMs = 40,        // 60 → 40 (2026-05-29): snappier long-press
             useSystemKeyEvents = false,            // route TAP / swipes through this map, not DPAD
         ),
         map = systemSlots + mapOf(

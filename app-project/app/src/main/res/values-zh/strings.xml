@@ -355,7 +355,7 @@
     <string name="about_phase0_probe">Phase-0 探针</string>
     <string name="about_show_guide">查看操作指南</string>
     <string name="about_credits_label">致谢</string>
-    <string name="about_credits_body">• 触摸 + 手势协议逆向自 `com.ring.r08remote` v2\n• 更广的 R02 系列命令来自 `tahnok/colmi_r02_client`\n• RF03 SoC + 固件研究：`atc1441/ATC_RF03_Ring`\n• Rokid 平台文档：`buildwithfenna/rokid-docs`\n• Mercury SDK 示例：`Quad-Labs/RayDesk`</string>
+    <string name="about_credits_body">• 戒指触摸 + 手势协议：完全自主、第一手逆向\n• Rokid 平台文档：`buildwithfenna/rokid-docs`\n• RayNeo Mercury SDK 示例：`Quad-Labs/RayDesk`</string>
     <string name="about_source_label">源码 &amp; 联系</string>
     <string name="about_source_body">Halo Ring · 环意 采用 GNU AGPLv3 协议开源。\n个人使用现在免费，未来也永远免费。\n\n仓库：github.com/MRziyi/Halo-Ring\n作者：ziyi-zhang.vercel.app\n\n如果有人向你收钱，那是被骗了。官方版本始终在上面的链接；请校对包签名证书。</string>
     <string name="about_docs_label">文档</string>

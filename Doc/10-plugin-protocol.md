@@ -1,4 +1,4 @@
-# 18 — Halo Ring External-App Plugin Protocol
+# 10 — Halo Ring External-App Plugin Protocol
 
 > **Status**: v1 — shipped. **Source**: this document is the canonical spec; the original draft
 > handed off by the Constellation team lives at [`halo-ring-plugin-protocol.md`](halo-ring-plugin-protocol.md).
@@ -142,11 +142,11 @@ class HaloTriggerReceiver : BroadcastReceiver() {
 
 End-to-end latency budget: **< 50 ms** in normal conditions, dominated by the broadcast
 delivery latency (which for foreground / recently-running apps is single-digit ms). No retry,
-no ACK — fire and forget per Doc/18 §5.3.
+no ACK — fire and forget per Doc/10 §5.3.
 
 ---
 
-## 5. Exclusive overlay (HUD takeover) — Doc/18 §7 model
+## 5. Exclusive overlay (HUD takeover) — Doc/10 §7 model
 
 **Supersedes the old `PROFILE_PUSH` binding-stack** (removed 2026-05-29 with `ProfileStack` /
 `PluginBindingsParser`). Use when your app shows an on-glasses HUD (over any app or the home) and
@@ -247,13 +247,13 @@ reads `pluginRegistry.plugins` (StateFlow) reactively.
 
 ### 7.2 Settings → External plugins
 
-New row in [Settings root](08-ui-design.md) between Test Arena and Advanced. Trailing "N
+New row in [Settings root](05-ui-design.md) between Test Arena and Advanced. Trailing "N
 active" summary when at least one plugin is installed. Drills into
 [`ExternalPluginsScreen`](../app-project/app/src/main/kotlin/com/halo/ring/ui/screens/ExternalPluginsScreen.kt)
 which lists each plugin's app name, package, action count, protocol version, and status
 ("● alive" / "⚠ {error}"). One CTA: "REFRESH PLUGINS" forces a re-scan.
 
-No per-plugin enable/disable toggle in v1 (Doc/18 §12). To stop a plugin firing, unbind its
+No per-plugin enable/disable toggle in v1 (Doc/10 §12). To stop a plugin firing, unbind its
 actions in the picker.
 
 ---
@@ -290,7 +290,7 @@ JVM unit tests (`./gradlew :core:test`):
 
 Total: **+36 :core tests** specific to this protocol.
 
-Spec test matrix (Doc/18 §11) for on-device verification on the OnePlus burn rig:
+Spec test matrix (Doc/10 §11) for on-device verification on the OnePlus burn rig:
 
 | # | Setup | Expected | Verified |
 |---|---|---|---|

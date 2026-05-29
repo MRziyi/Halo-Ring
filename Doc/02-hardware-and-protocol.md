@@ -1,8 +1,8 @@
 # 02 — Ring Hardware & BLE Protocol — Integration Notes
 
-> **The canonical protocol spec lives elsewhere.** Read [`R08-dev/phase0/SPEC v3.md`](../../R08-dev/phase0/SPEC%20v3.md) — 1797 lines, verified end-to-end on R08_E600 firmware `RT08_3.10.46_250621`. This document only captures Halo-Ring-specific integration details: which opcodes we use, when we use them, what dedup/delay constants the app picked, and what we explicitly avoid.
+> **The full protocol spec is [Doc/09 — R08 BLE Protocol Spec](09-r08-ble-protocol-spec.md)** — 1797 lines, verified end-to-end on R08_E600 firmware `RT08_3.10.46_250621`. This document only captures Halo-Ring-specific integration details: which opcodes we use, when we use them, what dedup/delay constants the app picked, and what we explicitly avoid.
 
-Updated 2026-05-27 as part of the v0.4 doc pass (absorbed Doc/07's sensor matrix — now lives in [Doc/04 §9](04-architecture.md#9-sensor-utilisation-matrix-formerly-doc07-11)).
+Updated 2026-05-27 as part of the v0.4 doc pass (absorbed Doc/07's sensor matrix — now lives in [Doc/03 §9](03-architecture.md#9-sensor-utilisation-matrix-formerly-doc07-11)).
 
 ---
 
@@ -20,7 +20,7 @@ Updated 2026-05-27 as part of the v0.4 doc pass (absorbed Doc/07's sensor matrix
 | Charging | Magnetic-contact cradle, USB-C, BLE **off** while charging |
 | Water resistance | IP68 / 5 ATM |
 | LED | Green single-colour (driven by `0x50 [0x55, 0xAA]` = Find Ring) |
-| OTA | BLE, unsigned, unencrypted — flasher at https://atc1441.github.io/ATC_RF03_Writer.html |
+| OTA | BLE, unsigned, unencrypted (observed first-hand; not used by Halo Ring) |
 
 The touch IC is the only hardware that distinguishes R08 from the rest of the Yawell/Colmi
 family — that's why most third-party Colmi tooling lacks gesture-frame parsing.
@@ -92,7 +92,7 @@ request CONNECTION_PRIORITY_HIGH (~15-30 ms interval) — relaxed by PowerPolicy
 
 End-to-end **~7 s** on R08_E600. Capability bitmap (17 flags including `appMeasure`, `bloodOxygen`,
 `hrv`, `newSleepProtocol`, `pressure`, `temperature`, `wechat`) is parsed into
-`AppGraph.ringCapabilitiesFlow` and used by v0.4 P3 capability-gated UI ([Doc/20 §8](20-v0.4-design.md)).
+`AppGraph.ringCapabilitiesFlow` and used by v0.4 P3 capability-gated UI ([Doc/11 §8](11-v0.4-design.md)).
 
 ## 5. Opcodes Halo Ring uses (cross-ref SPEC v3)
 
@@ -160,9 +160,8 @@ them. Discarded:
 
 ## 9. References
 
-- **SPEC v3**: [`R08-dev/phase0/SPEC v3.md`](../../R08-dev/phase0/SPEC%20v3.md) — the 1797-line
-  canonical protocol
-- **Phase-0 probes**: `R08-dev/phase0/*.py` — Python scripts that produced SPEC v3
-- **Sensor matrix** (which sensors + what we do with each): [Doc/04 §9](04-architecture.md#9-sensor-utilisation-matrix-formerly-doc07-11)
+- **Full protocol spec**: [Doc/09 — R08 BLE Protocol Spec](09-r08-ble-protocol-spec.md) — the
+  1797-line reverse-engineered protocol, verified on `RT08_3.10.46`
+- **Sensor matrix** (which sensors + what we do with each): [Doc/03 §9](03-architecture.md#9-sensor-utilisation-matrix-formerly-doc07-11)
 - **Code that implements this**: `core/.../ble/R08Protocol.kt` + `R08Frame.kt`
 - **Pre-v0.4 versions of this doc** (longer, included phase-0 stage planning): [`_archive/`](_archive/)

@@ -17,19 +17,20 @@ swipe-MotionEvent injection on X3 Pro).
 
 The original community hand-off document (`R08-Dev.md`, archived in the private R08-dev
 research workspace) posed the core open question: "the R08's touch/gesture BLE protocol is
-unknown — someone needs to reverse-engineer it." That turned out to be mostly already solved
-by a third-party app called `小猪遥控戒指` (`com.ring.r08remote`, WeChat `qq889538`); decompiling
-its v2 APK gave us the full protocol. See
-[12-research-and-references.md](12-research-and-references.md).
+unknown — someone needs to reverse-engineer it." This project answers it directly: the full
+touch/gesture BLE protocol was reverse-engineered **first-hand, on real R08 hardware**, by
+capturing and replaying BLE traffic and verifying every opcode on-device — no other project
+was used as a reference. The complete result is published as
+[09-r08-ble-protocol-spec.md](09-r08-ble-protocol-spec.md).
 
-But the third-party app has serious shortcomings (latency, power, fragility, only-Rokid, no
-configurability). This project is the from-scratch open redesign that **does the same thing,
-better, on two platforms, with a clean architecture suitable for long-term maintenance.**
+On top of that protocol work, this project is a from-scratch open design: a clean,
+configurable, low-latency remote that runs on **two platforms** with an architecture suitable
+for long-term maintenance.
 
-Key improvements over the reference app are catalogued in
-[12-research-and-references.md §3](12-research-and-references.md). The TL;DR is:
+The design choices below are deliberate — each avoids a common pitfall of a naïve ring-remote
+implementation:
 
-| | `小猪遥控戒指` | This project |
+| | Naïve approach | This project |
 |---|---|---|
 | Platforms | Rokid only | Rokid + RayNeo (shared core) |
 | Tap latency | Fixed 400ms multi-tap window | Tunable (default 280ms) + optional optimistic tap (~0ms) per profile |
@@ -47,18 +48,18 @@ Key improvements over the reference app are catalogued in
 **Hardware not yet acquired.** Both pairs of glasses + the ring are on order.
 
 > **For a comprehensive status snapshot + priority-ordered TODO + handoff notes**, read
-> [13-handoff.md](13-handoff.md). The summary below is a quick orientation; §13 is the canonical
+> [08-handoff.md](08-handoff.md). The summary below is a quick orientation; §13 is the canonical
 > "where are we, what's next" document.
 
 Already done (no hardware required):
 - BLE protocol fully reverse-engineered ([02-hardware-and-protocol.md](02-hardware-and-protocol.md))
 - Both target platforms researched and documented ([03-target-platforms.md](03-target-platforms.md))
-- End-to-end architecture designed ([04-architecture.md](04-architecture.md))
+- End-to-end architecture designed ([03-architecture.md](03-architecture.md))
 - Full interaction design: 12 gestures, 4 profiles, system-level wake/sleep, modal layer,
-  gesture-hint mode, in-app navigation ([05-interaction-design.md](05-interaction-design.md))
+  gesture-hint mode, in-app navigation ([04-interaction-design.md](04-interaction-design.md))
 - Performance + power budget designed ([06-performance-and-power.md](06-performance-and-power.md))
 - Sensor utilisation matrix and functional modules ([07-sensors-and-modules.md](07-sensors-and-modules.md))
-- **UI design + HTML mockup** at full 1:1 fidelity ([08-ui-design.md](08-ui-design.md) +
+- **UI design + HTML mockup** at full 1:1 fidelity ([05-ui-design.md](05-ui-design.md) +
   [ui-mockup.html](ui-mockup.html))
 - Skeleton Kotlin/Gradle multi-module project at [`../app-project/`](../app-project/) with:
   - **Full `:core`**: gesture state machine + frame parser + ~25 JVM tests
@@ -70,12 +71,12 @@ Already done (no hardware required):
   - Fully implemented runtime: `:agent`, `HaloRingService`, `AndroidR08BleClient`,
     `AppProcessAgentBackend`, `AccessibilityBackend`
 - Phase-0 verification probe with `--tutorial` mode at [`../Doc/02-hardware-and-protocol.md`](02-hardware-and-protocol.md)
-- End-user manual ([09-user-manual.md](09-user-manual.md))
-- Developer guide ([10-developer-guide.md](10-developer-guide.md)) + verification checklists
+- End-user manual ([06-user-manual.md](06-user-manual.md))
+- Developer guide ([07-developer-guide.md](07-developer-guide.md)) + verification checklists
   ([11-verification-checklists.md](11-verification-checklists.md)) + research provenance
   ([12-research-and-references.md](12-research-and-references.md))
 
-Outstanding work — see [13-handoff.md §2](13-handoff.md):
+Outstanding work — see [08-handoff.md §2](08-handoff.md):
 - **Critical path (priority A) — DONE**: `AndroidR08BleClient`, `:agent` body,
   `AppProcessAgentBackend`, `HaloRingService` body, HUD wiring to the InteractionRouter
   callback, foreground bypass, DataStore prefs persistence
@@ -95,12 +96,12 @@ If you are…
 
 - **A new contributor onboarding to the project**: read 01 (this), then 04 (architecture), then
   05 (interaction design). Skim everything else.
-- **An end user**: just read [09-user-manual.md](09-user-manual.md). Maybe glance at
+- **An end user**: just read [06-user-manual.md](06-user-manual.md). Maybe glance at
   [11-verification-checklists.md](11-verification-checklists.md) §1 to verify your hardware.
 - **A reverse engineer of the ring**: read [02-hardware-and-protocol.md](02-hardware-and-protocol.md)
   + [12-research-and-references.md](12-research-and-references.md).
-- **An Android developer fixing/extending the app**: read [04](04-architecture.md) +
-  [05](05-interaction-design.md) + [10-developer-guide.md](10-developer-guide.md).
+- **An Android developer fixing/extending the app**: read [04](03-architecture.md) +
+  [05](04-interaction-design.md) + [07-developer-guide.md](07-developer-guide.md).
 - **A reviewer doing handoff to another team**: read everything in order. Each doc is independent;
   no doc requires reading any other doc first.
 
@@ -108,10 +109,10 @@ If you are…
 
 - [`../app-project/`](../app-project/) — the Kotlin/Gradle multi-module project
 - [`Doc/02-hardware-and-protocol.md`](02-hardware-and-protocol.md) — the BLE protocol spec
-- [`Doc/18-plugin-protocol.md`](18-plugin-protocol.md) — the external-app plugin protocol (Constellation
+- [`Doc/10-plugin-protocol.md`](10-plugin-protocol.md) — the external-app plugin protocol (Constellation
   is the first client)
-- **Private research material** (separate `R08-Dev` repo) — vendor SDKs, jadx decompilation of
-  `小猪遥控戒指` v2, third-party reference clones (rokid-docs, colmi_r02_client, ATC_RF03_Ring,
-  RayDesk, …), the original community hand-off doc, plus Python BLE protocol-validation probes.
+- **Private research material** (separate `R08-Dev` repo) — the first-hand BLE
+  reverse-engineering work: Python BLE protocol-validation probes, on-device capture logs, the
+  glasses-platform SDKs (Rokid / RayNeo Mercury), and the original community hand-off doc.
   Public contributors don't need these — verified protocol details get published into Doc/02 above.
 - [`./_archive/`](./_archive/) — earlier monolithic versions of this design doc, preserved

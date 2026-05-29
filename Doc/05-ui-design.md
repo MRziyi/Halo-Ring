@@ -1,4 +1,4 @@
-# 08 — UI Design (v0.4)
+# 05 — UI Design (v0.4)
 
 The Halo Ring UI has **two surfaces** in v0.4:
 
@@ -11,8 +11,8 @@ The Halo Ring UI has **two surfaces** in v0.4:
 
 Pre-v0.4 design had a 3-tab top-level (Vitals / Settings / Status). v0.4 retires the tab strip
 and the `InAppFocusController` because they were the root cause of "ring 点不出来" on glasses
-([Doc/20 §2.1](20-v0.4-design.md)). Compose's standard `FocusManager` + system KeyEvents
-([Doc/05 §3.8](05-interaction-design.md#38-base-gesture-passthrough-v04)) handle navigation
+([Doc/11 §2.1](11-v0.4-design.md)). Compose's standard `FocusManager` + system KeyEvents
+([Doc/04 §3.8](04-interaction-design.md#38-base-gesture-passthrough-v04)) handle navigation
 natively.
 
 > Live visual mockup: [`ui-mockup.html`](ui-mockup.html). Note that the mockup still renders
@@ -115,13 +115,13 @@ from Sprite. **Never the daily entry point.**
 | **Ring** | Pair/Re-pair, Find Ring, MAC/FW/RSSI/battery, Forget, Reconnect, Capabilities (gated list) |
 | **Vitals** | Auto-snapshot interval, CSV export, HR-on-HUD, Step target, Sport session, "Pause when off-finger", Spatial features (opt-in) |
 | **Gestures** | Profiles list → Profile editor / Action picker / System gestures / Gesture picker / **Test Arena** (custom-gesture training) |
-| **Plugins** | External plugins (Doc/18) |
+| **Plugins** | External plugins (Doc/10) |
 | **More** | Power & Connection (collapsed defaults), Feedback, Language, Advanced (slim), About (3 rows) |
 
 ### 4.2 Headline screens — the custom-gesture editor
 
 These are the **value-add UI**. Custom gestures + plugin protocol are pillar #1 of the project
-([Doc/20 §1](20-v0.4-design.md)). None of these get deleted in v0.4.
+([Doc/11 §1](11-v0.4-design.md)). None of these get deleted in v0.4.
 
 | Screen | Purpose |
 |---|---|
@@ -131,11 +131,11 @@ These are the **value-add UI**. Custom gestures + plugin protocol are pillar #1 
 | **System gestures** | The 5 always-on slots: ScreenWake (default LONG_PRESS), ScreenSleep (LP+SwipeDown), ProfileCycle (TripleTap), PeekHUD (QuadrupleTap), AIAssistant (DoubleLongPress). Reassignable; inline conflict warnings |
 | **Gesture picker** | 12-gesture list; "in use by Slot X" markers; "(disable this slot)" row |
 | **Test Arena** | Gesture-training surface. Rows light up when recognised. Exit = universal DOUBLE_TAP (works regardless of how the user rebound DOUBLE_TAP — hardcoded inside the recognised-flow collector). No exit button (glasses have no touchscreen). |
-| **External plugins** (Doc/18) | Read-only directory: app name + package + protocol version + action count + status. REFRESH PLUGINS CTA. Plugin actions surface in the Action Picker under "EXTERNAL APPS". |
+| **External plugins** (Doc/10) | Read-only directory: app name + package + protocol version + action count + status. REFRESH PLUGINS CTA. Plugin actions surface in the Action Picker under "EXTERNAL APPS". |
 
 ### 4.3 SPEC v3 protocol surface
 
-Pillar #2 of the project ([Doc/20 §1](20-v0.4-design.md)) is to expose the full protocol surface.
+Pillar #2 of the project ([Doc/11 §1](11-v0.4-design.md)) is to expose the full protocol surface.
 
 | Screen | Surface |
 |---|---|
@@ -168,7 +168,7 @@ that needs them is invoked.
 | | Rokid Glasses | RayNeo X3 Pro |
 |---|---|---|
 | Activity host | Plain `ComponentActivity` with Compose | Mercury SDK `BaseMirrorActivity` (free binocular mirror) |
-| Input path (Service) | **System ordered broadcasts** (`ACTION_SPRITE_BUTTON_*` + `ACTION_TWO_FINGER_*`) — see [Doc/04 §8.1](04-architecture.md#81-rokid-glasses-yodaos-sprite-android-12-go) | Mercury SDK `TouchDispatcher` → `TempleAction` Flow |
+| Input path (Service) | **System ordered broadcasts** (`ACTION_SPRITE_BUTTON_*` + `ACTION_TWO_FINGER_*`) — see [Doc/03 §8.1](03-architecture.md#81-rokid-glasses-yodaos-sprite-android-12-go) | Mercury SDK `TouchDispatcher` → `TempleAction` Flow |
 | Input path (Activity) | Standard `onKeyDown` (DPAD events) | Mercury SDK + `FocusInfo` registration per focusable |
 | Touch input | **None** — no `pointerInput` / drag in shared code | Available but consumed by Mercury SDK |
 | Content area | 480×640 portrait | 1280×480 logical (640/eye); centre our 480×640 portrait composition |
@@ -201,7 +201,7 @@ flavor wires a small Mercury bridge that maps `TempleAction` → Compose focus.
 - ❌ 5-step FirstRunWizard — collapsed to 1 step (pair only)
 - ❌ Per-profile colour theming — one green accent
 - ❌ Light theme — black canvas always
-- ❌ Mobile companion app — deferred (Doc/13 D3); v0.4 ships glasses-native only
+- ❌ Mobile companion app — deferred (Doc/08 D3); v0.4 ships glasses-native only
 - ❌ Charts / sparklines in Vitals — display resolution insufficient
 - ❌ Animations beyond appear/disappear
 

@@ -1,11 +1,11 @@
-# 05 — Interaction Design
+# 04 — Interaction Design
 
 The complete specification of **what the user can do**, **what each thing means**, and **how the
 state machines work**. This is the most carefully-thought-out part of the project — read it in
 full before changing any gesture or mapping. It is **the gem** of the design — the v0.4 doc
 prune left it intact.
 
-For the end-user-facing summary, see [09-user-manual.md](09-user-manual.md).
+For the end-user-facing summary, see [06-user-manual.md](06-user-manual.md).
 
 ## 0. The mental model — two layers
 
@@ -20,7 +20,7 @@ The ring presents to the user as **two layers** stacked on top of each other:
    QUADRUPLE_TAP / LONG_PRESS + 4 combos + DOUBLE_LONG_PRESS go through the per-profile
    `KeyMapProfile` (or get bound to the 5 system slots: ScreenWake / ScreenSleep / ProfileCycle /
    PeekHUD / AI_assistant). **This IS the product** — the project's headline value-add over a
-   plain temple touchpad. See §4-§5 and [Doc/18 Plugin Protocol](18-plugin-protocol.md).
+   plain temple touchpad. See §4-§5 and [Doc/10 Plugin Protocol](10-plugin-protocol.md).
 
 ---
 
@@ -322,7 +322,7 @@ tell *what* the ring understood without looking. Gated by the "UI click sound" f
 ## 5. System-level gestures (screen on/off + meta)
 
 These five gestures are intercepted **before** the active profile by `InteractionRouter`
-(see [04](04-architecture.md) §6). They produce the same action regardless of which profile is
+(see [04](03-architecture.md) §6). They produce the same action regardless of which profile is
 active.
 
 | System action | Default gesture | Only when | Why this default |
@@ -415,11 +415,11 @@ B: I'm worn AND ring is not connected to me → autoConnect picks it up within ~
 If both pairs report "worn" (probably a sensor confusion), the first to grab the BLE link wins;
 the other shows "Ring is in use on the other glasses" and offers a `ForceReconnect` button.
 
-This is described in user-facing terms in [09-user-manual.md](09-user-manual.md) §8.
+This is described in user-facing terms in [06-user-manual.md](06-user-manual.md) §8.
 
 ---
 
-## 4.4 External plugin actions (Doc/18 protocol)
+## 4.4 External plugin actions (Doc/10 protocol)
 
 A gesture can be bound to an action provided by another installed Android app instead of one of
 Halo Ring's built-in `GlassAction` cases. From the wearer's perspective there's no observable
@@ -440,7 +440,7 @@ LIFO-stacked, falls through for unbound gestures, and is auto-popped when the ow
 uninstalled. System gestures (TRIPLE_TAP / QUAD_TAP / LP+SWIPE / DOUBLE_LP) always bypass the
 push stack — the wearer can never be locked out of profile cycling, peek-HUD, or AI-assistant.
 
-See [Doc/18 — External-App Plugin Protocol](18-plugin-protocol.md) for the full wire format
+See [Doc/10 — External-App Plugin Protocol](10-plugin-protocol.md) for the full wire format
 + test matrix.
 
 ---
@@ -454,7 +454,7 @@ issues:
 |---|---|---|---|---|
 | 1 | `KeyMapProfile` (the active one) | Navigation / Media / Reader / user-defined (Fast dropped v0.4) | Triple-tap cycle, auto-switch, manual select | Re-binds the 13 gestures; updates HUD; flashes ring LED; updates `GestureConfig` of the synthesiser |
 | 2 | `ConnectionState` | DISCONNECTED / SCANNING / CONNECTING / READY | BLE callbacks | HUD signal indicator; arm wake-swallow on transition to READY |
-| 3 | `WearState` | WORN / OFF | Sensors (`RokidDoorReceiver` / Mercury 佩戴检测) + `ACTION_SCREEN_ON/OFF` fallback | Drives ring hand-over (§7); gates `TOUCH_ENABLE/DISABLE` (see [04](04-architecture.md) §7) |
+| 3 | `WearState` | WORN / OFF | Sensors (`RokidDoorReceiver` / Mercury 佩戴检测) + `ACTION_SCREEN_ON/OFF` fallback | Drives ring hand-over (§7); gates `TOUCH_ENABLE/DISABLE` (see [04](03-architecture.md) §7) |
 | 4 | `ActiveMode` (BLE conn interval) | ACTIVE (short interval, ~15-30 ms) / IDLE (~100-200 ms) | recent-gesture timeout (~10 s) | BLE connection priority request |
 | 5 | `WakeSwallow` | armed(N) / disarmed | armed on reconnect | Eats N raw TOUCHes |
 

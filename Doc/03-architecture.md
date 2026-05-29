@@ -1,4 +1,4 @@
-# 04 — Architecture
+# 03 — Architecture
 
 How the codebase is organised, how the layers interact, what plugs where. Read this once and you
 should be able to navigate [`../app-project/`](../app-project/) without surprises.
@@ -56,7 +56,7 @@ Constellation-Glass's "Service spine + HUD-first" model (`~/Code/Projects/Conste
    src/rokid/ Rokid strategies + DeviceFlavorBindings.
    src/rayneo/ RayNeo strategies + DeviceFlavorBindings + Mercury AAR.
 
-:test-plugin  ─── reference Doc/18 plugin app for integration testing ───
+:test-plugin  ─── reference Doc/10 plugin app for integration testing ───
 
 → ./gradlew :app:assembleRokidDebug   ⇒  app-rokid-debug.apk
 → ./gradlew :app:assembleRayneoDebug  ⇒  app-rayneo-debug.apk
@@ -192,8 +192,8 @@ runs the layers top to bottom:
    ↓ modeManager.active().actionFor(gesture) → GlassAction → ActionRouter
 ```
 
-Layer 2 is the v0.4 addition (hard-locked base passthrough). See [Doc/20 §3](20-v0.4-design.md)
-for why and [Doc/05 §3.8](05-interaction-design.md) for behaviour detail.
+Layer 2 is the v0.4 addition (hard-locked base passthrough). See [Doc/11 §3](11-v0.4-design.md)
+for why and [Doc/04 §3.8](04-interaction-design.md) for behaviour detail.
 
 ## 7. Performance & power
 
@@ -236,7 +236,7 @@ gesture snaps back to HIGH.
 
 Touch IC stays on when worn + screen-off so the wake-gesture works.
 
-### 7.4 The three power wastes we avoid (vs the reference `小猪遥控戒指` app)
+### 7.4 The three power wastes we avoid (vs a naïve ring-remote implementation)
 
 - **No persistent CPU wakelock**. BLE controller IRQ wakes the CPU on every notify; that's enough.
 - **No app-level scan loop**. `connectGatt(autoConnect=true)` — BT stack handles low-duty-cycle
@@ -416,8 +416,8 @@ battery, foreground app (drives auto-switch profile).
 | **Converted** | `StatusScreen` full-screen panel → HUD-overlay trigger |
 | **Reorganised** | Settings 10 flat items → 5 groups (Ring / Vitals / Gestures / Plugins / More) |
 
-See [Doc/20 §4-§5](20-v0.4-design.md) for rationale. The deletes happen in code refactor C1
-(Doc/20 §11).
+See [Doc/11 §4-§5](11-v0.4-design.md) for rationale. The deletes happen in code refactor C1
+(Doc/11 §11).
 
 ## 12. Where things live
 

@@ -402,11 +402,6 @@ class HaloRingService : Service() {
                     // No backpressure: tryEmit is fire-and-forget against an extraBufferCapacity=16
                     // SharedFlow.
                     graph.rawAtomicGestureFlow.tryEmit(event.raw)
-                    // Burn-in 2026-05-27: log every raw event so we can verify the ring is
-                    // actually emitting all four gesture codes (0x01 SWIPE_UP / 0x02 SWIPE_DOWN /
-                    // 0x03 TOUCH / 0x04 LONG_PRESS). User reported "only DOUBLE_TAP back works";
-                    // need to know whether SWIPE / LONG_PRESS frames are arriving at all.
-                    Log.i(TAG, "raw gesture: ${event.raw}")
                     if (!interactionRouter.screenOn) {
                         // Screen-off fast path: a raw-matchable wake gesture (LONG_PRESS / SWIPE)
                         // fires in ~50-80 ms without the synthesizer. If the wake gesture is a

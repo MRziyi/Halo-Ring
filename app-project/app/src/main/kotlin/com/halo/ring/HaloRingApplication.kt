@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 
 class HaloRingApplication : Application() {
     lateinit var graph: AppGraph
@@ -36,9 +37,16 @@ class HaloRingApplication : Application() {
         val initialLanguage = runCatching { runBlocking { appPrefs.languageFlow.first() } }
             .getOrElse { AppLanguage.SYSTEM }
         applyLanguage(initialLanguage)
-        // Subsequent changes (Settings → Language) flow through this collector.
+        // Subsequent changes (Settings → Language) flow through this collector. The collector runs
+        // on appScope (Dispatchers.IO), but AppCompatDelegate.setApplicationLocales internally calls
+        // Activity.recreate() which MUST run on the main thread — applying it off-main throws
+        // IllegalStateException("Must be called from main thread") and crashes the process. So hop
+        // to Main for the apply. (The initial applyLanguage above is already on the main thread,
+        // since Application.onCreate runs there.)
         appScope.launch {
-            appPrefs.languageFlow.drop(1).collectLatest { applyLanguage(it) }
+            appPrefs.languageFlow.drop(1).collectLatest { lang ->
+                withContext(Dispatchers.Main) { applyLanguage(lang) }
+            }
         }
 
         graph = AppGraph.create(this)
