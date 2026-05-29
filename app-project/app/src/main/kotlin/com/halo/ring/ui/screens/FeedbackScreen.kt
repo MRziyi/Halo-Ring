@@ -34,14 +34,23 @@ data class FeedbackPrefs(
     val ringLedFeedback: Boolean = false,
     val hudPosition: HudPosition = HudPosition.TOP_RIGHT,
     val hudDurationMs: Int = 2000,
+    /** Vertical HUD nudge in "body" units (0..[HUD_OFFSET_MAX]). Top-anchored positions move DOWN,
+     *  bottom-anchored move UP — so Halo Ring's HUD can clear a plugin's own HUD (Constellation).
+     *  Default 2 ≈ two pill-heights down from the top. */
+    val hudOffsetSteps: Int = 2,
     /** Auto-enable [gestureHintHud] for the first 5 minutes after pairing. */
     val autoHintAfterPairing: Boolean = true,
 )
 
+/** Max HUD vertical offset in body units (each ≈ one pill-height). */
+const val HUD_OFFSET_MAX = 5
+
 enum class HudPosition(@StringRes val labelRes: Int) {
     TOP_RIGHT(R.string.feedback_hud_pos_top_right),
+    TOP_LEFT(R.string.feedback_hud_pos_top_left),
     TOP_CENTER(R.string.feedback_hud_pos_top_center),
     BOTTOM_RIGHT(R.string.feedback_hud_pos_bottom_right),
+    BOTTOM_LEFT(R.string.feedback_hud_pos_bottom_left),
 }
 
 /**
@@ -51,16 +60,15 @@ enum class HudPosition(@StringRes val labelRes: Int) {
 @Composable
 fun FeedbackScreen(
     prefs: FeedbackPrefs,
-    focusedIndex: Int = 0,
     onToggle: (FeedbackPrefField) -> Unit = {},
     onCyclePosition: () -> Unit = {},
+    onCycleOffset: () -> Unit = {},
     onCycleDuration: () -> Unit = {},
 ) {
     Column(modifier = Modifier.fillMaxSize().padding(top = 4.dp)) {
 
         // Headline row: gesture-hint HUD
         FocusableRow(
-            focused = focusedIndex == 0,
             onClick = { onToggle(FeedbackPrefField.GESTURE_HINT) },
         ) {
             Column(modifier = Modifier.weight(1f)) {
@@ -74,7 +82,6 @@ fun FeedbackScreen(
         Divider()
 
         FocusableRow(
-            focused = focusedIndex == 1,
             onClick = { onToggle(FeedbackPrefField.CLICK_SOUND) },
         ) {
             Text(stringResource(R.string.feedback_click_sound), style = HaloType.Body)
@@ -83,7 +90,6 @@ fun FeedbackScreen(
         Divider()
 
         FocusableRow(
-            focused = focusedIndex == 2,
             onClick = { onToggle(FeedbackPrefField.RING_LED) },
         ) {
             Text(stringResource(R.string.feedback_ring_led), style = HaloType.Body)
@@ -92,7 +98,6 @@ fun FeedbackScreen(
         Divider()
 
         FocusableRow(
-            focused = focusedIndex == 3,
             onClick = onCyclePosition,
         ) {
             Text(stringResource(R.string.feedback_hud_position), style = HaloType.Body)
@@ -100,8 +105,13 @@ fun FeedbackScreen(
         }
         Divider()
 
+        FocusableRow(onClick = onCycleOffset) {
+            Text(stringResource(R.string.feedback_hud_offset), style = HaloType.Body)
+            Text(prefs.hudOffsetSteps.toString(), style = HaloType.RowVal)
+        }
+        Divider()
+
         FocusableRow(
-            focused = focusedIndex == 4,
             onClick = onCycleDuration,
         ) {
             Text(stringResource(R.string.feedback_hud_duration), style = HaloType.Body)
@@ -110,7 +120,6 @@ fun FeedbackScreen(
         Divider()
 
         FocusableRow(
-            focused = focusedIndex == 5,
             onClick = { onToggle(FeedbackPrefField.AUTO_HINT_AFTER_PAIRING) },
         ) {
             Column(modifier = Modifier.weight(1f)) {

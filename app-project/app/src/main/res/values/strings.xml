@@ -24,6 +24,8 @@
     <string name="tab_vitals">VITALS</string>
     <string name="tab_settings">SETTINGS</string>
     <string name="tab_status">STATUS</string>
+    <string name="tab_ring">RING</string>
+    <string name="tab_more">MORE</string>
 
     <!-- ════════════════════════════════════════════════════════════════════════
          Settings root sections.
@@ -33,10 +35,21 @@
     <string name="settings_group_gestures">Gestures &amp; Profiles</string>
     <string name="settings_group_plugins">Plugins</string>
     <string name="settings_group_more">More</string>
+    <string name="settings_group_system">System</string>
+    <string name="home_settings">Settings</string>
     <string name="settings_section_vitals">Vitals dashboard</string>
-    <string name="settings_section_status">Connection status</string>
+    <string name="settings_section_status">Connection Status</string>
     <string name="ring_capabilities_header">Ring capabilities</string>
     <string name="hud_ring_dropped">Ring dropped? %1$s</string>
+    <string name="hud_charging_started">Charging…</string>
+    <string name="hud_charging_pct">Charged to %1$d%%</string>
+    <string name="hud_charging_full">Fully charged ✓</string>
+    <string name="ring_status_charging">Charging</string>
+    <string name="hud_step_milestone">%1$d steps!</string>
+    <string name="hud_ring_on">Ring on</string>
+    <string name="hud_ring_off">Ring removed</string>
+    <string name="ring_wear_off">not worn</string>
+    <string name="vitals_put_ring_on">Put the ring on to measure</string>
     <string name="vitals_sport_section">Workout</string>
     <string name="vitals_sport_start_walk">Start walk</string>
     <string name="vitals_sport_start_run">Start run</string>
@@ -53,8 +66,10 @@
     <string name="settings_section_profiles">Profiles &amp; Gestures</string>
     <string name="settings_section_system_gestures">System Gestures</string>
     <string name="settings_section_ring">Ring</string>
+    <string name="ring_info_title">Ring info</string>
+    <string name="profiles_gestures_header">Gesture tools</string>
     <string name="settings_section_power">Power &amp; Connection</string>
-    <string name="settings_section_bt_internet">Bluetooth internet</string>
+    <string name="settings_section_bt_internet">Bluetooth Internet</string>
     <string name="bt_internet_title">Bluetooth internet</string>
     <string name="bt_internet_body">Use your phone\'s data over Bluetooth. Android resets the phone\'s \"Internet access\" toggle on every reboot, so Halo Ring can re-enable it for you.</string>
     <string name="bt_internet_connect_now">Connect now</string>
@@ -74,7 +89,7 @@
     <string name="settings_section_vitals_prefs">Vitals</string>
     <string name="settings_section_language">Language</string>
     <string name="settings_section_test_arena">Test Arena</string>
-    <string name="settings_section_external_plugins">External plugins</string>
+    <string name="settings_section_external_plugins">External Plugins</string>
     <string name="settings_section_advanced">Advanced</string>
     <string name="settings_section_about">About</string>
 
@@ -113,6 +128,8 @@
     <string name="vitals_unit_percent">%</string>
     <string name="vitals_measured_just_now">measured just now</string>
     <string name="vitals_measured_min_ago">measured %1$d min ago</string>
+    <string name="vitals_today_section">Today</string>
+    <string name="vitals_today_summary">Today · %1$s steps · %2$s km</string>
     <string name="vitals_steps_today">Steps today</string>
     <string name="vitals_calories">Calories</string>
     <string name="vitals_calories_unit">%1$s kcal</string>
@@ -164,8 +181,13 @@
     <string name="profile_editor_title">Gesture mapping</string>
     <string name="profile_editor_edit_cta">EDIT</string>
     <string name="profile_editor_system_value">(system) ›</string>
-    <string name="profile_editor_footer">System gestures are intercepted before this profile. Edit them in Settings → System Gestures.</string>
-    <string name="profiles_list_footer">Profiles auto-switch by foreground app (when Accessibility is enabled). Triple-tap the ring to manually cycle.</string>
+    <string name="profile_editor_footer">A badge means the gesture also drives a system action. You can still rebind it here.</string>
+    <string name="gesture_role_wake">wakes</string>
+    <string name="gesture_role_sleep">sleeps</string>
+    <string name="gesture_role_screenshot">screenshot</string>
+    <string name="profiles_list_footer">Profiles auto-switch by foreground app (when Accessibility is enabled). There is no manual switch.</string>
+    <string name="profiles_restore_defaults">Restore default bindings</string>
+    <string name="profiles_restore_confirm">Tap again to reset all profiles</string>
     <string name="profiles_bindings_count">%1$d bindings ›</string>
     <string name="action_picker_current">(current)</string>
     <string name="action_picker_footer">System actions are advanced — they short-circuit the normal routing. Use cautiously.</string>
@@ -276,12 +298,15 @@
     <string name="feedback_click_sound">UI click sound</string>
     <string name="feedback_ring_led">Ring LED feedback</string>
     <string name="feedback_hud_position">HUD position</string>
+    <string name="feedback_hud_offset">HUD offset</string>
     <string name="feedback_hud_duration">HUD duration</string>
     <string name="feedback_hud_duration_value">%1$d s</string>
     <string name="feedback_auto_hint">Auto-enable hints for 5 min after pairing</string>
     <string name="feedback_hud_pos_top_right">Top-right</string>
+    <string name="feedback_hud_pos_top_left">Top-left</string>
     <string name="feedback_hud_pos_top_center">Top-centre</string>
     <string name="feedback_hud_pos_bottom_right">Bottom-right</string>
+    <string name="feedback_hud_pos_bottom_left">Bottom-left</string>
     <string name="feedback_auto_hint_subtitle">teaches new wearers the gesture set</string>
     <string name="feedback_footer">Hints fire only while the screen is on.</string>
     <string name="feedback_duration_seconds">%1$d s</string>
@@ -338,6 +363,7 @@
     <string name="advanced_debug_hud_desc">Show RSSI, BLE interval, RTT, drop count, active backend.</string>
     <string name="advanced_latency_desc">Log per-stage breakdown for the next 20 gestures to CSV (Doc/06 §4).</string>
     <string name="advanced_spatial_desc">Air gestures from the IMU. Burns battery — only enable if you need it.</string>
+    <string name="advanced_plugins_desc">Apps that bind ring gestures</string>
     <string name="advanced_a11y_title">Open Accessibility settings</string>
     <string name="advanced_a11y_desc">Enable Halo Ring in the OS Settings list.</string>
     <string name="advanced_battery_title">Battery exemption</string>

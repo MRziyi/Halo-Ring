@@ -66,6 +66,10 @@ class ProfilesPrefsStore(private val context: Context) {
         context.profilesPrefsDataStore.edit { it[Keys.SystemGesturesJson] = encodeSystemGestures(sg) }
     }
 
+    // Restore-defaults is done by resetting the in-memory graph.profilesFlow / systemGesturesFlow
+    // (see ProfilesListScreen) — wireProfilePersistence then writes those defaults through to here.
+    // (Clearing only the DataStore wouldn't refresh the UI/service, which read the live flows.)
+
     // ── encode ──────────────────────────────────────────────────────────────────────────────────
 
     private fun encodeProfiles(list: List<KeyMapProfile>): String {

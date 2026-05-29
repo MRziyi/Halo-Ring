@@ -74,11 +74,12 @@ object SettingsCatalog {
         Entry(GlassAction.OpenSettings,   ActionGroup.FEATURE),
         Entry(GlassAction.OpenGallery,    ActionGroup.FEATURE),
 
-        // Modal-entry — full state machines live in B10
+        // Modal-entry — full state machines live in B10. (AIDictate omitted from the picker:
+        // its mic-capture pipeline is unimplemented, so it's not offered rather than shown as a
+        // greyed "coming soon" row — 2026-05-29 "no placeholders" pass.)
         Entry(GlassAction.EnterVolumeModal,     ActionGroup.MODAL),
         Entry(GlassAction.EnterBrightnessModal, ActionGroup.MODAL),
         Entry(GlassAction.EnterRecentsModal,    ActionGroup.MODAL),
-        Entry(GlassAction.EnterAIDictateModal,  ActionGroup.MODAL),
 
         // System pseudo-actions (advanced)
         Entry(GlassAction.ScreenSleep,    ActionGroup.SYSTEM),

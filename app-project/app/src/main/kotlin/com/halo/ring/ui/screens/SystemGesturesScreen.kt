@@ -39,7 +39,9 @@ fun SystemGesturesScreen(
             style = HaloType.Title,
             modifier = Modifier.padding(horizontal = ScreenPadding, vertical = 12.dp),
         )
-        SystemGestureSlot.values().forEach { uiSlot ->
+        // Only wake + sleep remain meaningful (2026-05-29) — profile-cycle / peek-HUD / AI-assistant
+        // slots were retired (profiles auto-switch; triple-tap = screenshot). Hide the dead ones.
+        listOf(SystemGestureSlot.WAKE, SystemGestureSlot.SLEEP).forEach { uiSlot ->
             val coreSlot = uiSlot.toCore()
             val bound = gestures.gestureFor(coreSlot)
             val conflictSlot = bound?.let { gestures.conflict(it, exclude = coreSlot) }

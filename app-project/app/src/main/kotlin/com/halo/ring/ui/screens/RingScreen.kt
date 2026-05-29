@@ -1,13 +1,18 @@
+@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+
 package com.halo.ring.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -56,25 +61,48 @@ fun RingScreen(
             style = HaloType.Title,
             modifier = Modifier.padding(horizontal = ScreenPadding, vertical = 12.dp),
         )
-        Text(
-            text = stringResource(if (info.connected) R.string.ring_status_connected else R.string.ring_status_disconnected),
-            style = HaloType.Caption.copy(
-                color = if (info.connected) HaloColors.Accent else HaloColors.Bad,
-            ),
-            modifier = Modifier.padding(horizontal = ScreenPadding),
-        )
-        Spacer(Modifier.height(8.dp))
 
+        // Detail-only telemetry. Connection state / battery / interval / Find / Reconnect live on the
+        // RING tab itself (one level up), so they're NOT repeated here (Zack 2026-05-29 — de-dup).
         ListRow(stringResource(R.string.ring_mac),      info.macAddress ?: dash)
         ListRow(stringResource(R.string.ring_firmware), info.firmwareVersion ?: dash)
         ListRow(stringResource(R.string.ring_signal),   info.rssiDbm?.let { stringResource(R.string.ring_signal_unit_dbm, it) } ?: dash)
-        ListRow(stringResource(R.string.ring_battery),  info.batteryPct?.let { stringResource(R.string.ring_battery_pct, it) } ?: dash,
-                valueColor = batteryColor(info.batteryPct))
 
-        Spacer(Modifier.height(20.dp))
-        // Burn-in fix 2026-05-27: PAIR / RE-PAIR opens the picker so the user can choose which
-        // R0x ring on the airwaves is theirs. Without this CTA the service would never auto-scan
-        // (it gates on the persisted MAC), and the only way to recover was to wipe app data.
+        // Capabilities (info) sit with the other telemetry — ABOVE the actions — so the focusable
+        // PAIR/FORGET stay last. If they trailed the buttons, focus-driven scroll couldn't reach
+        // them (Zack 2026-05-29: "滑到 Forget 就到底，能力看不到").
+        if (capabilities.isNotEmpty()) {
+            // No explicit divider here — the signal ListRow above already draws its own trailing
+            // divider; a second one made a double line (Zack 2026-05-29). Just a gap + the header.
+            Spacer(Modifier.height(12.dp))
+            Text(
+                stringResource(R.string.ring_capabilities_header),
+                style = HaloType.RowKey,
+                modifier = Modifier.padding(horizontal = ScreenPadding),
+            )
+            Spacer(Modifier.height(6.dp))
+            // Wrapped chips instead of one long comma line — the list (~17 firmware flags decoded
+            // from the SetTime + 0x3C capability bitmaps, SPEC v3 §3) overflowed a single row.
+            FlowRow(
+                modifier = Modifier.padding(horizontal = ScreenPadding),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                capabilities.sorted().forEach { cap ->
+                    Text(
+                        text = cap,
+                        style = HaloType.Caption.copy(color = HaloColors.Accent),
+                        modifier = Modifier
+                            .background(HaloColors.AccentDim, RoundedCornerShape(4.dp))
+                            .padding(horizontal = 6.dp, vertical = 2.dp),
+                    )
+                }
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
+        // PAIR / RE-PAIR opens the picker to choose which R0x ring is yours; FORGET clears the
+        // persisted MAC so a fresh pairing can start. Both are unique to this screen + stay LAST.
         Box(Modifier.padding(horizontal = ScreenPadding)) {
             Cta(text = stringResource(
                 if (info.macAddress == null) R.string.ring_pair_short else R.string.ring_repair_short
@@ -82,30 +110,6 @@ fun RingScreen(
         }
         Spacer(Modifier.height(8.dp))
         Box(Modifier.padding(horizontal = ScreenPadding)) {
-            // SPEC v3 §4.9: 0x50 [0x55, 0xAA] — ring LED flashes briefly. Was previously wired to
-            // 0x10 (BindSuccess marker — no-op) and earlier 0x06 (DND, returns 0xEE on RT08).
-            Cta(text = stringResource(R.string.ring_find_short), onClick = { graph.bleClient.findRing() })
-        }
-        Spacer(Modifier.height(8.dp))
-        // Audit-pass 2026-05-14w: ForceReconnect used to live on the DOUBLE_LONG_PRESS system slot,
-        // but BLE auto-reconnect handles 99% of disconnects so the slot was reallocated to
-        // OpenAIAssistant. The remaining 1% — stuck BLE stack — is rare enough that a button buried
-        // in Settings is the right home. stop() + start() = full pipeline teardown + rescan.
-        Box(Modifier.padding(horizontal = ScreenPadding)) {
-            Cta(text = stringResource(R.string.ring_reconnect_short), onClick = {
-                graph.bleClient.stop()
-                graph.bleClient.start()
-            })
-        }
-        Spacer(Modifier.height(8.dp))
-        // Audit-pass 2026-05-27z: Shutdown CTA removed. SPEC v3 §4.2 — `0x08 [0x01]` is destructive
-        // and was previously wired to `0x0F` which is OTA-mode entry (would brick the ring). R08
-        // has no display + auto-sleeps when idle; users power it down by physically docking it on
-        // the charging cradle. Keeping a destructive button in Settings was a misfeature.
-        Box(Modifier.padding(horizontal = ScreenPadding)) {
-            // Burn-in fix 2026-05-27: Forget now also clears the persisted paired MAC. Without
-            // this, the service would still auto-scan + lock onto the old MAC on every restart.
-            // After Forget, the user must explicitly tap PAIR to choose a new ring.
             Cta(text = stringResource(R.string.ring_forget_short), danger = true, onClick = {
                 pairingScope.launch {
                     graph.bleClient.stop()
@@ -115,35 +119,5 @@ fun RingScreen(
                 onOpenPairing()   // drop user straight into the picker since the ring is now unset
             })
         }
-
-        Spacer(Modifier.height(12.dp))
-        Text(
-            stringResource(R.string.ring_screen_footer),
-            style = HaloType.Caption,
-            modifier = Modifier.padding(horizontal = ScreenPadding),
-        )
-
-        if (capabilities.isNotEmpty()) {
-            Spacer(Modifier.height(12.dp))
-            Box(Modifier.fillMaxWidth().height(1.dp).background(HaloColors.Line))
-            Spacer(Modifier.height(8.dp))
-            Text(
-                stringResource(R.string.ring_capabilities_header),
-                style = HaloType.RowKey,
-                modifier = Modifier.padding(horizontal = ScreenPadding),
-            )
-            Text(
-                text = capabilities.sorted().joinToString(", "),
-                style = HaloType.Caption,
-                modifier = Modifier.padding(horizontal = ScreenPadding, vertical = 4.dp),
-            )
-        }
     }
-}
-
-private fun batteryColor(pct: Int?) = when {
-    pct == null -> HaloColors.Fg
-    pct <= 5    -> HaloColors.Bad
-    pct <= 20   -> HaloColors.Warn
-    else        -> HaloColors.Fg
 }

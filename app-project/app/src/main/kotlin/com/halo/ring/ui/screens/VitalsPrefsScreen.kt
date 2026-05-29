@@ -86,12 +86,6 @@ fun VitalsPrefsScreen(
         Divider()
 
         ToggleRow(
-            title = stringResource(R.string.vitals_prefs_csv_title),
-            description = stringResource(R.string.vitals_prefs_csv_desc),
-            on = prefs.csvExportEnabled,
-            onToggle = { onUpdated(prefs.copy(csvExportEnabled = !prefs.csvExportEnabled)) },
-        )
-        ToggleRow(
             title = stringResource(R.string.vitals_prefs_pause_offfinger_title),
             description = stringResource(R.string.vitals_prefs_pause_offfinger_desc),
             on = prefs.wearDetectionEnabled,

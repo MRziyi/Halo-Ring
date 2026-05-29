@@ -187,12 +187,25 @@ class RokidWearStateProvider(private val ctx: Context) : WearStateProvider {
     private val sysProp = RokidSysPropWearPoller(proxy)
 
     init {
-        proximity.start()
-        sysProp.start()
+        // The `is_take_on` sysprop is Rokid's authoritative wear signal. The forehead
+        // TYPE_PROXIMITY sensor proved actively WRONG on this unit: it reads "far" while the
+        // glasses ARE worn, so it kept calling overrideWorn(false). Because both sources write the
+        // single override slot in [ScreenWearProxy] (last-writer-wins, NOT confidence-ordered as the
+        // kdoc implied), the bogus proximity value raced past the correct sysprop '1' and forced
+        // worn=false — which made PowerPolicy tear down the ring link within seconds of every
+        // connect (the "连上就断 / 一直 connecting" bug, on-device 2026-05-29). So only fall back to
+        // the proximity sensor when the sysprop is genuinely unavailable.
+        val sysPropActive = sysProp.start()
+        if (!sysPropActive) {
+            Log.i(TAG, "is_take_on sysprop unavailable — falling back to proximity sensor for wear")
+            proximity.start()
+        }
     }
 
     override fun isWorn(): Boolean = proxy.isWorn()
     override fun observe(onChange: (Boolean) -> Unit): () -> Unit = proxy.observe(onChange)
+
+    private companion object { private const val TAG = "RokidWear" }
 }
 
 /**
@@ -208,7 +221,9 @@ private class RokidSysPropWearPoller(private val proxy: ScreenWearProxy) {
     private var sysPropGet: java.lang.reflect.Method? = null
     @Volatile private var lastReported: Boolean? = null
 
-    fun start() {
+    /** @return true if the sysprop is present + now driving wear overrides; false if unavailable
+     *  (caller should fall back to a supplementary signal). */
+    fun start(): Boolean {
         try {
             val cls = Class.forName("android.os.SystemProperties")
             sysPropGet = cls.getMethod("get", String::class.java)
@@ -216,14 +231,16 @@ private class RokidSysPropWearPoller(private val proxy: ScreenWearProxy) {
             val initial = read()
             if (initial == null) {
                 Log.i(TAG, "Rokid wear property unavailable on this device — fallback to ScreenWearProxy.")
-                return
+                return false
             }
             Log.i(TAG, "Rokid wear property reads '$initial' — polling every ${POLL_INTERVAL_MS / 1000}s.")
             proxy.overrideWorn(initial == "1")
             lastReported = initial == "1"
             scheduleNext()
+            return true
         } catch (e: ReflectiveOperationException) {
             Log.w(TAG, "SystemProperties reflection failed: ${e.message}")
+            return false
         }
     }
 

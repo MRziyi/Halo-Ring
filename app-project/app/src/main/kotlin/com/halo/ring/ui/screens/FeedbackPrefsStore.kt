@@ -37,6 +37,7 @@ class FeedbackPrefsStore(private val context: Context) {
         val RingLedSet          = booleanPreferencesKey("ring_led_feedback_set")
         val HudPosition         = stringPreferencesKey("hud_position")
         val HudDurationMs       = intPreferencesKey("hud_duration_ms")
+        val HudOffsetSteps      = intPreferencesKey("hud_offset_steps")
         val AutoHintAfterPairing= booleanPreferencesKey("auto_hint_after_pairing")
         val AutoHintAfterPairingSet = booleanPreferencesKey("auto_hint_after_pairing_set")
         val AutoHintExpiresAtMs = androidx.datastore.preferences.core.longPreferencesKey("auto_hint_expires_at_ms")
@@ -57,6 +58,7 @@ class FeedbackPrefsStore(private val context: Context) {
             hudPosition         = p[Keys.HudPosition]?.let { runCatching { HudPosition.valueOf(it) }.getOrNull() }
                                   ?: defaults.hudPosition,
             hudDurationMs       = p[Keys.HudDurationMs] ?: defaults.hudDurationMs,
+            hudOffsetSteps      = p[Keys.HudOffsetSteps] ?: defaults.hudOffsetSteps,
             autoHintAfterPairing= if (p[Keys.AutoHintAfterPairingSet] == true) p[Keys.AutoHintAfterPairing] ?: defaults.autoHintAfterPairing
                                   else defaults.autoHintAfterPairing,
         )
@@ -91,6 +93,7 @@ class FeedbackPrefsStore(private val context: Context) {
             p[Keys.RingLedSet]                = true
             p[Keys.HudPosition]               = next.hudPosition.name
             p[Keys.HudDurationMs]             = next.hudDurationMs
+            p[Keys.HudOffsetSteps]            = next.hudOffsetSteps
             p[Keys.AutoHintAfterPairing]      = next.autoHintAfterPairing
             p[Keys.AutoHintAfterPairingSet]   = true
         }

@@ -114,10 +114,20 @@ class AndroidR08BleClient(
     private var adapter: BluetoothAdapter? = null
     private var gatt: BluetoothGatt? = null
     private var writeChar: BluetoothGattCharacteristic? = null
+    /** Latest live RSSI from [BluetoothGatt.readRemoteRssi] (callback below); null until first read
+     *  / after disconnect. The scan-time RSSI only feeds the pairing picker, so the connected ring's
+     *  signal must be polled separately. */
+    @Volatile private var lastRssiDbm: Int? = null
 
     @Volatile private var state: ConnectionState = ConnectionState.DISCONNECTED
     @Volatile private var batteryPollHandle: com.halo.ring.core.gesture.Cancellable? = null
     @Volatile private var scanTimeoutHandle: com.halo.ring.core.gesture.Cancellable? = null
+    /** Watchdog for the CONNECTING phase. `connectGatt(autoConnect=false)` normally fires
+     *  onConnectionStateChange within 1-3 s, but on the Rokid BLE stack a failed direct connect can
+     *  silently NEVER call back — leaving us pinned in CONNECTING forever (no auto-rescan, and
+     *  [start] used to early-return on any non-DISCONNECTED state, so even manual reconnect was a
+     *  no-op). This timer force-resolves a hung connect back to DISCONNECTED + re-scan. */
+    @Volatile private var connectTimeoutHandle: com.halo.ring.core.gesture.Cancellable? = null
     @Volatile private var lastBytes: ByteArray? = null
     @Volatile private var lastBytesAt: Long = 0L
     /**
@@ -160,6 +170,17 @@ class AndroidR08BleClient(
 
     /** Median inter-notify delta in ms over the recent window, or null until enough samples. */
     fun estimatedConnIntervalMs(): Int? = intervalEstimator.estimate()
+
+    /** Trigger an async live-RSSI read (result lands in [lastRssiDbm] via onReadRemoteRssi). No-op +
+     *  clears the value when not connected. Called ~1/s by the service's ring-info refresh. */
+    fun pollRssi() {
+        val g = gatt
+        if (g == null || state != ConnectionState.READY) { lastRssiDbm = null; return }
+        try { g.readRemoteRssi() } catch (_: SecurityException) {}
+    }
+
+    /** Most-recent live RSSI in dBm (null if unread / disconnected). */
+    fun currentRssiDbm(): Int? = lastRssiDbm
 
     // ── R08BleClient ───────────────────────────────────────────────────────────────────────────
 
@@ -247,10 +268,29 @@ class AndroidR08BleClient(
             }
             adapter = a
             wantConnection = true
-            if (state != ConnectionState.DISCONNECTED) {
-                Log.d(TAG, "start() ignored — current state=$state")
-                return@post
+            when (state) {
+                // Already connected — a stray start() must not drop a healthy link.
+                ConnectionState.READY -> {
+                    Log.d(TAG, "start() ignored — already READY")
+                    return@post
+                }
+                // An in-progress attempt that may be stuck (the Rokid stack can hang a direct
+                // connect with no callback). The old code early-returned here, so a user tapping
+                // "connect"/"re-pair" during a hung attempt got NOTHING. Tear the attempt down and
+                // restart cleanly so the action is always responsive.
+                ConnectionState.SCANNING, ConnectionState.CONNECTING -> {
+                    Log.w(TAG, "start() while $state — tearing down + restarting scan")
+                    try { adapter?.bluetoothLeScanner?.stopScan(scanCallback) } catch (_: SecurityException) {}
+                    connectTimeoutHandle?.cancel(); connectTimeoutHandle = null
+                    scanTimeoutHandle?.cancel(); scanTimeoutHandle = null
+                    try { gatt?.disconnect(); gatt?.close() } catch (_: SecurityException) {}
+                    gatt = null
+                    writeChar = null
+                    transitionTo(ConnectionState.DISCONNECTED)
+                }
+                ConnectionState.DISCONNECTED -> { /* normal start — fall through to scan */ }
             }
+            reconnectBackoffMs = RECONNECT_BACKOFF_BASE_MS   // explicit start → snappy first scan
             transitionTo(ConnectionState.SCANNING)
             beginScan()
         }
@@ -263,6 +303,7 @@ class AndroidR08BleClient(
             try { adapter?.bluetoothLeScanner?.stopScan(scanCallback) } catch (_: SecurityException) {}
             batteryPollHandle?.cancel(); batteryPollHandle = null
             scanTimeoutHandle?.cancel(); scanTimeoutHandle = null
+            connectTimeoutHandle?.cancel(); connectTimeoutHandle = null
             try { gatt?.disconnect(); gatt?.close() } catch (_: SecurityException) {}
             gatt = null
             writeChar = null
@@ -565,6 +606,31 @@ class AndroidR08BleClient(
         } catch (e: SecurityException) {
             Log.e(TAG, "connectGatt denied: ${e.message}")
             transitionTo(ConnectionState.DISCONNECTED)
+            return
+        }
+        // Watchdog: a direct connect must reach READY (or fire a DISCONNECTED callback) within
+        // CONNECT_TIMEOUT_MS. If it doesn't (Rokid stack hang, or STATE_CONNECTED with no service
+        // discovery), force it back to DISCONNECTED + re-scan so we never pin at CONNECTING. Cleared
+        // on READY ([onServicesDiscovered]) and on any onConnectionStateChange.
+        connectTimeoutHandle?.cancel()
+        connectTimeoutHandle = scheduler.postDelayed(CONNECT_TIMEOUT_MS) {
+            if (state == ConnectionState.CONNECTING) {
+                Log.w(TAG, "connect timed out after ${CONNECT_TIMEOUT_MS} ms — tearing down + re-scanning")
+                try { gatt?.disconnect(); gatt?.close() } catch (_: SecurityException) {}
+                gatt = null
+                writeChar = null
+                transitionTo(ConnectionState.DISCONNECTED)
+                if (wantConnection) {
+                    reconnectBackoffMs = (reconnectBackoffMs * 2).coerceAtMost(RECONNECT_BACKOFF_MAX_MS)
+                    scanTimeoutHandle?.cancel()
+                    scanTimeoutHandle = scheduler.postDelayed(reconnectBackoffMs) {
+                        if (wantConnection && state == ConnectionState.DISCONNECTED) {
+                            transitionTo(ConnectionState.SCANNING)
+                            beginScan()
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -578,6 +644,10 @@ class AndroidR08BleClient(
     @Volatile private var reconnectBackoffMs = RECONNECT_BACKOFF_BASE_MS
 
     private val gattCallback = object : BluetoothGattCallback() {
+        override fun onReadRemoteRssi(g: BluetoothGatt, rssi: Int, status: Int) {
+            if (status == BluetoothGatt.GATT_SUCCESS) lastRssiDbm = rssi
+        }
+
         @SuppressLint("MissingPermission")
         override fun onConnectionStateChange(g: BluetoothGatt, status: Int, newState: Int) {
             scheduler.post {
@@ -594,6 +664,7 @@ class AndroidR08BleClient(
                     }
                     BluetoothProfile.STATE_DISCONNECTED -> {
                         Log.w(TAG, "GATT disconnected (status=$status)")
+                        connectTimeoutHandle?.cancel(); connectTimeoutHandle = null
                         batteryPollHandle?.cancel(); batteryPollHandle = null
                         // Drop stale notify timestamps so a fresh connection's estimator isn't
                         // biased by the gap between the old and new connection's samples.
@@ -678,6 +749,7 @@ class AndroidR08BleClient(
                         kickOffReadyGateRead(g)   // best-effort fallback
                     }
                 } catch (_: SecurityException) {}
+                connectTimeoutHandle?.cancel(); connectTimeoutHandle = null   // connect succeeded
                 reconnectBackoffMs = RECONNECT_BACKOFF_BASE_MS   // healthy connection → reset backoff
                 transitionTo(ConnectionState.READY)
 
@@ -954,6 +1026,11 @@ class AndroidR08BleClient(
         private const val GATT_SETTLE_MS = 300L
         private const val RECONNECT_BACKOFF_BASE_MS = 800L
         private const val RECONNECT_BACKOFF_MAX_MS = 30_000L
+        /** Watchdog for a hung CONNECTING phase (see [connectTimeoutHandle]). A direct connect to an
+         *  in-range ring reaches READY in ~1-3 s; the GATT_SETTLE + service discovery + the SPEC §2.1
+         *  read-gate add a few more. 15 s is generous headroom — if we're still CONNECTING past it,
+         *  the connect has hung and we force a re-scan rather than pin forever. */
+        private const val CONNECT_TIMEOUT_MS = 15_000L
         /** Safety timeout for [requestVitalsSnapshot]. Burn-in 2026-05-27: bumped from 12s to 30s
          *  after live observation — the R08 PPG sensor emits `err=0/val=0` progress frames every
          *  ~500 ms and can take 15-25 s to converge on the first reading, especially after a

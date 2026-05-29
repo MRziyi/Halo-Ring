@@ -3,7 +3,6 @@ package com.halo.ring.ui.screens
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -17,16 +16,16 @@ import androidx.compose.ui.unit.sp
 import com.halo.ring.R
 import com.halo.ring.ui.FocusableRow
 import com.halo.ring.ui.HaloColors
-import com.halo.ring.ui.HaloSwitch
 import com.halo.ring.ui.HaloType
 import com.halo.ring.ui.ScreenPadding
 
 @androidx.compose.runtime.Immutable
 data class AdvancedPrefs(
-    /** v0.4: no consumer; preserved for DataStore back-compat. */
+    /** No consumer; preserved for DataStore back-compat. */
     val debugHudEnabled: Boolean = false,
+    /** No longer surfaced (latency toggle removed 2026-05-29); kept for DataStore back-compat. */
     val latencyMeasurementEnabled: Boolean = false,
-    /** v0.4: surfaced in Vitals (C6) not Advanced; preserved for DataStore back-compat. */
+    /** Surfaced in Vitals (spatial features) not Advanced; preserved for DataStore back-compat. */
     val spatialModeEnabled: Boolean = false,
     /** When true, re-enable the phone's Bluetooth "Internet access" (PAN) on every boot via the
      *  accessibility UI flow — Android resets that toggle on reboot. Off by default. */
@@ -37,8 +36,6 @@ enum class AdvancedAction {
     DEEP_LINK_ACCESSIBILITY,
     DEEP_LINK_BATTERY_EXEMPTION,
     REOPEN_ADB_WIZARD,
-    EXPORT_LATENCY_LOG,
-    EXPORT_VITALS_LOG,
     /** Run the accessibility UI flow that re-enables the phone's Bluetooth "Internet access". */
     BT_INTERNET_CONNECT_NOW,
     /** Open the Android system Settings app. */
@@ -46,24 +43,16 @@ enum class AdvancedAction {
 }
 
 /**
- * Settings → Advanced. v0.4-slimmed (Doc/20 §4):
- *  - one real toggle: Latency measurement (gates the LatencyLogger ring buffer)
- *  - actions: open A11y settings, request battery exemption, re-run ADB wizard, export logs
- *
- * The pre-v0.4 dead toggles (debug HUD never had a consumer; spatial mode moved to Vitals → C6)
- * are no longer surfaced. The data class fields stay for DataStore back-compat.
+ * Settings → Advanced (2026-05-29 reorg): the home for rarely-touched bits. No toggles — the
+ * latency-measurement switch + CSV exports were removed (Zack: use debug tools instead). Holds:
+ * External plugins (Doc/18, moved in here), plus the seldom-needed system deep-links (accessibility
+ * settings, battery exemption, re-run the ADB wizard).
  */
 @Composable
 fun AdvancedScreen(
-    prefs: AdvancedPrefs,
-    onToggleDebugHud: () -> Unit = {},
-    onToggleLatency: () -> Unit = {},
-    onToggleSpatial: () -> Unit = {},
     onActionTriggered: (AdvancedAction) -> Unit = {},
+    onOpenPlugins: () -> Unit = {},
 ) {
-    @Suppress("UNUSED_EXPRESSION") onToggleDebugHud
-    @Suppress("UNUSED_EXPRESSION") onToggleSpatial
-
     Column(modifier = Modifier.fillMaxSize().padding(top = 4.dp)) {
         Text(
             text = stringResource(R.string.advanced_title),
@@ -71,16 +60,9 @@ fun AdvancedScreen(
             modifier = Modifier.padding(horizontal = ScreenPadding, vertical = 12.dp),
         )
 
-        ToggleRow(
-            title = stringResource(R.string.advanced_latency_measure),
-            description = stringResource(R.string.advanced_latency_desc),
-            on = prefs.latencyMeasurementEnabled,
-            onToggle = onToggleLatency,
-        )
-
-        Spacer(Modifier.height(16.dp))
-        SectionHeader(stringResource(R.string.advanced_actions_header))
-
+        ActionRow(stringResource(R.string.settings_section_external_plugins), stringResource(R.string.advanced_plugins_desc)) {
+            onOpenPlugins()
+        }
         ActionRow(stringResource(R.string.advanced_a11y_title), stringResource(R.string.advanced_a11y_desc)) {
             onActionTriggered(AdvancedAction.DEEP_LINK_ACCESSIBILITY)
         }
@@ -90,40 +72,10 @@ fun AdvancedScreen(
         ActionRow(stringResource(R.string.advanced_adb_title), stringResource(R.string.advanced_adb_desc)) {
             onActionTriggered(AdvancedAction.REOPEN_ADB_WIZARD)
         }
-        ActionRow(stringResource(R.string.advanced_export_title), stringResource(R.string.advanced_export_desc)) {
-            onActionTriggered(AdvancedAction.EXPORT_LATENCY_LOG)
-        }
-        ActionRow(stringResource(R.string.advanced_export_vitals_title), stringResource(R.string.advanced_export_vitals_desc)) {
-            onActionTriggered(AdvancedAction.EXPORT_VITALS_LOG)
+        ActionRow(stringResource(R.string.bt_internet_open_android_settings), stringResource(R.string.bt_internet_open_android_settings_desc)) {
+            onActionTriggered(AdvancedAction.OPEN_ANDROID_SETTINGS)
         }
     }
-}
-
-@Composable
-private fun SectionHeader(text: String) {
-    Text(
-        text = text.uppercase(),
-        style = HaloType.Caption.copy(color = HaloColors.Mute),
-        modifier = Modifier.padding(horizontal = ScreenPadding, vertical = 4.dp),
-    )
-}
-
-@Composable
-private fun ToggleRow(
-    title: String,
-    description: String,
-    on: Boolean,
-    onToggle: () -> Unit,
-    disabled: Boolean = false,
-) {
-    FocusableRow(onClick = { if (!disabled) onToggle() }) {
-        Column(Modifier.padding(end = 8.dp).weight(1f)) {
-            Text(title, style = HaloType.Body.copy(color = if (disabled) HaloColors.Mute else HaloColors.Fg))
-            Text(description, style = HaloType.Caption.copy(fontSize = 11.sp))
-        }
-        HaloSwitch(on = on, disabled = disabled)
-    }
-    Box(Modifier.fillMaxWidth().height(1.dp).background(HaloColors.Line))
 }
 
 @Composable

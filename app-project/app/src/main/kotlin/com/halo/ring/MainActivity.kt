@@ -163,6 +163,9 @@ class MainActivity : AppCompatActivity() {
                 val vitalsPrefs by graph.vitalsPrefsFlow.collectAsState()
                 val vitalsSnapshot by graph.vitalsSnapshotFlow.collectAsState()
                 val ringCapabilities by graph.ringCapabilitiesFlow.collectAsState()
+                // Active home tab — driven by both UI taps and the in-app LONG_PRESS gesture (which
+                // the service routes into this same flow). See AppGraph.homeTabIndexFlow.
+                val homeTabIndex by graph.homeTabIndexFlow.collectAsState()
                 // Audit-2026-05-13o: app-wide prefs — language override only in v0.4 (GuidedTour deleted).
                 val appPrefs = (application as HaloRingApplication).appPrefs
                 val currentLanguage by appPrefs.languageFlow
@@ -223,6 +226,7 @@ class MainActivity : AppCompatActivity() {
                             connected = ringInfo.connected,
                             ringId = ringInfo.advertisedName ?: "R08_…",
                             batteryPct = ringInfo.batteryPct,
+                            charging = ringInfo.charging == true,
                             currentMode = graph.modeManager.active().name,
                         ),
                         vitals = VitalsState(
@@ -245,6 +249,8 @@ class MainActivity : AppCompatActivity() {
                         status = StatusState(activeBackend = "(none)"),
                         feedbackPrefs = prefs,
                     ),
+                    homeTab = com.halo.ring.ui.screens.HomeTab.values()
+                        .getOrElse(homeTabIndex) { com.halo.ring.ui.screens.HomeTab.RING },
                     profiles = profiles,
                     activeProfileId = activeProfileId,
                     systemGestures = sysGestures,
@@ -332,24 +338,6 @@ class MainActivity : AppCompatActivity() {
             AdvancedAction.DEEP_LINK_ACCESSIBILITY      -> openSettings(Settings.ACTION_ACCESSIBILITY_SETTINGS)
             AdvancedAction.DEEP_LINK_BATTERY_EXEMPTION  -> requestBatteryExemption()
             AdvancedAction.REOPEN_ADB_WIZARD            -> forceWizardState.value = true
-            AdvancedAction.EXPORT_LATENCY_LOG           -> {
-                val graph = (application as HaloRingApplication).graph
-                exportCsv(
-                    samples = graph.latencyLogger.size(),
-                    csvProvider = graph.latencyLogger::toCsv,
-                    fileStem = "halo-latency",
-                    emptyMsg = getString(R.string.advanced_export_latency_empty),
-                )
-            }
-            AdvancedAction.EXPORT_VITALS_LOG            -> {
-                val graph = (application as HaloRingApplication).graph
-                exportCsv(
-                    samples = graph.vitalsLogger.size(),
-                    csvProvider = graph.vitalsLogger::toCsv,
-                    fileStem = "halo-vitals",
-                    emptyMsg = getString(R.string.advanced_export_vitals_empty),
-                )
-            }
             AdvancedAction.OPEN_ANDROID_SETTINGS        -> openSettings(Settings.ACTION_SETTINGS)
             AdvancedAction.BT_INTERNET_CONNECT_NOW      -> {
                 val a11y = com.halo.ring.accessibility.HaloRingAccessibilityService.instance
@@ -363,72 +351,6 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
-    }
-
-    /**
-     * A-5 / P0-2: write a CSV ring-buffer dump to Downloads/ via MediaStore (scoped storage, no
-     * WRITE_EXTERNAL_STORAGE required on Android 10+). Shared by the latency + vitals exports —
-     * only the source logger and filename stem differ. Toast surfaces success / empty / failure.
-     */
-    private fun exportCsv(
-        samples: Int,
-        csvProvider: () -> String,
-        fileStem: String,
-        emptyMsg: String,
-    ) {
-        if (samples == 0) {
-            android.widget.Toast.makeText(this, emptyMsg, android.widget.Toast.LENGTH_SHORT).show()
-            return
-        }
-        val csv = csvProvider()
-        val ts = java.text.SimpleDateFormat("yyyyMMdd-HHmmss", java.util.Locale.US)
-            .format(java.util.Date())
-        val displayName = "$fileStem-$ts.csv"
-
-        val resolver = contentResolver
-        val values = android.content.ContentValues().apply {
-            put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, displayName)
-            put(android.provider.MediaStore.MediaColumns.MIME_TYPE, "text/csv")
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH,
-                    android.os.Environment.DIRECTORY_DOWNLOADS)
-            }
-        }
-
-        val uri: android.net.Uri? = try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                resolver.insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
-            } else {
-                @Suppress("DEPRECATION")
-                val downloads = android.os.Environment.getExternalStoragePublicDirectory(
-                    android.os.Environment.DIRECTORY_DOWNLOADS).apply { mkdirs() }
-                val out = java.io.File(downloads, displayName)
-                out.writeText(csv)
-                android.net.Uri.fromFile(out)
-            }
-        } catch (e: Exception) {
-            Log.e("Halo", "$fileStem CSV export failed: ${e.message}")
-            null
-        }
-
-        if (uri == null) {
-            android.widget.Toast.makeText(this,
-                getString(R.string.advanced_export_failed), android.widget.Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            try {
-                resolver.openOutputStream(uri)?.use { it.write(csv.toByteArray(Charsets.UTF_8)) }
-            } catch (e: Exception) {
-                Log.e("Halo", "$fileStem CSV write to $uri failed: ${e.message}")
-            }
-        }
-
-        Log.i("Halo", "wrote $samples $fileStem samples to $uri")
-        android.widget.Toast.makeText(this,
-            getString(R.string.advanced_export_success, samples, displayName),
-            android.widget.Toast.LENGTH_LONG).show()
     }
 
     private fun openSettings(action: String) {

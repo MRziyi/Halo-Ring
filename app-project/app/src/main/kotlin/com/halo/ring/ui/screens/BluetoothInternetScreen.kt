@@ -35,7 +35,6 @@ fun BluetoothInternetScreen(
     autoBootOn: Boolean,
     onToggleAutoBoot: () -> Unit = {},
     onConnectNow: () -> Unit = {},
-    onOpenAndroidSettings: () -> Unit = {},
 ) {
     Column(modifier = Modifier.fillMaxSize().padding(top = 4.dp)) {
         Text(
@@ -61,14 +60,7 @@ fun BluetoothInternetScreen(
             on = autoBootOn,
             onToggle = onToggleAutoBoot,
         )
-
-        Spacer(Modifier.height(16.dp))
-
-        ActionRowBt(
-            title = stringResource(R.string.bt_internet_open_android_settings),
-            description = stringResource(R.string.bt_internet_open_android_settings_desc),
-            onClick = onOpenAndroidSettings,
-        )
+        // "Open Android settings" moved to Advanced (Zack 2026-05-29).
     }
 }
 

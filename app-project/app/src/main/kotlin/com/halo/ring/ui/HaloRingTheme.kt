@@ -54,6 +54,9 @@ object HaloType {
                              fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
                              color = HaloColors.Mute)
     val Metric   = TextStyle(fontSize = 39.sp, fontWeight = FontWeight.Bold, letterSpacing = (-2).sp, color = HaloColors.Fg)
+    /** Mid-size metric for the compact VITALS tab — vitals are secondary on the redesigned home, so
+     *  they no longer use the 39sp hero. */
+    val MetricMid = TextStyle(fontSize = 26.sp, fontWeight = FontWeight.Bold, letterSpacing = (-1).sp, color = HaloColors.Fg)
     val MetricUnit = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.Normal, color = HaloColors.Mute)
     val MetricKey  = TextStyle(fontSize = 10.sp, fontWeight = FontWeight.Normal, color = HaloColors.Mute, letterSpacing = 1.sp)
     val RowKey   = TextStyle(fontSize = 11.sp, fontWeight = FontWeight.Normal, color = HaloColors.Mute)

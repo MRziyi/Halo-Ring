@@ -3,16 +3,20 @@ package com.halo.ring.ui.screens
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.halo.ring.R
 import com.halo.ring.ui.FocusableRow
 import com.halo.ring.ui.HaloColors
@@ -21,18 +25,20 @@ import com.halo.ring.ui.ScreenPadding
 import com.halo.ring.ui.hud.actionFriendlyText
 import com.halo.ring.ui.hud.gestureFriendlyText
 import com.halo.ring.ui.hud.profileFriendlyText
+import com.halo.ring.core.action.DefaultProfiles
 import com.halo.ring.core.action.GlassAction
 import com.halo.ring.core.action.KeyMapProfile
 import com.halo.ring.core.gesture.Gesture
 
 /**
- * Settings → Profiles → <Profile> (mockup §3 E). 12 rows, one per [Gesture], showing what action
- * fires when the user does it. Tapping a row navigates to [ActionPickerScreen] for that gesture.
+ * Settings → Profiles → <Profile> (mockup §3 E). One row per [Gesture], showing the action it fires.
+ * Tapping a row navigates to [ActionPickerScreen] to rebind it.
  *
- * System slots (TRIPLE_TAP / QUADRUPLE_TAP / LONG_PRESS_SWIPE_DOWN / DOUBLE_LONG_PRESS) are listed
- * but greyed out — they're intercepted by the [com.halo.ring.core.gesture.InteractionRouter]'s
- * system layer before the profile is consulted (Doc/05 §5). The user can rebind those in the
- * **System Gestures** screen instead.
+ * Gestures that ALSO carry a system role (DOUBLE_TAP wakes the screen when off; LONG_PRESS sleeps it
+ * in the Navigation profile; TRIPLE_TAP screenshots) get a small badge — but stay **editable** (user
+ * 2026-05-29: "有system绑定的要加个标记，但允许功能编辑"). The base-4 (TAP/DOUBLE_TAP/swipes) only honour
+ * a custom binding in profiles with `useSystemKeyEvents=false` (e.g. Media); elsewhere they pass
+ * through as fixed system KeyEvents.
  */
 @Composable
 fun ProfileEditorScreen(
@@ -45,26 +51,26 @@ fun ProfileEditorScreen(
             style = HaloType.Title,
             modifier = Modifier.padding(horizontal = ScreenPadding, vertical = 12.dp),
         )
-        val systemValueText = stringResource(R.string.profile_editor_system_value)
         Gesture.values().forEach { gesture ->
             if (gesture in HIDDEN_GESTURES) return@forEach
-            val isSystem = gesture in SYSTEM_SLOTS
             val action = profile.actionFor(gesture)
-            // Audit-pass 2026-05-13t: SettingsCatalog.entryFor was returning a hard-coded English
-            // `friendly` String which never got localised. Now we always go through
-            // [actionFriendlyText], which routes via R.string.action_* — same source of truth
-            // used by the HUD's GestureRecognised pill and the Test Arena rows.
-            val valueText = if (isSystem) systemValueText else actionFriendlyText(action)
-            FocusableRow(onClick = { if (!isSystem) onGestureTapped(gesture) }) {
-                Text(gestureFriendlyText(gesture), style = HaloType.Body)
+            val roleRes = systemRoleRes(gesture, profile.id)
+            FocusableRow(onClick = { onGestureTapped(gesture) }) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(gestureFriendlyText(gesture), style = HaloType.Body)
+                    if (roleRes != null) {
+                        Spacer(Modifier.width(6.dp))
+                        // System-role badge — informational; the binding below is still editable.
+                        Text(
+                            text = stringResource(roleRes),
+                            style = HaloType.Caption.copy(color = HaloColors.Accent, fontSize = 10.sp),
+                        )
+                    }
+                }
                 Text(
-                    text = valueText,
+                    text = actionFriendlyText(action),
                     style = HaloType.RowVal.copy(
-                        color = when {
-                            isSystem -> HaloColors.Mute
-                            action is GlassAction.None -> HaloColors.Mute
-                            else -> HaloColors.Fg
-                        },
+                        color = if (action is GlassAction.None) HaloColors.Mute else HaloColors.Fg,
                     ),
                 )
             }
@@ -79,15 +85,16 @@ fun ProfileEditorScreen(
     }
 }
 
-// TRIPLE_TAP is the only fully system-owned gesture now (→ WakeSystemAI, intercepted before the
-// profile). LONG_PRESS_SWIPE_DOWN / DOUBLE_LONG_PRESS are free again (2026-05-28) and bindable —
-// e.g. to a plugin call via the picker → External apps.
-private val SYSTEM_SLOTS = setOf(
-    Gesture.TRIPLE_TAP,
-)
+/** A short badge for gestures that also serve a system role (shown next to the gesture name).
+ *  LONG_PRESS only sleeps in the Navigation/fallback profile (InteractionRouter gates it there). */
+private fun systemRoleRes(g: Gesture, profileId: String): Int? = when (g) {
+    Gesture.DOUBLE_TAP -> R.string.gesture_role_wake
+    Gesture.TRIPLE_TAP -> R.string.gesture_role_screenshot
+    Gesture.LONG_PRESS -> if (profileId == DefaultProfiles.DEFAULT_FALLBACK_ID) R.string.gesture_role_sleep else null
+    else -> null
+}
 
-// Gestures removed from the vocabulary for now (2026-05-28): QUADRUPLE_TAP (too complex) and
-// WRIST_SHAKE (firmware shake is mutually exclusive with touch gestures). Hidden from the editor.
+// QUADRUPLE_TAP (disabled) + WRIST_SHAKE (unrouted) — hidden from the editor.
 private val HIDDEN_GESTURES = setOf(
     Gesture.QUADRUPLE_TAP,
     Gesture.WRIST_SHAKE,

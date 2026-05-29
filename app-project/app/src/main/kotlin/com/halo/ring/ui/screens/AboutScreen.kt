@@ -47,8 +47,9 @@ fun AboutScreen(
         ListRow(stringResource(R.string.about_app_version), "$versionName ($versionCode)")
         ListRow(stringResource(R.string.about_detected_device), stringResource(detectedProfile.labelRes()))
 
+        // No explicit divider — the detected-device ListRow above already draws a trailing divider;
+        // a second one made a double line (Zack 2026-05-29). Just a gap + the source label.
         Spacer(Modifier.height(12.dp))
-        Box(Modifier.fillMaxWidth().height(1.dp).background(HaloColors.Line))
         Text(
             stringResource(R.string.about_source_label),
             style = HaloType.RowKey,

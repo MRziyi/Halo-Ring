@@ -19,6 +19,8 @@
     <string name="tab_vitals">健康</string>
     <string name="tab_settings">设置</string>
     <string name="tab_status">状态</string>
+    <string name="tab_ring">戒指</string>
+    <string name="tab_more">更多</string>
 
     <!-- 设置入口 -->
     <string name="settings_group_ring">戒指</string>
@@ -26,10 +28,21 @@
     <string name="settings_group_gestures">手势 &amp; 配置</string>
     <string name="settings_group_plugins">插件</string>
     <string name="settings_group_more">更多</string>
+    <string name="settings_group_system">系统</string>
+    <string name="home_settings">设置</string>
     <string name="settings_section_vitals">健康数据</string>
     <string name="settings_section_status">连接状态</string>
     <string name="ring_capabilities_header">戒指能力</string>
     <string name="hud_ring_dropped">戒指掉了？%1$s</string>
+    <string name="hud_charging_started">充电中…</string>
+    <string name="hud_charging_pct">已充至 %1$d%%</string>
+    <string name="hud_charging_full">已充满 ✓</string>
+    <string name="ring_status_charging">充电中</string>
+    <string name="hud_step_milestone">%1$d 步！</string>
+    <string name="hud_ring_on">已佩戴</string>
+    <string name="hud_ring_off">已取下</string>
+    <string name="ring_wear_off">未佩戴</string>
+    <string name="vitals_put_ring_on">请先戴上戒指再测量</string>
     <string name="vitals_sport_section">运动</string>
     <string name="vitals_sport_start_walk">开始步行</string>
     <string name="vitals_sport_start_run">开始跑步</string>
@@ -46,6 +59,8 @@
     <string name="settings_section_profiles">配置文件 &amp; 手势</string>
     <string name="settings_section_system_gestures">系统手势</string>
     <string name="settings_section_ring">戒指</string>
+    <string name="ring_info_title">戒指信息</string>
+    <string name="profiles_gestures_header">手势工具</string>
     <string name="settings_section_power">功耗 &amp; 连接</string>
     <string name="settings_section_bt_internet">蓝牙网络</string>
     <string name="bt_internet_title">蓝牙网络</string>
@@ -100,6 +115,8 @@
     <string name="vitals_unit_percent">%</string>
     <string name="vitals_measured_just_now">刚刚测量</string>
     <string name="vitals_measured_min_ago">%1$d 分钟前测量</string>
+    <string name="vitals_today_section">今日</string>
+    <string name="vitals_today_summary">今日 · %1$s 步 · %2$s 公里</string>
     <string name="vitals_steps_today">今日步数</string>
     <string name="vitals_calories">卡路里</string>
     <string name="vitals_calories_unit">%1$s 千卡</string>
@@ -145,8 +162,13 @@
     <string name="profile_editor_title">手势映射</string>
     <string name="profile_editor_edit_cta">编辑</string>
     <string name="profile_editor_system_value">（系统）›</string>
-    <string name="profile_editor_footer">系统手势会在进入此配置前被拦截。可在 设置 → 系统手势 中编辑。</string>
-    <string name="profiles_list_footer">前台 app 切换时自动切换配置（需启用辅助功能）。也可三击戒指手动循环。</string>
+    <string name="profile_editor_footer">带标记的手势同时承担系统功能，但仍可在此重新绑定。</string>
+    <string name="gesture_role_wake">唤醒</string>
+    <string name="gesture_role_sleep">锁屏</string>
+    <string name="gesture_role_screenshot">截屏</string>
+    <string name="profiles_list_footer">前台 app 切换时自动切换配置（需启用辅助功能）。无手动切换。</string>
+    <string name="profiles_restore_defaults">恢复默认按键</string>
+    <string name="profiles_restore_confirm">再点一次以重置全部配置</string>
     <string name="profiles_bindings_count">%1$d 个绑定 ›</string>
     <string name="action_picker_current">（当前）</string>
     <string name="action_picker_footer">系统动作较为高级 — 它们会绕过正常路由。请谨慎使用。</string>
@@ -248,12 +270,15 @@
     <string name="feedback_click_sound">界面点击音</string>
     <string name="feedback_ring_led">戒指 LED 反馈</string>
     <string name="feedback_hud_position">HUD 位置</string>
+    <string name="feedback_hud_offset">HUD 偏移</string>
     <string name="feedback_hud_duration">HUD 时长</string>
     <string name="feedback_hud_duration_value">%1$d 秒</string>
     <string name="feedback_auto_hint">配对后 5 分钟内自动开启提示</string>
     <string name="feedback_hud_pos_top_right">右上</string>
+    <string name="feedback_hud_pos_top_left">左上</string>
     <string name="feedback_hud_pos_top_center">顶部居中</string>
     <string name="feedback_hud_pos_bottom_right">右下</string>
+    <string name="feedback_hud_pos_bottom_left">左下</string>
     <string name="feedback_auto_hint_subtitle">帮助新用户熟悉手势</string>
     <string name="feedback_footer">提示仅在屏幕亮起时显示。</string>
     <string name="feedback_duration_seconds">%1$d 秒</string>
@@ -306,6 +331,7 @@
     <string name="advanced_debug_hud_desc">显示 RSSI、BLE 间隔、RTT、丢包数、当前后端。</string>
     <string name="advanced_latency_desc">把后续 20 次手势的分段时延记录到 CSV（Doc/06 §4）。</string>
     <string name="advanced_spatial_desc">基于 IMU 的空中手势。耗电较大 — 仅需要时启用。</string>
+    <string name="advanced_plugins_desc">绑定戒指手势的外部应用</string>
     <string name="advanced_a11y_title">打开辅助功能设置</string>
     <string name="advanced_a11y_desc">在系统设置中启用环意。</string>
     <string name="advanced_battery_title">电量豁免</string>

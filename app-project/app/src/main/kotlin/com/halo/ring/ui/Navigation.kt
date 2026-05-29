@@ -12,14 +12,8 @@ import com.halo.ring.core.gesture.Gesture
  * are for.
  */
 sealed interface SubScreen {
-    /** v0.4 (Doc/20 §6.2): the former Vitals tab is now reachable from Settings. */
-    object VitalsDashboard : SubScreen
     /** v0.4: the former Status tab. */
     object StatusInfo : SubScreen
-    /** v0.4 C3 (Doc/20 §7): root → group → leaf. The group screen lists its member sections. */
-    data class SettingsGroupSubScreen(
-        val group: com.halo.ring.ui.screens.SettingsGroup,
-    ) : SubScreen
     object Feedback : SubScreen
     object Profiles : SubScreen
     data class ProfileEditor(val profileId: String) : SubScreen

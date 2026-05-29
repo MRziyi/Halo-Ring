@@ -86,6 +86,22 @@ class HaloRingService : Service() {
     private var lastWornMs: Long = Long.MIN_VALUE
     private var worn: Boolean = false
     private var screenOnState: Boolean = true
+    /** Charging-milestone HUD state. [wasCharging] tracks edges (dock-in / unplug); the highest
+     *  percentage threshold already announced this charging session lives in [lastChargeMilestone]
+     *  so the ~60 s `0x73` sub-0C heartbeats while % rises don't re-fire. Reset on unplug. */
+    private var wasCharging: Boolean = false
+    private var lastChargeMilestone: Int = 0
+    /** P-F: when an alert HUD wakes a sleeping screen, [wokeForHud] is set and [hudSleepTimer]
+     *  is armed to auto-sleep after [HUD_AUTO_SLEEP_MS]. A user gesture in the window cancels it. */
+    private var wokeForHud: Boolean = false
+    private var hudSleepTimer: com.halo.ring.core.gesture.Cancellable? = null
+    /** Highest 500-step boundary already announced via HUD today; resets when the ring's step
+     *  counter rolls back (new day). Steps auto-stream via `0x73` sub-12 — no goal-setting. */
+    private var lastStepMilestone: Int = 0
+    /** Latest BLE connection state, mirrored from the [com.halo.ring.core.ble.R08BleClient]
+     *  connectionState stream. Read by [reconcilePower] to decide whether a worn ring needs a
+     *  (re)connect kicked off — the wear gate's `stop()` has no symmetric auto-`start()` otherwise. */
+    private var connState: ConnectionState = ConnectionState.DISCONNECTED
     private var idleRelaxTimer: com.halo.ring.core.gesture.Cancellable? = null
     private var modalTimeoutTimer: com.halo.ring.core.gesture.Cancellable? = null
     /** Periodic re-display of the Disconnected HUD while the ring stays disconnected. The HUD
@@ -115,7 +131,7 @@ class HaloRingService : Service() {
                 val now = graph.scheduler.nowMs()
                 if (now - lastDropHudMs >= 5_000L) {
                     lastDropHudMs = now
-                    hud?.show(HudEvent.RingDropped(graph.ringInfoFlow.value.advertisedName ?: "Halo"))
+                    showAlert(HudEvent.RingDropped(graph.ringInfoFlow.value.advertisedName ?: "Halo"))
                 }
             }
             is com.halo.ring.core.sensor.AccelProcessor.SpatialEvent.Impact ->
@@ -258,6 +274,9 @@ class HaloRingService : Service() {
             // gesture finishes dispatching.
             r.onGestureRecognized = { gesture, action ->
                 lastResolvedActionName = action::class.simpleName ?: "None"
+                // P-F: a user interaction cancels a pending HUD auto-sleep (don't yank the screen
+                // they're now using). No-op unless an alert HUD recently woke a sleeping display.
+                cancelHudAutoSleep()
                 // v0.4: distinct per-gesture audio feedback (eyes-off confirmation). Fired for
                 // every recognised gesture, even base/system ones, so the wearer hears *what* the
                 // ring understood. Gated by the "UI click sound" feedback pref.
@@ -309,6 +328,14 @@ class HaloRingService : Service() {
                 graph.overlayController.isActive()
             }
             r.forwardOverlayGesture = { gesture -> forwardOverlayGesture(gesture) }
+            // Context gesture (2026-05-29): while our Config Activity is foreground, LONG_PRESS
+            // cycles the home tab (RING → VITALS → MORE); out-of-app it sleeps the screen (handled
+            // in InteractionRouter §0). Both the UI tap and this gesture drive `homeTabIndexFlow`.
+            r.appForeground = { com.halo.ring.MainActivity.isInForeground.get() }
+            r.onAppTabCycle = {
+                val n = com.halo.ring.ui.screens.HomeTab.values().size
+                graph.homeTabIndexFlow.value = (graph.homeTabIndexFlow.value + 1) % n
+            }
         }
 
         // ── 2. install the HUD overlay (after router so it can dispatch into it) ────────────────
@@ -334,7 +361,7 @@ class HaloRingService : Service() {
 
         // Forward HUD notices posted from elsewhere in the process (the accessibility service's
         // Bluetooth-internet flow) so the foreground service stays the single HUD owner.
-        serviceScope.launch { graph.hudNoticeFlow.collect { hud?.show(it) } }
+        serviceScope.launch { graph.hudNoticeFlow.collect { showAlert(it) } }
 
         // ── 3. subscribe BLE events ────────────────────────────────────────────────────────────
         subs += graph.bleClient.events().subscribe { event, nowMs ->
@@ -351,18 +378,22 @@ class HaloRingService : Service() {
                     if (nowMs - lastRingInfoRefreshMs >= RING_INFO_REFRESH_MS) {
                         lastRingInfoRefreshMs = nowMs
                         val client = graph.bleClient as? com.halo.ring.ble.AndroidR08BleClient
+                        client?.pollRssi()   // async; result read on the next cycle (~1 s lag)
                         val ms = client?.estimatedConnIntervalMs()
                         val mode = client?.currentIntervalMode() ?: PowerPolicy.IntervalMode.BALANCED
                         val backendId = backendsByPriority.firstOrNull { it.isReady() }?.id ?: "(none)"
+                        val rssi = client?.currentRssiDbm()
                         val prev = graph.ringInfoFlow.value
                         if (prev.estimatedConnIntervalMs != ms ||
                             prev.intervalMode != mode ||
-                            prev.activeBackendId != backendId
+                            prev.activeBackendId != backendId ||
+                            prev.rssiDbm != rssi
                         ) {
                             graph.ringInfoFlow.value = prev.copy(
                                 estimatedConnIntervalMs = ms,
                                 intervalMode = mode,
                                 activeBackendId = backendId,
+                                rssiDbm = rssi,
                             )
                         }
                     }
@@ -391,9 +422,34 @@ class HaloRingService : Service() {
                     }
                 }
                 is RingEvent.Battery -> {
-                    graph.ringInfoFlow.value = graph.ringInfoFlow.value.copy(batteryPct = event.percent)
-                    if (event.percent <= LOW_BATTERY_THRESHOLD) {
-                        hud?.show(HudEvent.LowBattery(graph.ringInfoFlow.value.advertisedName ?: "Halo", event.percent))
+                    val charging = event.charging
+                    graph.ringInfoFlow.value = graph.ringInfoFlow.value.copy(
+                        batteryPct = event.percent,
+                        charging = charging,
+                    )
+                    // Low-battery warning only while NOT charging (no point nagging on the dock).
+                    if (event.percent <= LOW_BATTERY_THRESHOLD && charging != true) {
+                        showAlert(HudEvent.LowBattery(graph.ringInfoFlow.value.advertisedName ?: "Halo", event.percent))
+                    }
+                    // Charging milestones: dock-in, then 90 / 95 / full — each once per session.
+                    if (charging == true) {
+                        if (!wasCharging) {
+                            lastChargeMilestone = 0
+                            showAlert(HudEvent.Notice(getString(R.string.hud_charging_started)))
+                        }
+                        for (threshold in intArrayOf(90, 95, 100)) {
+                            if (event.percent >= threshold && lastChargeMilestone < threshold) {
+                                lastChargeMilestone = threshold
+                                showAlert(HudEvent.Notice(
+                                    if (threshold >= 100) getString(R.string.hud_charging_full)
+                                    else getString(R.string.hud_charging_pct, threshold)
+                                ))
+                            }
+                        }
+                        wasCharging = true
+                    } else if (charging == false) {
+                        wasCharging = false
+                        lastChargeMilestone = 0
                     }
                 }
                 is RingEvent.TouchStatus -> {
@@ -448,9 +504,18 @@ class HaloRingService : Service() {
                         activityKcal = event.calories,
                         activityMeters = event.distanceMeters,
                     )
+                    // Every-500-steps HUD milestone (500 / 1000 / 1500…). Fires once per boundary;
+                    // a counter rollback (new day) re-arms it. On a big jump we announce only the
+                    // highest boundary crossed rather than spamming each.
+                    val steps = event.steps
+                    if (steps < lastStepMilestone) lastStepMilestone = 0
+                    if (steps >= lastStepMilestone + 500) {
+                        lastStepMilestone = (steps / 500) * 500
+                        showAlert(HudEvent.Notice(getString(R.string.hud_step_milestone, lastStepMilestone)))
+                    }
                 }
                 is RingEvent.TargetReached -> {
-                    hud?.show(HudEvent.TargetReached)
+                    showAlert(HudEvent.TargetReached)
                 }
                 is RingEvent.RingGameKey ->
                     // Firmware wrist-shake (0x73 sub=0x29). Only ever fires in appType=7 (Game) mode,
@@ -498,6 +563,7 @@ class HaloRingService : Service() {
         // ── 4. subscribe BLE connection state ──────────────────────────────────────────────────
         subs += graph.bleClient.connectionState().subscribe { state ->
             Log.i(TAG, "BLE connection state: $state")
+            connState = state
             when (state) {
                 ConnectionState.READY -> {
                     val client = graph.bleClient as? com.halo.ring.ble.AndroidR08BleClient
@@ -514,7 +580,7 @@ class HaloRingService : Service() {
                         macAddress = client?.connectedDeviceAddress() ?: graph.ringInfoFlow.value.macAddress,
                     )
                     disconnectReminderTimer?.cancel(); disconnectReminderTimer = null
-                    hud?.show(HudEvent.Reconnected)
+                    showAlert(HudEvent.Reconnected)
                     synthesizer.armWakeSwallow()
                     // Audit-2026-05-13j (P3): "just-connected" counts as activity for the policy —
                     // otherwise the very first gesture rides whatever interval Android negotiated
@@ -542,7 +608,7 @@ class HaloRingService : Service() {
                 }
                 ConnectionState.DISCONNECTED -> {
                     graph.ringInfoFlow.value = graph.ringInfoFlow.value.copy(connected = false)
-                    hud?.show(HudEvent.Disconnected())
+                    showAlert(HudEvent.Disconnected())
                     // P1-8: fresh disconnect → reset the backoff so the user gets the first
                     // reminder on the short cadence; if the ring is genuinely gone, subsequent
                     // fires stretch out.
@@ -680,9 +746,12 @@ class HaloRingService : Service() {
                 feedbackPrefs = p
                 hud?.setPosition(when (p.hudPosition) {
                     com.halo.ring.ui.screens.HudPosition.TOP_RIGHT    -> HudOverlay.HudPosition.TopRight
+                    com.halo.ring.ui.screens.HudPosition.TOP_LEFT     -> HudOverlay.HudPosition.TopLeft
                     com.halo.ring.ui.screens.HudPosition.TOP_CENTER   -> HudOverlay.HudPosition.TopCenter
                     com.halo.ring.ui.screens.HudPosition.BOTTOM_RIGHT -> HudOverlay.HudPosition.BottomRight
+                    com.halo.ring.ui.screens.HudPosition.BOTTOM_LEFT  -> HudOverlay.HudPosition.BottomLeft
                 })
+                hud?.setVerticalOffsetSteps(p.hudOffsetSteps)
                 hud?.setDefaultDuration(p.hudDurationMs.toLong())
                 // v0.4: per-gesture audio feedback gated by the same "click sound" pref.
                 com.halo.ring.ui.GestureSounds.enabled = p.clickSoundOnModeSwitch
@@ -953,11 +1022,50 @@ class HaloRingService : Service() {
      * inserted into the charging dock. Both are "not worn" semantically; use as a fast-acting
      * wear-state signal that doesn't depend on the eye-side ScreenWearProxy.
      */
+    /** P-F: show an "alert-class" HUD (charging / step / wear / drop / low-battery / (dis)connect).
+     *  If the screen is off, briefly wake it and auto-sleep after [HUD_AUTO_SLEEP_MS] so the notice
+     *  is seen without leaving the display on — unless the user interacts ([cancelHudAutoSleep]).
+     *  Frequent HUDs (gesture-hint / profile-switch / sport tick) call hud?.show directly so they
+     *  don't keep waking the screen. Runs on the scheduler thread (all callers repost there). */
+    private fun showAlert(event: HudEvent) {
+        if (!screenOnState) {
+            wokeForHud = true
+            serviceScope.launch { graph.router.dispatch(GlassAction.ScreenWake) }
+        }
+        hud?.show(event)
+        if (wokeForHud) {
+            hudSleepTimer?.cancel()
+            hudSleepTimer = graph.scheduler.postDelayed(HUD_AUTO_SLEEP_MS) {
+                if (wokeForHud) {
+                    wokeForHud = false
+                    serviceScope.launch { graph.router.dispatch(GlassAction.ScreenSleep) }
+                }
+            }
+        }
+    }
+
+    /** A user interaction cancels a pending HUD auto-sleep — don't yank a screen they're using. */
+    private fun cancelHudAutoSleep() {
+        if (wokeForHud) {
+            wokeForHud = false
+            hudSleepTimer?.cancel(); hudSleepTimer = null
+        }
+    }
+
     private fun onRingWorn(worn: Boolean) {
         if (this.worn == worn) return
         this.worn = worn
         if (worn) lastWornMs = graph.scheduler.nowMs()
+        graph.ringInfoFlow.value = graph.ringInfoFlow.value.copy(worn = worn)
         Log.i(TAG, "wear state from ring touch-IC: worn=$worn")
+        // Wear-change HUD so the wearer gets feedback even off-screen (P-F wakes the screen).
+        showAlert(HudEvent.Notice(getString(if (worn) R.string.hud_ring_on else R.string.hud_ring_off)))
+        // "戴上即测": the moment the ring is put on (and we're connected) take one snapshot so the
+        // Vitals readout is fresh without a manual MEASURE. Only on the false→true transition (this
+        // method early-returns on no-change), so reconnect flaps don't trigger repeated PPG.
+        if (worn && graph.ringInfoFlow.value.connected) {
+            graph.bleClient.requestVitalsSnapshot()
+        }
         reconcilePower()
     }
 
@@ -1005,6 +1113,14 @@ class HaloRingService : Service() {
         if (decision.disconnect) {
             Log.i(TAG, "PowerPolicy: not worn for ${PowerPolicy.NOT_WORN_DISCONNECT_MS} ms → disconnect")
             graph.bleClient.stop()
+        } else if (worn && connState == ConnectionState.DISCONNECTED) {
+            // Symmetric counterpart to the wear-gate stop() above: once the ring is worn again we
+            // must actively re-establish the link. Nothing else calls start() after a wear-gated
+            // (or any) disconnect, so without this the ring stays down until the user manually
+            // reconnects — the "断了不会自动连上" bug. start() is a cheap no-op when already
+            // scanning/connecting, and the BLE client owns the retry/backoff from here.
+            Log.i(TAG, "worn + ring DISCONNECTED → kicking off (re)connect")
+            graph.bleClient.start()
         }
         // Energy fix 2: the accel stream (for spatial/wrist-shake) follows worn+screen state too.
         reconcileAccelStream()
@@ -1081,7 +1197,7 @@ class HaloRingService : Service() {
         disconnectReminderTimer = graph.scheduler.postDelayed(disconnectReminderDelayMs) {
             // Re-check connection state at fire time — a fast reconnect may have already happened.
             if (!graph.ringInfoFlow.value.connected) {
-                hud?.show(HudEvent.Disconnected())
+                showAlert(HudEvent.Disconnected())
                 disconnectReminderDelayMs = (disconnectReminderDelayMs * 2)
                     .coerceAtMost(DISCONNECT_REMINDER_MAX_MS)
                 scheduleDisconnectReminder()
@@ -1117,6 +1233,9 @@ class HaloRingService : Service() {
         private const val NOTIF_CHANNEL_ID = "halo.ring"
         private const val NOTIF_ID = 1
         private const val LOW_BATTERY_THRESHOLD = 20
+        /** How long an alert HUD keeps the screen lit when it woke a sleeping display, before
+         *  auto-sleeping it again (so off-screen notices are seen without draining battery). */
+        private const val HUD_AUTO_SLEEP_MS = 7_000L
         /** P1-8: first reminder fires after this gap. Doubles each subsequent fire up to
          *  [DISCONNECT_REMINDER_MAX_MS]. AR-HUD philosophy (Doc/06 §3.3): the StatusBar's red ●
          *  dot is the persistent indicator; the HUD nudges briefly. */

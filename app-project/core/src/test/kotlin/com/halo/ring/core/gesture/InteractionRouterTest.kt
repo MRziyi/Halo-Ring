@@ -59,6 +59,30 @@ class InteractionRouterTest {
         val backend: RecordingBackend,
     )
 
+    // ── context gesture: in-app LONG_PRESS cycles the home tab (2026-05-29) ──────────────────────
+
+    @Test fun `in-app LONG_PRESS cycles the home tab and does not sleep`() = runBlocking<Unit> {
+        val (ir, _, _, b) = fixture()
+        ir.systemGestures = SystemGestures(sleep = Gesture.LONG_PRESS)
+        var cycles = 0
+        ir.appForeground = { true }
+        ir.onAppTabCycle = { cycles++ }
+        ir.onGesture(Gesture.LONG_PRESS)
+        assertEquals(1, cycles)               // tab cycled
+        assertTrue(b.dispatched.isEmpty())    // did NOT fall through to ScreenSleep
+    }
+
+    @Test fun `out-of-app LONG_PRESS still sleeps and does not cycle tabs`() = runBlocking<Unit> {
+        val (ir, _, _, b) = fixture()
+        ir.systemGestures = SystemGestures(sleep = Gesture.LONG_PRESS)
+        var cycles = 0
+        ir.appForeground = { false }
+        ir.onAppTabCycle = { cycles++ }
+        ir.onGesture(Gesture.LONG_PRESS)
+        assertEquals(0, cycles)
+        assertEquals(listOf<GlassAction>(GlassAction.ScreenSleep), b.dispatched.toList())
+    }
+
     // ── screen-off fast path ───────────────────────────────────────────────────────────────────
 
     @Test fun `screen-off raw-matchable wake gesture fires ScreenWake on the fast path`() = runBlocking<Unit> {

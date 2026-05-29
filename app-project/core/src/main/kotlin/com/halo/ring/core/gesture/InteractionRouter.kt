@@ -85,6 +85,16 @@ class InteractionRouter(
      * for tests; the foreground service wires a real Activity-window dispatcher.
      */
     var systemKeyDispatcher: SystemKeyDispatcher = NoopSystemKeyDispatcher,
+    /**
+     * True when our own Config Activity is foreground. When so, an in-app LONG_PRESS cycles the
+     * home tab (RING → VITALS → MORE) instead of sleeping the screen — sleep stays the out-of-app
+     * meaning. The service wires this to `MainActivity.isInForeground`. (Context gesture,
+     * 2026-05-29: the dual-axis focus juggling for a horizontal tab strip was too confusing.)
+     */
+    var appForeground: () -> Boolean = { false },
+    /** Cycle the foreground Config Activity's home tab. Wired by the service to bump
+     *  `AppGraph.homeTabIndexFlow`; no-op when our UI isn't up. */
+    var onAppTabCycle: () -> Unit = {},
 ) {
     /** Whether the glasses display is currently on. Set by the foreground service from
      *  ACTION_SCREEN_ON/OFF (or RayNeo ARSDK wear/screen state when available). */
@@ -137,6 +147,15 @@ class InteractionRouter(
         if (overlayCaptures()) {
             forwardOverlayGesture(gesture)
             onGestureRecognized?.invoke(gesture, GlassAction.None)   // HUD-hint / telemetry only
+            return
+        }
+        // 0b. In-app tab switch (context gesture). When our own Config Activity is foreground a
+        //     LONG_PRESS cycles the home tab instead of sleeping the screen. Placed before the
+        //     screen-sleep check so in-app LONG_PRESS never falls through to sleep; out-of-app it
+        //     does (below). Guarded by appForeground() so out-of-app behaviour is unchanged.
+        if (gesture == Gesture.LONG_PRESS && appForeground()) {
+            onAppTabCycle()
+            onGestureRecognized?.invoke(gesture, GlassAction.None)
             return
         }
         // 0. system screen-sleep (LONG_PRESS) — but ONLY in the fallback profile (Navigation).

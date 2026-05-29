@@ -52,6 +52,8 @@ fun StatusBar(
     connected: Boolean = true,
     ringId: String = "R08_…",
     batteryPct: Int? = null,
+    /** On the charging dock — renders the battery % in accent green as an at-a-glance cue. */
+    charging: Boolean = false,
     currentMode: String? = "Navigation",
 ) {
     Row(
@@ -67,7 +69,10 @@ fun StatusBar(
             Text(ringId, style = HaloType.Mono.copy(color = HaloColors.Mute))
             if (batteryPct != null) {
                 Spacer(Modifier.width(10.dp))
-                Text("$batteryPct%", style = HaloType.Mono.copy(color = HaloColors.Fg))
+                Text(
+                    "$batteryPct%",
+                    style = HaloType.Mono.copy(color = if (charging) HaloColors.Accent else HaloColors.Fg),
+                )
             }
         }
         if (currentMode != null) {
@@ -156,7 +161,7 @@ fun Cta(
             .border(width = if (effective) 2.dp else 1.dp, color = accent)
             .background(bg)
             .clickable(onClick = onClick)
-            .padding(vertical = 12.dp),
+            .padding(vertical = 8.dp),
         contentAlignment = Alignment.Center,
     ) {
         // P2-10: bumped 14 → 16 sp to match the RayNeo guideline floor (HaloType kdoc). The Cta
@@ -167,10 +172,10 @@ fun Cta(
         Text(
             text,
             style = TextStyle(
-                fontSize = 16.sp,
+                fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = fg,
-                letterSpacing = 1.sp,
+                letterSpacing = 0.5.sp,
             ),
         )
     }

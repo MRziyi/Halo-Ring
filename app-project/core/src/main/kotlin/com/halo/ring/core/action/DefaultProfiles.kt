@@ -4,24 +4,25 @@ import com.halo.ring.core.gesture.Gesture
 import com.halo.ring.core.gesture.GestureConfig
 
 /**
- * Built-in profiles, fully specified across all 12 gestures (R08-Remote-Design.md §25.2).
+ * Built-in profiles, auto-selected by the foreground app (no manual switching).
  *
- * System-level gestures (TRIPLE_TAP = WakeSystemAI, plus the now-free LONG_PRESS_SWIPE_DOWN /
- * DOUBLE_LONG_PRESS slots) are left as [GlassAction.None] here — TRIPLE_TAP is intercepted by
- * [com.halo.ring.core.gesture.InteractionRouter] before the profile; the free slots are rebindable.
+ * Shared via [systemSlots] in every profile:
+ *  - `TRIPLE_TAP` → system **Screenshot** (intercepted before the profile; shown as "(system)").
+ *  - `LONG_PRESS_SWIPE_DOWN` / `DOUBLE_LONG_PRESS` → free (None), user-rebindable (e.g. a plugin call).
  *
- * Audit-pass 2026-05-14w redesign of profile bindings + triggerPackages:
- *  - DOUBLE_LONG_PRESS system slot is now [GlassAction.OpenAIAssistant] (was ForceReconnect).
- *  - DefaultProfiles.NAVIGATION's `DOUBLE_TAP_SWIPE_DOWN` swapped from AskVisualAI →
- *    OpenAIAssistant: everyday voice/chat AI is more useful than camera-grounded VQA for the
- *    average user. AskVisualAI stays in the picker for users who want it.
- *  - MEDIA's swipes now do volume (most-used media op) instead of track-change; long-press and
- *    its combo do track navigation. Screenshot moved to DOUBLE_TAP_SWIPE_UP (more useful than
- *    photo while in a media app).
- *  - READER's long-press does brightness (reading-light affordance); kept Translate on
- *    DOUBLE_TAP_SWIPE_DOWN.
- *  - triggerPackages populated with actual Rokid Sprite + common AOSP music/video/reader
- *    packages so Media / Reader auto-activate without manual setup.
+ * Current bindings (v0.6, 2026-05-29):
+ *  - **Navigation** (fallback): base nav; `LONG_PRESS` = system screen-sleep (fallback-only, via
+ *    InteractionRouter); `TAP_SWIPE_UP` = Photo, `TAP_SWIPE_DOWN` = AI; `LONG_PRESS_SWIPE_UP` =
+ *    Notifications. `DOUBLE_TAP_SWIPE_*` left free for user-custom.
+ *  - **Media** (`useSystemKeyEvents=false`, so base gestures route through this map): TAP=play/pause,
+ *    DOUBLE_TAP=Back, swipes=volume, `TAP_SWIPE_UP/DOWN`=prev/next track.
+ *  - **Reader**: page-nav swipes; LONG_PRESS=brightness; `TAP_SWIPE_UP`=Photo, `TAP_SWIPE_DOWN`=Translate.
+ *  - `DOUBLE_TAP` = Back (exit) in every profile — invariant. Also wakes the screen when off (system).
+ *  - `TRIPLE_TAP` = Screenshot (system, shared via systemSlots).
+ *
+ * NOTE: these are *seed* defaults. Once the wearer's profiles are persisted ([ProfilesPrefsStore]),
+ * changing these does NOT retroactively update a device — use Settings → Profiles → "Restore default
+ * bindings" to re-seed after an update.
  */
 object DefaultProfiles {
 
@@ -57,9 +58,10 @@ object DefaultProfiles {
             // LONG_PRESS in the fallback profile = system screen-sleep (handled by InteractionRouter
             // before the profile; this None is just for clarity). Only Navigation owns sleep.
             Gesture.LONG_PRESS            to GlassAction.None,
-            // Subtitle + AI on the easy single-tap-swipe pair. DOUBLE_TAP_SWIPE_* is freed for the
-            // user's own custom bindings (picker → e.g. a Constellation plugin call).
-            Gesture.TAP_SWIPE_UP          to GlassAction.OpenSubtitle,     // 单击上 → Rokid 字幕 (live caption)
+            // Photo + AI on the easy single-tap-swipe pair (user 2026-05-29). DOUBLE_TAP_SWIPE_* is
+            // freed for the user's own custom bindings (picker → e.g. a Constellation plugin call).
+            // (Subtitle stays available as an action in the picker.)
+            Gesture.TAP_SWIPE_UP          to GlassAction.TakePhoto,        // 单击上 → photo
             Gesture.TAP_SWIPE_DOWN        to GlassAction.OpenAIAssistant,  // 单击下 → AI
             Gesture.LONG_PRESS_SWIPE_UP   to GlassAction.Notifications,    // "long-press, pull-up" → notification shade
         ),
@@ -134,7 +136,7 @@ object DefaultProfiles {
             Gesture.LONG_PRESS            to GlassAction.BrightnessUp,
             Gesture.LONG_PRESS_SWIPE_UP   to GlassAction.BrightnessDown,
             // Primary combos on the easy single-tap-swipe pair (consistent with Nav/Media).
-            Gesture.TAP_SWIPE_UP          to GlassAction.OpenSubtitle,       // 单击上 → live caption
+            Gesture.TAP_SWIPE_UP          to GlassAction.TakePhoto,          // 单击上 → photo (capture passage)
             Gesture.TAP_SWIPE_DOWN        to GlassAction.OpenTranslate,      // reading context → translate
         ),
         triggerPackages = listOf(

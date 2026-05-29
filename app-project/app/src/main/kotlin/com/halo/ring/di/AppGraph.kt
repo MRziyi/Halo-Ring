@@ -130,6 +130,10 @@ class AppGraph private constructor(
      *  Bluetooth-internet flow). The service collects this and forwards to its [HudOverlay] so
      *  there's a single HUD owner. */
     val hudNoticeFlow: MutableSharedFlow<com.halo.ring.ui.hud.HudEvent>,
+    /** Active home tab, as a [com.halo.ring.ui.screens.HomeTab] ordinal (0 = RING). The single
+     *  source of truth so BOTH a UI tap and the in-app LONG_PRESS gesture (routed through the
+     *  service) can drive the tab; [com.halo.ring.MainActivity] collects it for the UI. */
+    val homeTabIndexFlow: MutableStateFlow<Int>,
 ) {
     /**
      * Best-effort detection of which input source the wearer is using right now. Drives the
@@ -191,6 +195,7 @@ class AppGraph private constructor(
                 ringCapabilitiesFlow = MutableStateFlow(emptySet()),
                 rawAtomicGestureFlow = MutableSharedFlow(extraBufferCapacity = 16),
                 hudNoticeFlow = MutableSharedFlow(extraBufferCapacity = 4),
+                homeTabIndexFlow = MutableStateFlow(0),
             )
         }
 
@@ -255,6 +260,12 @@ data class RingInfo(
     val rssiDbm: Int? = null,
     /** Battery percentage 0-100, null = unknown. */
     val batteryPct: Int? = null,
+    /** True while the ring is on the charging dock (SPEC §4.2 `0x03` + §5.3 `0x73` sub-0C push).
+     *  Null = unknown (never reported this session). */
+    val charging: Boolean? = null,
+    /** True when worn, false when off-finger/docked (from `0x2A` touch-status + the wear provider).
+     *  Null = unknown. Drives the RING-tab wear line + the MEASURE "put the ring on" guard. */
+    val worn: Boolean? = null,
     /** True when [com.halo.ring.core.ble.ConnectionState.READY] is observed. */
     val connected: Boolean = false,
     /**

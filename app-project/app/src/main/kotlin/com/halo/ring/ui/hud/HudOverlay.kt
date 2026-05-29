@@ -92,8 +92,12 @@ class HudOverlay(
     /** Per-event base duration in ms (overridable by [HudEvent] subtypes via [resolveDuration]).
      *  Wired from [com.halo.ring.ui.screens.FeedbackPrefs.hudDurationMs] by the service. */
     @Volatile private var defaultDurationMs: Long = 2_000L
+    /** Vertical nudge in body units (each ≈ one pill-height). Top-anchored positions move DOWN,
+     *  bottom-anchored move UP (see [buildLayoutParams]) so the HUD can clear a plugin's own HUD.
+     *  Wired from `FeedbackPrefs.hudOffsetSteps`. */
+    @Volatile private var hudOffsetSteps: Int = 2
 
-    enum class HudPosition { TopRight, TopCenter, BottomRight, Center }
+    enum class HudPosition { TopRight, TopLeft, TopCenter, BottomRight, BottomLeft, Center }
 
     fun setPosition(pos: HudPosition) {
         runOnMain {
@@ -113,6 +117,16 @@ class HudOverlay(
      *  keep their own cadence regardless. */
     fun setDefaultDuration(durationMs: Long) {
         defaultDurationMs = durationMs.coerceIn(500L, 10_000L)
+    }
+
+    /** Set the vertical HUD offset in body units (0..5); re-layouts a currently-installed view. */
+    fun setVerticalOffsetSteps(steps: Int) {
+        runOnMain {
+            val clamped = steps.coerceIn(0, 5)
+            if (hudOffsetSteps == clamped) return@runOnMain
+            hudOffsetSteps = clamped
+            view?.let { try { wm.updateViewLayout(it, buildLayoutParams(hudPosition)) } catch (_: Exception) {} }
+        }
     }
 
     /** Set the binocular flag (matched to `DisplayAdapter.isBinocular`). Re-layouts a currently
@@ -252,9 +266,11 @@ class HudOverlay(
         // physical glasses orientation.)
         val gravity = when {
             pos == HudPosition.TopRight                  -> Gravity.TOP    or Gravity.END
+            pos == HudPosition.TopLeft                   -> Gravity.TOP    or Gravity.START
             pos == HudPosition.TopCenter && isBinocular  -> Gravity.TOP    or Gravity.END
             pos == HudPosition.TopCenter                 -> Gravity.TOP    or Gravity.CENTER_HORIZONTAL
             pos == HudPosition.BottomRight               -> Gravity.BOTTOM or Gravity.END
+            pos == HudPosition.BottomLeft                -> Gravity.BOTTOM or Gravity.START
             pos == HudPosition.Center && isBinocular     -> Gravity.CENTER_VERTICAL or Gravity.END
             else /* HudPosition.Center */                -> Gravity.CENTER
         }
@@ -272,6 +288,13 @@ class HudOverlay(
             pos == HudPosition.Center && isBinocular    -> 160
             else                                        -> SAFE_MARGIN_PX
         }
+        // User HUD offset (FeedbackPrefs.hudOffsetSteps, in body-units): top-anchored positions
+        // move DOWN, bottom-anchored move UP — both achieved by adding to `y` (TOP gravity grows
+        // downward, BOTTOM gravity grows upward) — so the HUD can clear a plugin's own HUD
+        // (Constellation). Center positions ignore the offset.
+        val topAnchored = pos == HudPosition.TopRight || pos == HudPosition.TopLeft || pos == HudPosition.TopCenter
+        val bottomAnchored = pos == HudPosition.BottomRight || pos == HudPosition.BottomLeft
+        val offsetPx = if (topAnchored || bottomAnchored) hudOffsetSteps * BODY_UNIT_PX else 0
         return WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
@@ -279,7 +302,7 @@ class HudOverlay(
         ).apply {
             this.gravity = gravity
             x = xInset
-            y = SAFE_MARGIN_PX
+            y = SAFE_MARGIN_PX + offsetPx
         }
     }
 
@@ -287,6 +310,8 @@ class HudOverlay(
         /** Waveguide safe-area margin (px). The outer edge of the Rokid panel is trimmed by the
          *  optics; keep the bordered HUD pill inside this inset so no edge clips. */
         const val SAFE_MARGIN_PX = 32
+        /** One "body" unit (px) for the user's HUD vertical offset ≈ one pill-height. */
+        const val BODY_UNIT_PX = 60
     }
 }
 
