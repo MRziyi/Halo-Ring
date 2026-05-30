@@ -18,6 +18,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.halo.ring.R
 import com.halo.ring.di.RingInfo
 import com.halo.ring.ui.Cta
@@ -48,6 +49,9 @@ fun RingScreen(
     /** v0.4 C4 (Doc/20 §8): SPEC v3 capability bitmap. Rendered as a "Capabilities" caption at
      *  the bottom so users can see what their ring's firmware claims to support. */
     capabilities: Set<String> = emptySet(),
+    /** Touch-IC idle-sleep timeout in minutes (SPEC v3 §4.10). A ring-hardware power knob. */
+    touchSleepMin: Int = com.halo.ring.core.ble.R08Protocol.DEFAULT_TOUCH_SLEEP_MIN,
+    onTouchSleepMinChanged: (Int) -> Unit = {},
 ) {
     // A-4: read the BLE client directly off LocalAppGraph instead of taking three callback
     // parameters. The three actions always target the same singleton, so threading them through
@@ -67,6 +71,19 @@ fun RingScreen(
         ListRow(stringResource(R.string.ring_mac),      info.macAddress ?: dash)
         ListRow(stringResource(R.string.ring_firmware), info.firmwareVersion ?: dash)
         ListRow(stringResource(R.string.ring_signal),   info.rssiDbm?.let { stringResource(R.string.ring_signal_unit_dbm, it) } ?: dash)
+
+        // Touch-IC idle-sleep timeout (SPEC v3 §4.10): tap to cycle. Shorter saves ring battery; the
+        // touch sensor sleeps this long after the last touch.
+        com.halo.ring.ui.FocusableRow(onClick = { onTouchSleepMinChanged(cycleTouchSleep(touchSleepMin)) }) {
+            Column(Modifier.padding(end = 8.dp).weight(1f)) {
+                Text(stringResource(R.string.ring_sleep_title), style = HaloType.Body)
+                Text(stringResource(R.string.ring_sleep_desc), style = HaloType.Caption.copy(fontSize = 11.sp))
+            }
+            Text(
+                stringResource(R.string.ring_sleep_unit_min, touchSleepMin),
+                style = HaloType.RowVal.copy(color = HaloColors.Accent),
+            )
+        }
 
         // Capabilities (info) sit with the other telemetry — ABOVE the actions — so the focusable
         // PAIR/FORGET stay last. If they trailed the buttons, focus-driven scroll couldn't reach
@@ -120,4 +137,11 @@ fun RingScreen(
             })
         }
     }
+}
+
+/** Touch-IC sleep-timeout presets in minutes (SPEC v3 §4.10 `sleepMin`). */
+private val TOUCH_SLEEP_PRESETS = intArrayOf(1, 2, 5, 10, 15, 30)
+private fun cycleTouchSleep(current: Int): Int {
+    val i = TOUCH_SLEEP_PRESETS.indexOf(current)
+    return if (i < 0) TOUCH_SLEEP_PRESETS.first() else TOUCH_SLEEP_PRESETS[(i + 1) % TOUCH_SLEEP_PRESETS.size]
 }

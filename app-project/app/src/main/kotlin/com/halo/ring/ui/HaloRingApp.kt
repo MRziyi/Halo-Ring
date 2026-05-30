@@ -381,6 +381,8 @@ fun HaloRingApp(
                         info = ringInfo,
                         onOpenPairing = { push(SubScreen.RingPairing) },
                         capabilities = ringCapabilities,
+                        touchSleepMin = advancedPrefs.touchSleepMin,
+                        onTouchSleepMinChanged = { onAdvancedPrefsChanged(advancedPrefs.copy(touchSleepMin = it)) },
                     )
 
                     SubScreen.RingPairing -> com.halo.ring.ui.screens.RingPairingScreen(onPaired = { pop() })
@@ -391,8 +393,6 @@ fun HaloRingApp(
                         else PowerConnectionScreen(
                             activeProfile = active,
                             onActiveProfileUpdated = onProfileUpdated,
-                            touchSleepMin = advancedPrefs.touchSleepMin,
-                            onTouchSleepMinChanged = { onAdvancedPrefsChanged(advancedPrefs.copy(touchSleepMin = it)) },
                         )
                     }
 

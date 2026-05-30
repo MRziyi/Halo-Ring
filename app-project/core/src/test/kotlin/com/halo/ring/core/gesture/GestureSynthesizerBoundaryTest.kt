@@ -33,7 +33,7 @@ class GestureSynthesizerBoundaryTest {
         // (Handler ordering); the second TOUCH then arrives as a fresh tap-1. We mirror that with
         // ManualScheduler by advancing time first.
         val (syn, sched, out) = fixture(GestureConfig(
-            optimisticSingleTap = false, awaitCombos = true,
+            optimisticSingleTap = false, enableTapSwipe = true, enableDoubleTapSwipe = true,
             multiTapWindowMs = 280, comboWindowMs = 300,
         ))
         syn.onRaw(RawGesture.TOUCH, nowMs = 0)
@@ -46,7 +46,7 @@ class GestureSynthesizerBoundaryTest {
 
     @Test fun `two TOUCHes one millisecond inside the window become a DOUBLE_TAP`() {
         val (syn, sched, out) = fixture(GestureConfig(
-            optimisticSingleTap = false, awaitCombos = true,
+            optimisticSingleTap = false, enableTapSwipe = true, enableDoubleTapSwipe = true,
             multiTapWindowMs = 280, comboWindowMs = 300,
         ))
         syn.onRaw(RawGesture.TOUCH, nowMs = 0)
@@ -61,7 +61,7 @@ class GestureSynthesizerBoundaryTest {
         // Sequence: TOUCH, TOUCH (DOUBLE_TAP pending in the combo window), advance to window expiry
         // (timer fires → bare DOUBLE_TAP commits), then SWIPE_UP arrives → plain SWIPE.
         val (syn, sched, out) = fixture(GestureConfig(
-            optimisticSingleTap = false, awaitCombos = true,
+            optimisticSingleTap = false, enableTapSwipe = true, enableDoubleTapSwipe = true,
             multiTapWindowMs = 280, comboWindowMs = 300,
         ))
         syn.onRaw(RawGesture.TOUCH, nowMs = 0)
@@ -73,7 +73,7 @@ class GestureSynthesizerBoundaryTest {
 
     @Test fun `swipe arriving one ms before combo timer fires becomes DOUBLE_TAP_SWIPE_UP`() {
         val (syn, sched, out) = fixture(GestureConfig(
-            optimisticSingleTap = false, awaitCombos = true,
+            optimisticSingleTap = false, enableTapSwipe = true, enableDoubleTapSwipe = true,
             multiTapWindowMs = 280, comboWindowMs = 300,
         ))
         syn.onRaw(RawGesture.TOUCH, nowMs = 0)
@@ -113,7 +113,7 @@ class GestureSynthesizerBoundaryTest {
 
     @Test fun `five rapid taps are capped at QUADRUPLE_TAP, no extra emit on the 5th`() {
         val (syn, sched, out) = fixture(GestureConfig(
-            optimisticSingleTap = false, awaitCombos = true,
+            optimisticSingleTap = false, enableTapSwipe = true, enableDoubleTapSwipe = true,
             enableTripleTap = true, enableQuadrupleTap = true,
             multiTapWindowMs = 280,
         ))
@@ -133,7 +133,7 @@ class GestureSynthesizerBoundaryTest {
         // NOT a DOUBLE_TAP — even though lastTapAtMs was advanced. The synth resets tapCount on
         // arm via the public contract (reset()), so this is the expected behaviour.
         val (syn, sched, out) = fixture(GestureConfig(
-            optimisticSingleTap = false, awaitCombos = true,
+            optimisticSingleTap = false, enableTapSwipe = true, enableDoubleTapSwipe = true,
             multiTapWindowMs = 280, wakeSwallowCount = 1,
         ))
         syn.armWakeSwallow()

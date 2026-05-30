@@ -43,12 +43,13 @@ object DefaultProfiles {
         id = "navigation",
         name = "Navigation",
         gestureConfig = GestureConfig(
-            multiTapWindowMs = 220,        // 300→220→200→220 (2026-05-30): 200 made double-tap too tight; 220 is the sweet spot
-            comboWindowMs = 400,
+            multiTapWindowMs = 220,        // 单击组合窗口
+            comboWindowMs = 300,           // 双击组合窗口
             optimisticSingleTap = false,
-            awaitCombos = true,
-            awaitLongPressCombos = true,
-            longPressFollowupWindowMs = 40, // 60 → 40 (2026-05-29): snappier long-press, LP-combos still detectable
+            enableTapSwipe = true,         // 单击组合 ON (TAP_SWIPE_* have default actions)
+            enableDoubleTapSwipe = false,  // 双击组合 OFF by default (Zack 2026-05-30)
+            awaitLongPressCombos = false,  // 长按组合 OFF by default
+            longPressFollowupWindowMs = 40,
             enableTripleTap = true,
             enableDoubleLongPress = true,
         ),
@@ -65,7 +66,7 @@ object DefaultProfiles {
             // is freed for the user's own custom bindings (picker → e.g. a Constellation plugin call).
             Gesture.TAP_SWIPE_UP          to GlassAction.OpenSubtitle,     // 单击上 → Rokid 字幕 (live caption)
             Gesture.TAP_SWIPE_DOWN        to GlassAction.OpenAIAssistant,  // 单击下 → AI
-            Gesture.LONG_PRESS_SWIPE_UP   to GlassAction.Notifications,    // "long-press, pull-up" → notification shade
+            Gesture.LONG_PRESS_SWIPE_UP   to GlassAction.None,            // 长按上 → None (长按组合 off by default; Zack 2026-05-30)
         ),
         triggerPackages = emptyList(),   // fallback profile; matches whenever nothing else does
     )
@@ -78,12 +79,13 @@ object DefaultProfiles {
         id = "media",
         name = "Media",
         gestureConfig = GestureConfig(
-            multiTapWindowMs = 220,                // 300→220→200→220 (2026-05-30): 200 made double-tap too tight
-            comboWindowMs = 400,
+            multiTapWindowMs = 220,                // 单击组合窗口
+            comboWindowMs = 300,                   // 双击组合窗口
             optimisticSingleTap = false,           // keep double-tap = exit reliable
-            awaitCombos = true,
-            awaitLongPressCombos = true,
-            longPressFollowupWindowMs = 40,        // 60 → 40 (2026-05-29): snappier long-press
+            enableTapSwipe = true,                 // 单击组合 ON
+            enableDoubleTapSwipe = false,          // 双击组合 OFF by default
+            awaitLongPressCombos = false,          // 长按组合 OFF by default
+            longPressFollowupWindowMs = 40,
             useSystemKeyEvents = false,            // route TAP / swipes through this map, not DPAD
         ),
         map = systemSlots + mapOf(
@@ -96,7 +98,7 @@ object DefaultProfiles {
             Gesture.TAP_SWIPE_UP          to GlassAction.MediaPrev,
             Gesture.TAP_SWIPE_DOWN        to GlassAction.MediaNext,
             Gesture.LONG_PRESS            to GlassAction.None,             // freed (track-change moved to tap-swipe)
-            Gesture.LONG_PRESS_SWIPE_UP   to GlassAction.Notifications,
+            Gesture.LONG_PRESS_SWIPE_UP   to GlassAction.None,            // 长按上 → None (长按组合 off by default)
         ),
         // Auto-activates when foreground app matches. Audit-pass 2026-05-14w: populated with
         // Sprite Music + common AOSP music/video apps. `ModeManager.onForegroundPackage` does
@@ -127,8 +129,9 @@ object DefaultProfiles {
             // detect a following swipe). Bare page-nav swipes still fire instantly; only the bare
             // TAP=Confirm waits out the multi-tap window.
             optimisticSingleTap = false,
-            awaitCombos = true,
-            awaitLongPressCombos = true,
+            enableTapSwipe = true,         // 单击组合 ON
+            enableDoubleTapSwipe = false,  // 双击组合 OFF by default
+            awaitLongPressCombos = false,  // 长按组合 OFF by default
         ),
         map = systemSlots + mapOf(
             Gesture.TAP                   to GlassAction.Confirm,
@@ -138,7 +141,7 @@ object DefaultProfiles {
             Gesture.SWIPE_DOWN            to GlassAction.NavNext,
             // brightness on long-press (reading-light affordance); not shadowed by sleep (Reader ≠ fallback).
             Gesture.LONG_PRESS            to GlassAction.BrightnessUp,
-            Gesture.LONG_PRESS_SWIPE_UP   to GlassAction.BrightnessDown,
+            Gesture.LONG_PRESS_SWIPE_UP   to GlassAction.None,               // 长按上 → None (长按组合 off by default)
             // Primary combos on the easy single-tap-swipe pair (consistent with Nav/Media).
             Gesture.TAP_SWIPE_UP          to GlassAction.OpenSubtitle,       // 单击上 → live caption
             Gesture.TAP_SWIPE_DOWN        to GlassAction.OpenTranslate,      // reading context → translate
@@ -167,7 +170,8 @@ object DefaultProfiles {
         name = "Fast",
         gestureConfig = GestureConfig(
             optimisticSingleTap = true,
-            awaitCombos = false,
+            enableTapSwipe = false,
+            enableDoubleTapSwipe = false,
             awaitLongPressCombos = false,   // ← LONG_PRESS = Back, instant
             comboWindowMs = 0,
             enableTripleTap = true,         // triple = system Sprite AI
@@ -197,10 +201,11 @@ object DefaultProfiles {
         name = "Camera",
         gestureConfig = GestureConfig(
             multiTapWindowMs = 220,
-            comboWindowMs = 400,
+            comboWindowMs = 300,
             optimisticSingleTap = false,
-            awaitCombos = true,
-            awaitLongPressCombos = true,
+            enableTapSwipe = true,         // 单击组合 ON
+            enableDoubleTapSwipe = false,  // 双击组合 OFF by default
+            awaitLongPressCombos = false,  // 长按组合 OFF by default
             longPressFollowupWindowMs = 40,
             // Route through the profile so SWIPE_UP/DOWN can be Volume (= zoom) instead of DPAD.
             useSystemKeyEvents = false,

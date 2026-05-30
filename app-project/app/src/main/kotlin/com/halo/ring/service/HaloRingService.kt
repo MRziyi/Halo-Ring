@@ -168,6 +168,9 @@ class HaloRingService : Service() {
     override fun onCreate() {
         super.onCreate()
         Log.i(TAG, "HaloRingService.onCreate")
+        // Pre-render + load the gesture blips into SoundPool now (idempotent) so the first gesture
+        // plays with no allocation latency. Off the UI/scheduler path — just file writes + load.
+        com.halo.ring.ui.GestureSounds.init(applicationContext)
         graph = (application as HaloRingApplication).graph
         // CRITICAL: bind serviceScope to the scheduler thread so suspending pipeline work doesn't
         // race with the synthesiser. See Doc/06 §2.2.

@@ -209,18 +209,18 @@ class InteractionRouterTest {
     }
 
     @Test fun `custom (non-base) gesture still routes through profile + backend`() = runBlocking<Unit> {
-        // LONG_PRESS_SWIPE_UP is NOT a base gesture and NOT a system gesture — Navigation profile
-        // maps it to Notifications. Even with useSystemKeyEvents=true it goes through dispatch().
-        // (LONG_PRESS itself is now the system screen-toggle, so we use the combo here.)
+        // TAP_SWIPE_UP is NOT a base gesture and NOT a system gesture — Navigation profile maps it to
+        // OpenSubtitle. Even with useSystemKeyEvents=true it goes through dispatch(). (LONG_PRESS is
+        // the system screen-toggle; LONG_PRESS_SWIPE_UP is now None by default, so use a tap-swipe.)
         val (ir, _, _, b) = fixture()
-        ir.onGesture(Gesture.LONG_PRESS_SWIPE_UP)
-        assertEquals(listOf<GlassAction>(GlassAction.Notifications), b.dispatched)
+        ir.onGesture(Gesture.TAP_SWIPE_UP)
+        assertEquals(listOf<GlassAction>(GlassAction.OpenSubtitle), b.dispatched)
     }
 
     // ── foreground bypass (inAppShortCircuit) ──────────────────────────────────────────────────
     // v0.3 P1: base gestures don't reach inAppShortCircuit (systemKeyDispatcher handles them).
-    // v0.4: LONG_PRESS is now the system screen-toggle, so these use LONG_PRESS_SWIPE_UP (a
-    // non-base, non-system gesture mapped to Notifications in Navigation) to exercise the shortcut.
+    // We use TAP_SWIPE_UP (a non-base, non-system gesture mapped to OpenSubtitle in Navigation) to
+    // exercise the shortcut.
 
     @Test fun `inAppShortCircuit returning true prevents backend dispatch`() = runBlocking<Unit> {
         val (ir, _, _, b) = fixture()
@@ -229,16 +229,16 @@ class InteractionRouterTest {
             shortCircuited += action
             true   // claim we handled it
         }
-        ir.onGesture(Gesture.LONG_PRESS_SWIPE_UP)   // Navigation maps LONG_PRESS_SWIPE_UP → Notifications
-        assertEquals(listOf<GlassAction>(GlassAction.Notifications), shortCircuited.toList())
+        ir.onGesture(Gesture.TAP_SWIPE_UP)   // Navigation maps TAP_SWIPE_UP → OpenSubtitle
+        assertEquals(listOf<GlassAction>(GlassAction.OpenSubtitle), shortCircuited.toList())
         assertTrue(b.dispatched.isEmpty(), "backend must be skipped when shortcut returns true")
     }
 
     @Test fun `inAppShortCircuit returning false falls through to backend dispatch`() = runBlocking<Unit> {
         val (ir, _, _, b) = fixture()
         ir.inAppShortCircuit = { false }
-        ir.onGesture(Gesture.LONG_PRESS_SWIPE_UP)
-        assertEquals(listOf<GlassAction>(GlassAction.Notifications), b.dispatched)
+        ir.onGesture(Gesture.TAP_SWIPE_UP)
+        assertEquals(listOf<GlassAction>(GlassAction.OpenSubtitle), b.dispatched)
     }
 
     @Test fun `inAppShortCircuit is NOT consulted for in-app pseudo-actions`() = runBlocking<Unit> {

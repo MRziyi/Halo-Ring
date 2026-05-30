@@ -64,7 +64,7 @@ class GestureSynthesizerTest {
 
     @Test fun `optimistic single-tap followed by a real second tap yields TAP then DOUBLE_TAP`() {
         // documented trade-off of optimistic mode (§20.3)
-        val (syn, sched, out) = fixture(GestureConfig(optimisticSingleTap = true, awaitCombos = true))
+        val (syn, sched, out) = fixture(GestureConfig(optimisticSingleTap = true, enableTapSwipe = true, enableDoubleTapSwipe = true))
         syn.onRaw(RawGesture.TOUCH, nowMs = 0)
         syn.onRaw(RawGesture.TOUCH, nowMs = 150)
         // immediate TAP from optimistic; DOUBLE_TAP after the combo window
@@ -76,7 +76,7 @@ class GestureSynthesizerTest {
     // ── double tap (conservative, awaitCombos) ───────────────────────────────────────────────────
 
     @Test fun `double tap waits the combo window then emits DOUBLE_TAP`() {
-        val (syn, sched, out) = fixture(GestureConfig(optimisticSingleTap = false, awaitCombos = true, comboWindowMs = 300))
+        val (syn, sched, out) = fixture(GestureConfig(optimisticSingleTap = false, enableTapSwipe = true, enableDoubleTapSwipe = true, comboWindowMs = 300))
         syn.onRaw(RawGesture.TOUCH, nowMs = 0)
         syn.onRaw(RawGesture.TOUCH, nowMs = 150)
         assertEquals(emptyList<Gesture>(), out)
@@ -86,8 +86,13 @@ class GestureSynthesizerTest {
         assertEquals(listOf(Gesture.DOUBLE_TAP), out)
     }
 
-    @Test fun `double tap (no awaitCombos) fires immediately on 2nd tap`() {
-        val (syn, _, out) = fixture(GestureConfig(optimisticSingleTap = false, awaitCombos = false))
+    @Test fun `double tap fires immediately on 2nd tap when no combo or triple to await`() {
+        // DOUBLE_TAP commits on the 2nd tap only when there's nothing left to wait for: no 双击组合
+        // swipe (enableDoubleTapSwipe) AND no 3rd tap (enableTripleTap/Quad).
+        val (syn, _, out) = fixture(GestureConfig(
+            optimisticSingleTap = false, enableTapSwipe = false, enableDoubleTapSwipe = false,
+            enableTripleTap = false, enableQuadrupleTap = false,
+        ))
         syn.onRaw(RawGesture.TOUCH, nowMs = 0)
         syn.onRaw(RawGesture.TOUCH, nowMs = 100)
         assertEquals(listOf(Gesture.DOUBLE_TAP), out)
@@ -106,7 +111,7 @@ class GestureSynthesizerTest {
 
     @Test fun `with enableTripleTap=false a 3rd tap collapses to DOUBLE_TAP`() {
         val (syn, sched, out) = fixture(GestureConfig(
-            optimisticSingleTap = false, awaitCombos = true, enableTripleTap = false,
+            optimisticSingleTap = false, enableTapSwipe = true, enableDoubleTapSwipe = true, enableTripleTap = false,
         ))
         syn.onRaw(RawGesture.TOUCH, nowMs = 0)
         syn.onRaw(RawGesture.TOUCH, nowMs = 100)
@@ -118,7 +123,7 @@ class GestureSynthesizerTest {
     // ── combos ───────────────────────────────────────────────────────────────────────────────────
 
     @Test fun `double-tap then swipe up within combo window emits DOUBLE_TAP_SWIPE_UP only`() {
-        val (syn, sched, out) = fixture(GestureConfig(optimisticSingleTap = false, awaitCombos = true, comboWindowMs = 300))
+        val (syn, sched, out) = fixture(GestureConfig(optimisticSingleTap = false, enableTapSwipe = true, enableDoubleTapSwipe = true, comboWindowMs = 300))
         syn.onRaw(RawGesture.TOUCH, nowMs = 0)
         syn.onRaw(RawGesture.TOUCH, nowMs = 120)
         syn.onRaw(RawGesture.SWIPE_UP, nowMs = 250)
@@ -127,7 +132,7 @@ class GestureSynthesizerTest {
     }
 
     @Test fun `swipe down after the combo window is just a plain SWIPE_DOWN`() {
-        val (syn, sched, out) = fixture(GestureConfig(optimisticSingleTap = false, awaitCombos = true, comboWindowMs = 300))
+        val (syn, sched, out) = fixture(GestureConfig(optimisticSingleTap = false, enableTapSwipe = true, enableDoubleTapSwipe = true, comboWindowMs = 300))
         syn.onRaw(RawGesture.TOUCH, nowMs = 0)
         syn.onRaw(RawGesture.TOUCH, nowMs = 100)
         sched.advanceBy(350)                       // window expires → DOUBLE_TAP fires

@@ -61,7 +61,7 @@
     <string name="settings_section_ring">戒指</string>
     <string name="ring_info_title">戒指信息</string>
     <string name="profiles_gestures_header">手势工具</string>
-    <string name="settings_section_power">功耗 &amp; 连接</string>
+    <string name="settings_section_power">手势组合</string>
     <string name="settings_section_bt_internet">蓝牙网络</string>
     <string name="bt_internet_title">蓝牙网络</string>
     <string name="bt_internet_body">通过蓝牙使用手机的流量上网。安卓每次重启都会把手机的「互联网访问」开关关掉，Halo Ring 可以帮你自动重新打开。</string>
@@ -164,6 +164,7 @@
     <string name="profile_editor_edit_cta">编辑</string>
     <string name="profile_editor_system_value">（系统）›</string>
     <string name="profile_editor_footer">带标记的手势同时承担系统功能，但仍可在此重新绑定。</string>
+    <string name="profile_combo_disabled">在手势组合中开启</string>
     <string name="gesture_role_wake">唤醒</string>
     <string name="gesture_role_sleep">锁屏</string>
     <string name="profiles_list_footer">前台 app 切换时自动切换配置（需启用辅助功能）。无手动切换。</string>
@@ -228,7 +229,17 @@
     <string name="ring_pairing_done">配对完成 ✓</string>
 
     <!-- 功耗 &amp; 连接 -->
-    <string name="power_title">功耗 &amp; 连接</string>
+    <string name="power_title">手势组合设置</string>
+    <string name="combo_enable">启用</string>
+    <string name="combo_single_title">单击组合</string>
+    <string name="combo_single_desc">单击后接滑动 → 单击上 / 单击下。（双击始终可用）</string>
+    <string name="combo_single_window">单击组合窗口</string>
+    <string name="combo_double_title">双击组合</string>
+    <string name="combo_double_desc">双击后接滑动 → 双击上 / 双击下。</string>
+    <string name="combo_double_window">双击组合窗口</string>
+    <string name="combo_long_title">长按组合</string>
+    <string name="combo_long_desc">长按后接滑动 → 长按上 / 长按下；以及双长按。</string>
+    <string name="combo_long_window">长按组合窗口</string>
     <string name="power_multi_tap_window">连击窗口</string>
     <string name="power_combo_window">组合窗口</string>
     <string name="power_long_press_followup">长按后续窗口</string>
@@ -252,10 +263,9 @@
     <string name="power_section_timing_label">时间窗口</string>
     <string name="power_section_latency_label">延迟开关</string>
     <string name="power_section_connection_label">连接（自动）</string>
-    <string name="power_section_ring_label">戒指</string>
-    <string name="power_ring_sleep_title">戒指休眠</string>
-    <string name="power_ring_sleep_desc">最后一次触摸后过这么久，触摸传感器休眠。越短越省戒指电；越长则第一次触摸始终即时。</string>
-    <string name="power_ring_sleep_unit_min">%1$d 分钟</string>
+    <string name="ring_sleep_title">戒指休眠</string>
+    <string name="ring_sleep_desc">最后一次触摸后过这么久，触摸传感器休眠。越短越省戒指电；越长则第一次触摸始终即时。</string>
+    <string name="ring_sleep_unit_min">%1$d 分钟</string>
     <string name="power_active_profile_caption">编辑当前配置：%1$s</string>
     <string name="power_multi_tap_desc">两次触摸之间最大间隔，仍算同一连击。</string>
     <string name="power_combo_desc">双击之后等多久接收随后的滑动。</string>

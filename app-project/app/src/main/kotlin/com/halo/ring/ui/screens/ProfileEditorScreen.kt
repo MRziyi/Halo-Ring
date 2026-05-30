@@ -29,6 +29,7 @@ import com.halo.ring.core.action.DefaultProfiles
 import com.halo.ring.core.action.GlassAction
 import com.halo.ring.core.action.KeyMapProfile
 import com.halo.ring.core.gesture.Gesture
+import com.halo.ring.core.gesture.GestureConfig
 
 /**
  * Settings → Profiles → <Profile> (mockup §3 E). One row per [Gesture], showing the action it fires.
@@ -52,14 +53,21 @@ fun ProfileEditorScreen(
             style = HaloType.Title,
             modifier = Modifier.padding(horizontal = ScreenPadding, vertical = 12.dp),
         )
+        val cfg = profile.gestureConfig
         Gesture.values().forEach { gesture ->
             if (gesture in HIDDEN_GESTURES) return@forEach
             val action = profile.actionFor(gesture)
             val roleRes = systemRoleRes(gesture, profile.id)
-            FocusableRow(onClick = { onGestureTapped(gesture) }) {
+            // Combo gestures are inert while their group switch (手势组合设置) is off — grey them and
+            // explain instead of letting the wearer bind something that can never fire (Zack 2026-05-30).
+            val comboOff = comboDisabled(gesture, cfg)
+            FocusableRow(onClick = { if (!comboOff) onGestureTapped(gesture) }) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(gestureFriendlyText(gesture), style = HaloType.Body)
-                    if (roleRes != null) {
+                    Text(
+                        gestureFriendlyText(gesture),
+                        style = HaloType.Body.copy(color = if (comboOff) HaloColors.Mute else HaloColors.Fg),
+                    )
+                    if (roleRes != null && !comboOff) {
                         Spacer(Modifier.width(6.dp))
                         // System-role badge — informational; the binding below is still editable.
                         Text(
@@ -69,9 +77,11 @@ fun ProfileEditorScreen(
                     }
                 }
                 Text(
-                    text = actionFriendlyText(action),
+                    text = if (comboOff) stringResource(R.string.profile_combo_disabled)
+                           else actionFriendlyText(action),
                     style = HaloType.RowVal.copy(
-                        color = if (action is GlassAction.None) HaloColors.Mute else HaloColors.Fg,
+                        color = if (comboOff || action is GlassAction.None) HaloColors.Mute else HaloColors.Fg,
+                        fontSize = if (comboOff) 11.sp else HaloType.RowVal.fontSize,
                     ),
                 )
             }
@@ -92,6 +102,15 @@ private fun systemRoleRes(g: Gesture, profileId: String): Int? = when (g) {
     Gesture.DOUBLE_TAP -> R.string.gesture_role_wake
     Gesture.LONG_PRESS -> if (profileId == DefaultProfiles.DEFAULT_FALLBACK_ID) R.string.gesture_role_sleep else null
     else -> null
+}
+
+/** True when [g] belongs to a combo group whose switch is OFF in [cfg] (Settings → 手势组合设置),
+ *  so it can never fire and shouldn't be bindable. */
+private fun comboDisabled(g: Gesture, cfg: GestureConfig): Boolean = when (g) {
+    Gesture.TAP_SWIPE_UP, Gesture.TAP_SWIPE_DOWN -> !cfg.enableTapSwipe
+    Gesture.DOUBLE_TAP_SWIPE_UP, Gesture.DOUBLE_TAP_SWIPE_DOWN -> !cfg.enableDoubleTapSwipe
+    Gesture.LONG_PRESS_SWIPE_UP, Gesture.LONG_PRESS_SWIPE_DOWN, Gesture.DOUBLE_LONG_PRESS -> !cfg.awaitLongPressCombos
+    else -> false
 }
 
 // QUADRUPLE_TAP (disabled) + WRIST_SHAKE (unrouted) — hidden from the editor.

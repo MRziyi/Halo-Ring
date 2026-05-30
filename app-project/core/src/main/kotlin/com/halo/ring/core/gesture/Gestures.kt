@@ -56,13 +56,16 @@ enum class Gesture {
  *                          tap-count. ~120ms is the human double-tap floor; ~280ms is comfortable.
  * @param comboWindowMs     After a *double*-tap, how long to wait for a following swipe (→
  *                          DOUBLE_TAP_SWIPE_*). Also delays a bare DOUBLE_TAP by this much if
- *                          `awaitCombos` is true, so keep it modest (~300ms).
+ *                          `enableDoubleTapSwipe` is true, so keep it modest (~300ms).
  * @param optimisticSingleTap  Emit TAP immediately on the first TOUCH (latency ≈ 0) instead of
  *                          waiting out `multiTapWindowMs`. Trade-off: a fast double-tap then
  *                          produces TAP *then* DOUBLE_TAP.
- * @param awaitCombos       After a double-tap, wait `comboWindowMs` to see whether a swipe follows
- *                          before committing the bare DOUBLE_TAP. Off → DOUBLE_TAP fires
- *                          immediately on the 2nd tap and no DOUBLE_TAP_SWIPE_* is possible.
+ * @param enableTapSwipe    "单击组合": allow a swipe right after a single TAP → TAP_SWIPE_UP/DOWN.
+ *                          Off → a swipe with a tap pending is just the bare swipe. DOUBLE_TAP is
+ *                          unaffected (always recognised).
+ * @param enableDoubleTapSwipe "双击组合": after a double-tap, wait `comboWindowMs` for a swipe →
+ *                          DOUBLE_TAP_SWIPE_*. Off → DOUBLE_TAP fires immediately on the 2nd tap and
+ *                          no DOUBLE_TAP_SWIPE_* is possible.
  * @param enableTripleTap   If false, ≥3 taps collapse to DOUBLE_TAP.
  * @param enableQuadrupleTap If false, ≥4 taps collapse to TRIPLE_TAP (or DOUBLE_TAP if Triple is
  *                          also disabled). Enabled by default — it's the system PeekHud handle.
@@ -97,18 +100,24 @@ data class GestureConfig(
     // sweet spot — still ~80 ms faster than the old 300 ms, double-tap stays reliable. Profiles
     // needing instant taps set optimisticSingleTap.
     val multiTapWindowMs: Long = 220,
-    // Widened 300 → 400 ms (2026-05-27): the window after a DOUBLE_TAP to land a follow-up swipe.
-    // Combos (DOUBLE_TAP_SWIPE) were hard to train at 300 ms — the double-tap committed (= Back!)
-    // before the user got the swipe out. 400 ms gives comfortable slack.
-    val comboWindowMs: Long = 400,
+    // The "双击组合窗口": after a DOUBLE_TAP, how long to wait for a follow-up swipe → DOUBLE_TAP_SWIPE.
+    // Default 300 ms (Zack 2026-05-30). Only used when [enableDoubleTapSwipe] is on.
+    val comboWindowMs: Long = 300,
     val optimisticSingleTap: Boolean = false,
-    val awaitCombos: Boolean = true,
+    // ── Combo enables (Settings → 手势组合设置). Three independent groups (Zack 2026-05-30): ──
+    // 单击组合 = the single-tap-initiated swipe combos TAP_SWIPE_UP/DOWN. DOUBLE_TAP itself always
+    // works (it's = Back) and isn't gated here. Default ON.
+    val enableTapSwipe: Boolean = true,
+    // 双击组合 = DOUBLE_TAP_SWIPE_UP/DOWN (was the old `awaitCombos`, which also — wrongly — gated
+    // TAP_SWIPE; now split). Default OFF.
+    val enableDoubleTapSwipe: Boolean = false,
     val enableTripleTap: Boolean = true,
     // Disabled by default (user 2026-05-28: "4击用不上，操作太复杂"). ≥4 taps now collapse to
     // TRIPLE_TAP. QUADRUPLE_TAP is no longer emitted, bound, or offered in the picker.
     val enableQuadrupleTap: Boolean = false,
 
-    val awaitLongPressCombos: Boolean = true,
+    // 长按组合 = LONG_PRESS_SWIPE_UP/DOWN + DOUBLE_LONG_PRESS. Default OFF (Zack 2026-05-30).
+    val awaitLongPressCombos: Boolean = false,
     // On-glasses tuning: 400 → 120 → 280 → 60 → 30 ms. The user kept finding bare LONG_PRESS too
     // slow and asked to halve the follow-up window each time; now 30 ms — effectively instant after
     // the firmware's hold-to-register floor (which is the real, unchangeable latency: the ring only

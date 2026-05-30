@@ -18,7 +18,10 @@ package com.halo.ring.core.gesture
  * ## Latency knobs (per profile, via [GestureConfig])
  * - `optimisticSingleTap`: fire TAP on the *first* TOUCH (latency ≈ 0) instead of after the tap
  *   window. Fast double-tap then yields TAP + DOUBLE_TAP — accepted trade-off.
- * - `awaitCombos`: off → DOUBLE_TAP fires immediately on the 2nd tap, no DOUBLE_TAP_SWIPE_*.
+ * - `enableTapSwipe` (单击组合): off → a swipe after a single tap is just the bare swipe (no
+ *   TAP_SWIPE_*). DOUBLE_TAP is unaffected — always recognised.
+ * - `enableDoubleTapSwipe` (双击组合): off → DOUBLE_TAP fires immediately on the 2nd tap, no
+ *   DOUBLE_TAP_SWIPE_*.
  * - `awaitLongPressCombos`: off → LONG_PRESS fires immediately, no long-press combos. Fast profile
  *   uses this.
  *
@@ -112,10 +115,18 @@ class GestureSynthesizer(
                 tapTimer = scheduler.postDelayed(config.multiTapWindowMs) { onTapWindowExpired(1) }
             }
             tapCount == 2 -> {
-                if (config.awaitCombos) {
-                    inComboWindow = true
-                    comboTimer = scheduler.postDelayed(config.comboWindowMs) {
-                        if (inComboWindow && tapCount == 2) {
+                // Hold the DOUBLE_TAP if EITHER a 双击组合 swipe (enableDoubleTapSwipe) OR a 3rd tap
+                // (enableTripleTap/Quad) could still follow — these are now independent. The window is
+                // the 双击组合窗口 (comboWindowMs) when waiting for a swipe, else the multi-tap window
+                // (just disambiguating DOUBLE vs TRIPLE). `inComboWindow` arms the DOUBLE_TAP_SWIPE
+                // path and is set ONLY when double-tap-swipe is enabled.
+                val waitForSwipe = config.enableDoubleTapSwipe
+                val waitForMoreTaps = config.enableTripleTap || config.enableQuadrupleTap
+                if (waitForSwipe || waitForMoreTaps) {
+                    inComboWindow = waitForSwipe
+                    val window = if (waitForSwipe) config.comboWindowMs else config.multiTapWindowMs
+                    comboTimer = scheduler.postDelayed(window) {
+                        if (tapCount == 2) {
                             inComboWindow = false
                             comboTimer = NoopCancellable
                             tapCount = 0
@@ -163,7 +174,7 @@ class GestureSynthesizer(
                 tapCount = 0
                 if (!config.optimisticSingleTap) emit(Gesture.TAP)  // optimistic already emitted
             }
-            n == 2 -> { if (!config.awaitCombos) { tapCount = 0; emit(Gesture.DOUBLE_TAP) } }
+            n == 2 -> { if (!config.enableDoubleTapSwipe) { tapCount = 0; emit(Gesture.DOUBLE_TAP) } }
             n == 3 -> {
                 tapCount = 0
                 // Window timed out at count 3 — no 4th coming. Commit the best we can recognize.
@@ -204,7 +215,7 @@ class GestureSynthesizer(
         // and the tap is NOT optimistic (optimistic already emitted the bare TAP, so a tap-combo
         // would double-fire). A bare swipe with no pending tap falls through to `plain` (instant —
         // keeps base-gesture nav snappy).
-        if (tapCount == 1 && config.awaitCombos && !config.optimisticSingleTap) {
+        if (tapCount == 1 && config.enableTapSwipe && !config.optimisticSingleTap) {
             tapTimer.cancel(); tapTimer = NoopCancellable
             tapCount = 0
             lastTapAtMs = Long.MIN_VALUE
@@ -264,7 +275,7 @@ class GestureSynthesizer(
         tapTimer.cancel(); tapTimer = NoopCancellable
         when {
             tapCount == 1 -> { if (!config.optimisticSingleTap) emit(Gesture.TAP) }
-            tapCount == 2 -> { if (!config.awaitCombos) emit(Gesture.DOUBLE_TAP) }
+            tapCount == 2 -> { if (!config.enableDoubleTapSwipe) emit(Gesture.DOUBLE_TAP) }
             tapCount == 3 -> { if (config.enableTripleTap) emit(Gesture.TRIPLE_TAP) }
             tapCount >= 4 -> { if (config.enableQuadrupleTap) emit(Gesture.QUADRUPLE_TAP)
                               else if (config.enableTripleTap) emit(Gesture.TRIPLE_TAP) }

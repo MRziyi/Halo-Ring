@@ -92,7 +92,8 @@ class ProfilesPrefsStore(private val context: Context) {
         .put("multiTapWindowMs",          c.multiTapWindowMs)
         .put("comboWindowMs",             c.comboWindowMs)
         .put("optimisticSingleTap",       c.optimisticSingleTap)
-        .put("awaitCombos",               c.awaitCombos)
+        .put("enableTapSwipe",            c.enableTapSwipe)
+        .put("enableDoubleTapSwipe",      c.enableDoubleTapSwipe)
         .put("enableTripleTap",           c.enableTripleTap)
         .put("enableQuadrupleTap",        c.enableQuadrupleTap)
         .put("awaitLongPressCombos",      c.awaitLongPressCombos)
@@ -153,7 +154,8 @@ class ProfilesPrefsStore(private val context: Context) {
             multiTapWindowMs          = j.optLong("multiTapWindowMs",          d.multiTapWindowMs),
             comboWindowMs             = j.optLong("comboWindowMs",             d.comboWindowMs),
             optimisticSingleTap       = j.optBoolean("optimisticSingleTap",    d.optimisticSingleTap),
-            awaitCombos               = j.optBoolean("awaitCombos",            d.awaitCombos),
+            enableTapSwipe            = j.optBoolean("enableTapSwipe",         d.enableTapSwipe),
+            enableDoubleTapSwipe      = j.optBoolean("enableDoubleTapSwipe",   d.enableDoubleTapSwipe),
             enableTripleTap           = j.optBoolean("enableTripleTap",        d.enableTripleTap),
             enableQuadrupleTap        = j.optBoolean("enableQuadrupleTap",     d.enableQuadrupleTap),
             awaitLongPressCombos      = j.optBoolean("awaitLongPressCombos",   d.awaitLongPressCombos),
