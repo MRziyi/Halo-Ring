@@ -19,7 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.unit.dp
@@ -218,27 +218,33 @@ fun HaloRingApp(
                     .onFocusChanged { contentHasFocus = it.hasFocus }
                     .focusRequester(contentFocus)
                     .focusGroup()
-                    .onKeyEvent { event ->
-                        // Focus-overflow tab switching (Zack 2026-05-29): when a swipe at the home
-                        // boundary can't move focus within the current tab (no focusable above/below),
-                        // the DPAD key bubbles up here unhandled. Cycle to the next/previous tab
-                        // (with wrap) and let the LaunchedEffect above re-anchor focus to the first
-                        // (DOWN) or last (UP) content element. Sub-screens get default behaviour.
-                        if (event.type != androidx.compose.ui.input.key.KeyEventType.KeyDown) return@onKeyEvent false
-                        if (top != null) return@onKeyEvent false
+                    .onPreviewKeyEvent { event ->
+                        // Focus-overflow tab switching (Zack 2026-05-29). We use **preview** + explicit
+                        // [focusManager.moveFocus] so the cycle ONLY fires when focus is genuinely at
+                        // the boundary: try to move within the tab first; if it moved, just consume
+                        // (we did the same job as the default DPAD handler). Only when moveFocus
+                        // returns false — meaning there's no focusable above/below — do we cycle
+                        // tabs. The earlier `onKeyEvent` approach fired before the focus search and
+                        // switched tabs on every swipe — the bug Zack hit.
+                        if (event.type != androidx.compose.ui.input.key.KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                        if (top != null) return@onPreviewKeyEvent false
                         val n = HomeTab.values().size
                         when (event.key) {
                             androidx.compose.ui.input.key.Key.DirectionDown -> {
-                                onSelectTab(HomeTab.values()[(homeTab.ordinal + 1) % n])
-                                pendingFocusEnd = false
-                                true
+                                if (!focusManager.moveFocus(androidx.compose.ui.focus.FocusDirection.Down)) {
+                                    onSelectTab(HomeTab.values()[(homeTab.ordinal + 1) % n])
+                                    pendingFocusEnd = false
+                                }
+                                true   // always consume DOWN on home (we either moved or cycled)
                             }
                             androidx.compose.ui.input.key.Key.DirectionUp -> {
-                                onSelectTab(HomeTab.values()[(homeTab.ordinal - 1 + n) % n])
-                                pendingFocusEnd = true
+                                if (!focusManager.moveFocus(androidx.compose.ui.focus.FocusDirection.Up)) {
+                                    onSelectTab(HomeTab.values()[(homeTab.ordinal - 1 + n) % n])
+                                    pendingFocusEnd = true
+                                }
                                 true
                             }
-                            else -> false
+                            else -> false   // left/right + others: default behaviour
                         }
                     },
             ) {
