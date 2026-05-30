@@ -90,11 +90,12 @@ enum class Gesture {
  *                          even right after ring auto-sleep). Verify count on real hardware.
  */
 data class GestureConfig(
-    // On-glasses tuning (2026-05-29): 300 → 220 ms. Every bare TAP waits this long to disambiguate
-    // from a forming DOUBLE_TAP (= Back), so it's the single biggest everyday-gesture latency. 220 ms
-    // shaves 80 ms off every select while still leaving comfortable slack for an intentional
-    // double-tap; only an unusually slow double-tap (220–300 ms between taps) risks being read as two
-    // singles. Profiles that need instant taps set optimisticSingleTap = true instead (see FAST).
+    // On-glasses tuning (2026-05-30): 300 → 220 → 200 → 220 ms. Every bare TAP waits this long to
+    // disambiguate from a forming DOUBLE_TAP (= Back), so it's the single biggest everyday-gesture
+    // latency (verified on-device: synth window was the whole ~286 ms a bare TAP took). 200 ms made
+    // the second tap of a double-tap too tight to land (Zack: "200ms 的双击有点短了"); 220 ms is the
+    // sweet spot — still ~80 ms faster than the old 300 ms, double-tap stays reliable. Profiles
+    // needing instant taps set optimisticSingleTap.
     val multiTapWindowMs: Long = 220,
     // Widened 300 → 400 ms (2026-05-27): the window after a DOUBLE_TAP to land a follow-up swipe.
     // Combos (DOUBLE_TAP_SWIPE) were hard to train at 300 ms — the double-tap committed (= Back!)

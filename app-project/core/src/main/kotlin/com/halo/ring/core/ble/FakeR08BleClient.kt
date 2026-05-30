@@ -74,7 +74,7 @@ class FakeR08BleClient(
         setConnectionState(ConnectionState.DISCONNECTED)
     }
 
-    override fun setTouchEnabled(enabled: Boolean) {
+    override fun setTouchEnabled(enabled: Boolean, sleepMin: Int) {
         if (lastTouchEnabledRequested == enabled) return
         lastTouchEnabledRequested = enabled
         sentCommands.add(if (enabled) Command.TOUCH_ENABLE else Command.TOUCH_DISABLE)

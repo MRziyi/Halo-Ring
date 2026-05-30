@@ -144,7 +144,17 @@ fun HaloRingApp(
         // without touching the nav stack) so focus lands on the new tab's first content element.
         androidx.compose.runtime.LaunchedEffect(topKey, homeTab) {
             contentHasFocus = false
-            repeat(12) {
+            // Keep requesting until focus is *confirmed* landed. The budget must cover the worst case:
+            // the FIRST cold-launch home frame, where the focusable content (RECONNECT/FIND buttons)
+            // hasn't been placed yet, so requestFocus silently no-ops. The old 12×120 ms (1.44 s)
+            // budget sometimes expired before that first frame composed on the glasses — and once the
+            // loop gave up there was NO recovery (the onPreviewKeyEvent handler below only receives
+            // DPAD events while something in the group holds focus, so with no cursor the wearer's
+            // swipes went nowhere and they had to exit + re-enter — Zack 2026-05-30). Re-entry worked
+            // only because the second attempt ran warm. So we extend the budget to ~9.6 s; warm
+            // entries still land in the first try and return immediately, so this costs nothing when
+            // composition is fast.
+            repeat(80) {
                 if (contentHasFocus) {
                     // If we got here by overflowing UPward into the previous tab, walk the focus
                     // down until it can't move — lands on the last content element.
@@ -381,6 +391,8 @@ fun HaloRingApp(
                         else PowerConnectionScreen(
                             activeProfile = active,
                             onActiveProfileUpdated = onProfileUpdated,
+                            touchSleepMin = advancedPrefs.touchSleepMin,
+                            onTouchSleepMinChanged = { onAdvancedPrefsChanged(advancedPrefs.copy(touchSleepMin = it)) },
                         )
                     }
 

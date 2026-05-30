@@ -30,6 +30,10 @@ data class AdvancedPrefs(
     /** When true, re-enable the phone's Bluetooth "Internet access" (PAN) on every boot via the
      *  accessibility UI flow — Android resets that toggle on reboot. Off by default. */
     val btInternetAutoBoot: Boolean = false,
+    /** Touch-IC idle-sleep timeout in minutes (SPEC v3 §4.10 `sleepMin`): how long the ring's touch
+     *  sensor stays awake after the last touch before sleeping to save battery. Shorter = better ring
+     *  battery, slower first-touch wake. Surfaced in Settings → Power & Connection → Ring sleep. */
+    val touchSleepMin: Int = com.halo.ring.core.ble.R08Protocol.DEFAULT_TOUCH_SLEEP_MIN,
 )
 
 enum class AdvancedAction {

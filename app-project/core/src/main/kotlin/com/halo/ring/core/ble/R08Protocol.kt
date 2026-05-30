@@ -266,10 +266,14 @@ object R08Protocol {
      *  Sent ~500 ms after TOUCH_ENABLE; without this, the touch IC is on but never reports.
      *
      *  4th byte = `sleepMin` (SPEC §4.10 `[2,0,appType,sleepMin]`): how long the touch IC stays
-     *  awake before sleeping. Bumped 1 → 10 min (user 2026-05-28: "现在有点经常睡眠") so the ring
-     *  stops dozing off so often. Trade-off: a longer-awake touch IC costs a bit more battery; tune
-     *  this byte if it's too aggressive. */
-    val TOUCH_MODE: ByteArray    = command(OP_TOUCH_CONTROL, byteArrayOf(0x02, 0x00, TOUCH_APP_REPORT_ALL_GESTURES.toByte(), 0x0A))
+     *  awake after the LAST touch before sleeping. Longer = touch instantly ready for longer = a bit
+     *  more ring battery; shorter = sleeps sooner (saves battery) but the first touch after sleep may
+     *  lag. History: 1 → 10 min (user 2026-05-28: "现在有点经常睡眠"); now wearer-tunable in
+     *  Settings → Power & Connection → Ring sleep, default [DEFAULT_TOUCH_SLEEP_MIN]. */
+    fun touchModeCmd(sleepMin: Int): ByteArray =
+        command(OP_TOUCH_CONTROL, byteArrayOf(0x02, 0x00, TOUCH_APP_REPORT_ALL_GESTURES.toByte(), sleepMin.coerceIn(1, 255).toByte()))
+    /** Default touch-IC idle-sleep timeout in minutes (wearer-tunable). */
+    const val DEFAULT_TOUCH_SLEEP_MIN = 5
     // NOTE: the firmware wrist-shake event (SUB_RING_GAME_KEY 0x29) requires appType=7 (Game), and
     // the four touch gestures (SUB_TOUCH_GESTURE 0x2D) require appType=9 (REPORT_ALL_GESTURES).
     // appType is a single-slot mode selector — per SPEC v3 §4.10/§5.2 + on-device test (a dual-touch

@@ -128,9 +128,16 @@ class ProfilesPrefsStore(private val context: Context) {
             val triggers = obj.optJSONArray("triggerPackages")?.let { jt ->
                 List(jt.length()) { jt.getString(it) }
             } ?: emptyList()
+            val id = obj.getString("id")
+            // Respect the persisted gestureConfig: the timing windows ARE user-editable per profile
+            // via Settings → Power & Connection (CycleRow for multiTapWindowMs / comboWindowMs /
+            // longPressFollowupWindowMs + the latency toggles), so an earlier "always override from
+            // DefaultProfiles by id" shortcut would have silently reverted the wearer's edits on
+            // every app restart. To pick up a NEW code default on an already-seeded device, use
+            // Settings → Profiles → "Restore default bindings" (re-seeds from DefaultProfiles).
             out += KeyMapProfile(
-                id = obj.getString("id"),
-                name = obj.optString("name", obj.getString("id")),
+                id = id,
+                name = obj.optString("name", id),
                 map = bindings,
                 gestureConfig = decodeConfig(obj.optJSONObject("config")),
                 triggerPackages = triggers,

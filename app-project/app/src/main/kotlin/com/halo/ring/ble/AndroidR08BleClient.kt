@@ -154,6 +154,7 @@ class AndroidR08BleClient(
      * connection re-issues the writes.
      */
     @Volatile private var lastTouchEnabledRequested: Boolean? = null
+    @Volatile private var lastTouchSleepMinRequested: Int? = null
     @Volatile private var lastIntervalModeRequested: PowerPolicy.IntervalMode? = null
 
     /** Pure JVM-testable BLE interval estimator (see :core `ConnIntervalEstimatorTest`). */
@@ -308,6 +309,7 @@ class AndroidR08BleClient(
             gatt = null
             writeChar = null
             lastTouchEnabledRequested = null
+            lastTouchSleepMinRequested = null
             lastIntervalModeRequested = null
             lastBytes = null
             lastBytesAt = 0L
@@ -316,21 +318,31 @@ class AndroidR08BleClient(
         }
     }
 
-    override fun setTouchEnabled(enabled: Boolean) {
+    override fun setTouchEnabled(enabled: Boolean, sleepMin: Int) {
         scheduler.post {
             // Talking to the ring when we're not connected is pointless — and used to spam
             // `writeChar not yet available` once per reconcile cycle. Now silently ignored.
             if (state != ConnectionState.READY) return@post
             // Doc/13 §audit-2026-05-13j: reconcilePower fires on every BLE event, so without
-            // this guard every gesture writes TOUCH_ENABLE + TOUCH_MODE redundantly. The flag
-            // is cleared on disconnect so a fresh connection re-arms the writes.
-            if (lastTouchEnabledRequested == enabled) return@post
+            // this guard every gesture writes TOUCH_ENABLE + TOUCH_MODE redundantly. The flags
+            // are cleared on disconnect so a fresh connection re-arms the writes.
+            val wasEnabled = lastTouchEnabledRequested == true
+            if (lastTouchEnabledRequested == enabled && lastTouchSleepMinRequested == sleepMin) return@post
             lastTouchEnabledRequested = enabled
-            writeBytes(if (enabled) R08Protocol.TOUCH_ENABLE else R08Protocol.TOUCH_DISABLE)
-            if (enabled) {
+            lastTouchSleepMinRequested = sleepMin
+            if (!enabled) {
+                writeBytes(R08Protocol.TOUCH_DISABLE)
+                return@post
+            }
+            if (!wasEnabled) {
+                // Fresh enable: TOUCH_ENABLE, then TOUCH_MODE (carrying the sleep timeout) ~500 ms later.
+                writeBytes(R08Protocol.TOUCH_ENABLE)
                 scheduler.postDelayed(500L) {
-                    if (state == ConnectionState.READY) writeBytes(R08Protocol.TOUCH_MODE)
+                    if (state == ConnectionState.READY) writeBytes(R08Protocol.touchModeCmd(sleepMin))
                 }
+            } else {
+                // Already enabled, only the sleep timeout changed — re-send TOUCH_MODE alone.
+                writeBytes(R08Protocol.touchModeCmd(sleepMin))
             }
         }
     }
@@ -697,6 +709,7 @@ class AndroidR08BleClient(
                         // reconcilePower writes a fresh connection priority. Stale flags would
                         // suppress these and leave the ring with no touch IC after reconnect.
                         lastTouchEnabledRequested = null
+                        lastTouchSleepMinRequested = null
                         lastIntervalModeRequested = null
                         // autoConnect=false has no OS auto-reconnect. Close the dead GATT and,
                         // if we still want a connection (not an intentional stop()), re-scan for
@@ -971,7 +984,15 @@ class AndroidR08BleClient(
             }
         }
         scheduler.postDelayed(1500L) {
-            if (state == ConnectionState.READY) writeBytes(R08Protocol.TOUCH_MODE)
+            // Only assert the DEFAULT sleep timeout if the service hasn't already configured touch:
+            // reconcilePower() runs on the READY transition (before this +1500 ms fires) and calls
+            // setTouchEnabled(worn, wearerSleepMin), which sets lastTouchSleepMinRequested. If we
+            // unconditionally wrote touchModeCmd(DEFAULT) here it would clobber a non-default sleepMin
+            // back to 5 until the next reconcile. So skip when the sleep timeout is already set.
+            if (state == ConnectionState.READY && lastTouchSleepMinRequested == null) {
+                writeBytes(R08Protocol.touchModeCmd(R08Protocol.DEFAULT_TOUCH_SLEEP_MIN))
+                lastTouchSleepMinRequested = R08Protocol.DEFAULT_TOUCH_SLEEP_MIN
+            }
         }
     }
 

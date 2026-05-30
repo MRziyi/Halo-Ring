@@ -52,8 +52,10 @@ interface R08BleClient {
     fun startDiscovery()
     fun stopDiscovery()
 
-    /** Send `TOUCH_ENABLE` / `TOUCH_DISABLE` (and re-send `TOUCH_MODE` on enable). */
-    fun setTouchEnabled(enabled: Boolean)
+    /** Send `TOUCH_ENABLE` / `TOUCH_DISABLE` (and `TOUCH_MODE` with [sleepMin] on enable). [sleepMin]
+     *  is the touch-IC idle-sleep timeout in minutes; a change while already enabled re-sends only
+     *  `TOUCH_MODE`. */
+    fun setTouchEnabled(enabled: Boolean, sleepMin: Int = R08Protocol.DEFAULT_TOUCH_SLEEP_MIN)
     /** Query battery now (response arrives async via [events]). */
     fun queryBattery()
     /** Blink the ring LED ("find my ring"). */

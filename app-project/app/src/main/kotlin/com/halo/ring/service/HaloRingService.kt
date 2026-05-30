@@ -86,6 +86,8 @@ class HaloRingService : Service() {
     private var lastWornMs: Long = Long.MIN_VALUE
     private var worn: Boolean = false
     private var screenOnState: Boolean = true
+    /** Touch-IC idle-sleep timeout (min), mirrored from AdvancedPrefs; passed to setTouchEnabled. */
+    private var touchSleepMin: Int = com.halo.ring.core.ble.R08Protocol.DEFAULT_TOUCH_SLEEP_MIN
     /** Charging-milestone HUD state. [wasCharging] tracks edges (dock-in / unplug); the highest
      *  percentage threshold already announced this charging session lives in [lastChargeMilestone]
      *  so the ~60 s `0x73` sub-0C heartbeats while % rises don't re-fire. Reset on unplug. */
@@ -280,9 +282,18 @@ class HaloRingService : Service() {
                 // v0.4: distinct per-gesture audio feedback (eyes-off confirmation). Fired for
                 // every recognised gesture, even base/system ones, so the wearer hears *what* the
                 // ring understood. Gated by the "UI click sound" feedback pref.
-                com.halo.ring.ui.GestureSounds.play(gesture)
-                if (feedbackPrefs.gestureHintHud && action !is GlassAction.None) {
-                    hud?.show(HudEvent.GestureRecognised(gesture, action))
+                //
+                // P-latency (2026-05-29): this callback runs SYNCHRONOUSLY inside the router, BEFORE
+                // it dispatches the action (InteractionRouter.onGesture: onGestureRecognized(...) then
+                // dispatch(...)). The hint-HUD's WindowManager.addView is ~30 ms — measured on-device
+                // as the bulk of a gesture's "dispatch" time — so doing it inline delayed the actual
+                // input injection by that much. Defer the cosmetic sound + HUD to a separate launch
+                // so the action fires first; a frame-late hint is imperceptible.
+                serviceScope.launch {
+                    com.halo.ring.ui.GestureSounds.play(gesture)
+                    if (feedbackPrefs.gestureHintHud && action !is GlassAction.None) {
+                        hud?.show(HudEvent.GestureRecognised(gesture, action))
+                    }
                 }
                 // Doc/18 §5 — fire targeted broadcast for external plugin actions. Defensive: skip
                 // if the owning plugin is no longer installed (binding survived an uninstall via
@@ -448,16 +459,18 @@ class HaloRingService : Service() {
                     }
                 }
                 is RingEvent.TouchStatus -> {
-                    // SPEC v3 §5.2 row 0x2A: this echo fires (a) after TOUCH_MODE writes during
-                    // bootstrap, with byte=0 (ACTIVE), and (b) on charging-dock insertion, with
-                    // byte=1 (DISABLED). It does NOT fire on finger removal. So we only treat the
-                    // disabled→worn=false direction as meaningful (dock = definitely off-finger);
-                    // the enabled echo is a TOUCH_MODE-write side-effect and would clobber the
-                    // wearProvider's real state with a false-positive "worn=true" at every reconnect.
-                    Log.d(TAG, "ring touch IC enabled=${event.enabled}")
-                    // No HUD here — 0x2A only fires on dock-insertion (per SPEC §10.6); the
-                    // charging HUD already covers that case. Just update the wear state.
-                    if (!event.enabled) onRingWorn(false, showHud = false)
+                    // SPEC v3 §10.6 / §5.2: `0x2A` is the touch-IC POWER-state echo (fires after
+                    // TOUCH_MODE writes, on charging-dock insertion, and — as observed on-device
+                    // 2026-05-29 — when the firmware autonomously dozes the touch IC after
+                    // `sleepMin`). It is NOT a wear signal: the touch IC can be disabled while the
+                    // ring is firmly on a finger (we send TOUCH_DISABLE for power, or the ~10 min
+                    // doze fires). Conflating `enabled=false` with "ring off the user" caused the
+                    // PowerPolicy to tear down the link mid-session — bug 2026-05-29.
+                    // Per SPEC v3 there is NO continuous ring-side worn/off-finger event; the only
+                    // ring-wear evidence the firmware emits is `0x69 err=0x02` during a PPG snapshot
+                    // (handled in [AndroidR08BleClient] + the Vitals "wear-detect fail" HUD). So
+                    // glasses-side wear (`wearProvider`) is the only source feeding [worn].
+                    Log.d(TAG, "ring touch IC power state echo: enabled=${event.enabled} (informational, does not flip wear)")
                 }
                 is RingEvent.Health -> {
                     val prev = graph.vitalsSnapshotFlow.value
@@ -603,7 +616,10 @@ class HaloRingService : Service() {
                     // command-channel writes complete first; otherwise the writes can collide.
                     graph.scheduler.postDelayed(2_500L) {
                         val vp = graph.vitalsPrefsFlow.value
-                        graph.bleClient.setHrAutoMonitor(vp.ringAutonomousPpgEnabled, intervalMinutes = 30)
+                        // Always disable the ring's own autonomous HR-only `0x16` monitor: vitals
+                        // auto-detection (app-driven HR+SpO₂, VitalsPrefs.vitalsAutoDetectEnabled) now
+                        // owns the cadence, so leaving `0x16` on would double-measure (extra LED drain).
+                        graph.bleClient.setHrAutoMonitor(false, intervalMinutes = 30)
                         // SPEC §4.9: firmware silently drops steps < 100; the client coerces.
                         graph.bleClient.setDailyTarget(
                             steps = vp.dailyStepTarget,
@@ -769,6 +785,12 @@ class HaloRingService : Service() {
         val advancedJob = serviceScope.launch {
             graph.advancedPrefsFlow.collectLatest { p ->
                 graph.latencyLogger.enabled = p.latencyMeasurementEnabled
+                // Touch-IC sleep timeout (SPEC v3 §4.10): cache it and re-apply via reconcilePower so
+                // a change takes effect immediately (re-sends TOUCH_MODE if the ring is worn+enabled).
+                if (touchSleepMin != p.touchSleepMin) {
+                    touchSleepMin = p.touchSleepMin
+                    reconcilePower()
+                }
             }
         }
         cleanup += { advancedJob.cancel() }
@@ -782,7 +804,7 @@ class HaloRingService : Service() {
             graph.vitalsPrefsFlow.collectLatest { p ->
                 graph.vitalsLogger.enabled = p.csvExportEnabled
                 snapshotJob?.cancel()
-                snapshotJob = if (p.autoSnapshotIntervalMin > 0) {
+                snapshotJob = if (p.vitalsAutoDetectEnabled && p.autoSnapshotIntervalMin > 0) {
                     serviceScope.launch { runVitalsAutoSnapshot(p) }
                 } else null
                 // v0.4 C6 + energy fix 2: the spatial toggle is the master switch; the actual
@@ -1057,15 +1079,20 @@ class HaloRingService : Service() {
     }
 
     /**
-     * Update wear state from one of two sources:
-     *  - `0x2A` TOUCH_STATUS_ECHO (ring side; **only** fires on dock-insertion, NOT on finger
-     *    removal — SPEC v3 §10.6). Calls with [showHud] = false so the dock case doesn't double
-     *    up with the charging HUD that also fires on dock-in.
-     *  - The [graph.wearProvider] observer (fused glasses-side signal — Rokid sysprop /
-     *    RayNeo Mercury proximity + screen-on heuristic). Calls with [showHud] = true; this is
-     *    the *best proxy* we have for "ring on the user's hand" since the firmware doesn't push
-     *    a finger-on/off event. It's not perfect (it tracks the glasses, which usually correlate
-     *    with the ring being worn) but it's the only signal we get.
+     * Update wear state. Driven **solely by the glasses-side wear provider** (Rokid `is_take_on`
+     * sysprop / RayNeo Mercury + screen heuristic) — the only continuous, reliable signal we have.
+     *
+     * Per SPEC v3, the ring firmware does NOT push a continuous worn/off-finger event:
+     *  - `0x2A` is a touch-IC power-state echo (handled above as informational only — it fires for
+     *    TOUCH_MODE writes, dock-insertion, and the firmware's ~10 min touch-IC doze; conflating it
+     *    with "off-finger" tore down the link mid-session on 2026-05-29).
+     *  - `0x69 err=0x02` is the only authentic ring wear-detect, but it's a one-shot during a PPG
+     *    measurement, not a persistent state — surfaced in the Vitals flow, not here.
+     *
+     * The glasses-wear signal is an imperfect proxy for "ring on hand" (someone could wear the
+     * glasses while the ring is off, or vice versa) but it's strongly correlated with active use
+     * and is what we use to gate the power-policy disconnect. The `showHud` flag is kept so the
+     * ring-on/off HUD notice only fires on a real user transition.
      */
     private fun onRingWorn(worn: Boolean, showHud: Boolean = true) {
         if (this.worn == worn) return
@@ -1124,7 +1151,7 @@ class HaloRingService : Service() {
                 nowMs = now,
             )
         )
-        graph.bleClient.setTouchEnabled(decision.touchEnabled)
+        graph.bleClient.setTouchEnabled(decision.touchEnabled, touchSleepMin)
         graph.bleClient.setIntervalMode(decision.intervalMode)
         if (decision.disconnect) {
             Log.i(TAG, "PowerPolicy: not worn for ${PowerPolicy.NOT_WORN_DISCONNECT_MS} ms → disconnect")

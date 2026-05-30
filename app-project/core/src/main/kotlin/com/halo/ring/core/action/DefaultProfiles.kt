@@ -19,8 +19,9 @@ import com.halo.ring.core.gesture.GestureConfig
  *  - **Camera**: auto-activates on the Sprite CameraActivity (restored 2026-05-29 once we found the
  *    non-bouncing launch path). TAP→DPAD_CENTER passes through as shutter.
  *  - `DOUBLE_TAP` = Back (exit) in every profile — invariant. Also wakes the screen when off (system).
- *  - `TRIPLE_TAP` = Home (回主页) — a **preset** default in every profile, but rebindable per-profile
- *    via the editor (user 2026-05-29: "三击截屏不是系统级,而是预设的自定义手势").
+ *  - `TRIPLE_TAP` is **unbound by default** in every profile — reserved for the user to set in the
+ *    editor (user 2026-05-29: tried Screenshot then Home as presets; both dropped — Home injection
+ *    silently filtered by Android's policy on this Rokid build, so triple-tap stays empty for now).
  *
  * NOTE: these are *seed* defaults. Once the wearer's profiles are persisted ([ProfilesPrefsStore]),
  * changing these does NOT retroactively update a device — use Settings → Profiles → "Restore default
@@ -42,7 +43,7 @@ object DefaultProfiles {
         id = "navigation",
         name = "Navigation",
         gestureConfig = GestureConfig(
-            multiTapWindowMs = 220,        // 300 → 220 (2026-05-29): faster bare TAP, double-tap still reliable
+            multiTapWindowMs = 220,        // 300→220→200→220 (2026-05-30): 200 made double-tap too tight; 220 is the sweet spot
             comboWindowMs = 400,
             optimisticSingleTap = false,
             awaitCombos = true,
@@ -54,7 +55,7 @@ object DefaultProfiles {
         map = systemSlots + mapOf(
             Gesture.TAP                   to GlassAction.Confirm,
             Gesture.DOUBLE_TAP            to GlassAction.Back,
-            Gesture.TRIPLE_TAP            to GlassAction.Home,             // preset = 回主页, per-profile rebindable (user 2026-05-29)
+            Gesture.TRIPLE_TAP            to GlassAction.None,             // unbound — reserved for user-custom (preset Home dropped 2026-05-29: agent's HOME injection silently filtered on this Rokid build)
             Gesture.SWIPE_UP              to GlassAction.NavPrev,
             Gesture.SWIPE_DOWN            to GlassAction.NavNext,
             // LONG_PRESS in the fallback profile = system screen-sleep (handled by InteractionRouter
@@ -77,7 +78,7 @@ object DefaultProfiles {
         id = "media",
         name = "Media",
         gestureConfig = GestureConfig(
-            multiTapWindowMs = 220,                // 300 → 220 (2026-05-29): faster play/pause tap
+            multiTapWindowMs = 220,                // 300→220→200→220 (2026-05-30): 200 made double-tap too tight
             comboWindowMs = 400,
             optimisticSingleTap = false,           // keep double-tap = exit reliable
             awaitCombos = true,
@@ -88,7 +89,7 @@ object DefaultProfiles {
         map = systemSlots + mapOf(
             Gesture.TAP                   to GlassAction.MediaPlayPause,   // single-tap = play/pause
             Gesture.DOUBLE_TAP            to GlassAction.Back,             // double-tap = exit (consistent w/ Nav)
-            Gesture.TRIPLE_TAP            to GlassAction.Home,             // preset = 回主页, rebindable
+            Gesture.TRIPLE_TAP            to GlassAction.None,             // unbound — reserved for user-custom
             Gesture.SWIPE_UP              to GlassAction.VolumeUp,
             Gesture.SWIPE_DOWN            to GlassAction.VolumeDown,
             // 单击上/下 = prev/next track (user 2026-05-28: "音乐手势很别扭，单击上上一曲，单击下下一曲").
@@ -132,7 +133,7 @@ object DefaultProfiles {
         map = systemSlots + mapOf(
             Gesture.TAP                   to GlassAction.Confirm,
             Gesture.DOUBLE_TAP            to GlassAction.Back,
-            Gesture.TRIPLE_TAP            to GlassAction.Home,               // preset = 回主页, rebindable
+            Gesture.TRIPLE_TAP            to GlassAction.None,               // unbound — reserved for user-custom
             Gesture.SWIPE_UP              to GlassAction.NavPrev,            // prev page / line
             Gesture.SWIPE_DOWN            to GlassAction.NavNext,
             // brightness on long-press (reading-light affordance); not shadowed by sleep (Reader ≠ fallback).
@@ -207,7 +208,7 @@ object DefaultProfiles {
         map = systemSlots + mapOf(
             Gesture.TAP                   to GlassAction.Confirm,        // shutter (Confirm → DPAD_CENTER)
             Gesture.DOUBLE_TAP            to GlassAction.Back,           // exit camera
-            Gesture.TRIPLE_TAP            to GlassAction.Home,           // preset = 回主页, rebindable
+            Gesture.TRIPLE_TAP            to GlassAction.None,           // unbound — reserved for user-custom
             Gesture.SWIPE_UP              to GlassAction.VolumeUp,       // 上滑 → zoom in (camera maps vol → zoom)
             Gesture.SWIPE_DOWN            to GlassAction.VolumeDown,     // 下滑 → zoom out
             Gesture.LONG_PRESS            to GlassAction.None,           // free (RecordVideo dropped 2026-05-29 — "手势不对")

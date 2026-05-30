@@ -28,16 +28,23 @@ private val Context.vitalsPrefsDataStore: DataStore<Preferences> by preferencesD
 data class VitalsPrefs(
     val showHrOnHud: Boolean = false,
     val activityOverlay: Boolean = true,
-    val autoSnapshotIntervalMin: Int = 0,
+    /**
+     * Master switch for the app-driven **vitals auto-detection** (HR + SpO₂ measured together every
+     * [autoSnapshotIntervalMin]). Default ON. Replaces the old ring-autonomous HR-only monitor —
+     * when on, the app owns the cadence and measures the whole vitals group, not just HR.
+     */
+    val vitalsAutoDetectEnabled: Boolean = true,
+    /** Vitals auto-detection cadence in minutes — one HR+SpO₂ group per interval. Default 60. */
+    val autoSnapshotIntervalMin: Int = 60,
     val csvExportEnabled: Boolean = false,
     val wearDetectionEnabled: Boolean = true,
     /**
-     * Whether the ring's own autonomous HR-every-30min PPG (`0x16 HR-auto`) is enabled.
-     * Default true — matches the ring's factory setting (per user's burn-in decision).
-     * Disable to save ring battery; we then write `0x16 [02, 00, …]` on every bootstrap.
-     * SPEC v3 §4.4 — observable as green→red LED briefly flashing on a worn ring every 30 min.
+     * The ring's own autonomous HR-every-30min PPG (`0x16 HR-auto`, SPEC v3 §4.4). Default OFF now —
+     * superseded by the app-driven [vitalsAutoDetectEnabled] (which also measures SpO₂). Kept as a
+     * field for DataStore back-compat; the service writes `0x16 [02, 00, …]` to disable it on
+     * bootstrap so the ring doesn't ALSO run its own 30-min HR LED on top of the app cadence.
      */
-    val ringAutonomousPpgEnabled: Boolean = true,
+    val ringAutonomousPpgEnabled: Boolean = false,
     /**
      * User's daily step target (SPEC v3 §4.9 `0x21 TargetSetting`). Firmware silently drops
      * values < 100; we coerce. Default 5000.
@@ -51,14 +58,16 @@ data class VitalsPrefs(
     val spatialFeaturesEnabled: Boolean = false,
 )
 
-/** The cycle of preset intervals for [VitalsPrefs.autoSnapshotIntervalMin] (0 = off). */
-val AUTO_SNAPSHOT_INTERVALS: IntArray = intArrayOf(0, 5, 15, 30, 60, 240)
+/** Preset cadences (minutes) for vitals auto-detection. Off is handled by the master toggle, so the
+ *  interval cycle no longer includes 0. */
+val AUTO_SNAPSHOT_INTERVALS: IntArray = intArrayOf(15, 30, 60, 120, 240)
 
 class VitalsPrefsStore(private val context: Context) {
 
     private object Keys {
         val ShowHrOnHud         = booleanPreferencesKey("show_hr_on_hud")
         val ActivityOverlay     = booleanPreferencesKey("activity_overlay")
+        val VitalsAutoDetect    = booleanPreferencesKey("vitals_auto_detect_enabled")
         val AutoSnapshotInterval = intPreferencesKey("auto_snapshot_interval_min")
         val CsvExportEnabled    = booleanPreferencesKey("csv_export_enabled")
         val WearDetectionEnabled = booleanPreferencesKey("wear_detection_enabled")
@@ -71,10 +80,13 @@ class VitalsPrefsStore(private val context: Context) {
         VitalsPrefs(
             showHrOnHud              = p[Keys.ShowHrOnHud]         ?: false,
             activityOverlay          = p[Keys.ActivityOverlay]     ?: true,
-            autoSnapshotIntervalMin  = p[Keys.AutoSnapshotInterval] ?: 0,
+            vitalsAutoDetectEnabled  = p[Keys.VitalsAutoDetect]    ?: true,
+            // Off is now the master toggle's job, so a persisted 0 (the old "manual only" sentinel)
+            // migrates to the 60-min default; the toggle carries the on/off state.
+            autoSnapshotIntervalMin  = (p[Keys.AutoSnapshotInterval] ?: 60).let { if (it <= 0) 60 else it },
             csvExportEnabled         = p[Keys.CsvExportEnabled]    ?: false,
             wearDetectionEnabled     = p[Keys.WearDetectionEnabled] ?: true,
-            ringAutonomousPpgEnabled = p[Keys.RingAutonomousPpg]   ?: true,
+            ringAutonomousPpgEnabled = p[Keys.RingAutonomousPpg]   ?: false,
             dailyStepTarget          = p[Keys.DailyStepTarget]     ?: 5000,
             spatialFeaturesEnabled   = p[Keys.SpatialFeatures]     ?: false,
         )
@@ -84,6 +96,7 @@ class VitalsPrefsStore(private val context: Context) {
         context.vitalsPrefsDataStore.edit { p ->
             p[Keys.ShowHrOnHud]          = prefs.showHrOnHud
             p[Keys.ActivityOverlay]      = prefs.activityOverlay
+            p[Keys.VitalsAutoDetect]     = prefs.vitalsAutoDetectEnabled
             p[Keys.AutoSnapshotInterval] = prefs.autoSnapshotIntervalMin
             p[Keys.CsvExportEnabled]     = prefs.csvExportEnabled
             p[Keys.WearDetectionEnabled] = prefs.wearDetectionEnabled

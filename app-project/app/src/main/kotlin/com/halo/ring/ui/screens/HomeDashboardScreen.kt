@@ -138,9 +138,11 @@ private fun RingHomeContent(
                     // Surface the actionable "not worn" state; RSSI lives in Ring details.
                     if (info.connected && info.worn == false) { append(" · "); append(stringResource(R.string.ring_wear_off)) }
                     info.batteryPct?.let { append(" · "); append(stringResource(R.string.ring_battery_pct, it)) }
-                    // Connection interval on the first screen (Zack 2026-05-29) — the one connection
-                    // diagnostic worth a glance; the rest stay in Ring details.
-                    if (info.connected) info.estimatedConnIntervalMs?.let { append(" · "); append("$it ms") }
+                    // (Removed 2026-05-29) The "NN ms" conn-interval read used to live here, but this
+                    // firmware emits notifies only on gestures (not periodically), so the estimator
+                    // mostly measured the idle gap *between* gestures, not the link interval — it read
+                    // 185–1300 ms for what is really a 15–500 ms link. Misleading as a glanceable
+                    // diagnostic, so it's gone.
                 }
             },
             style = HaloType.Caption.copy(

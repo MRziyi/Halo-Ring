@@ -64,14 +64,22 @@ fun VitalsPrefsScreen(
             onToggle = { onUpdated(prefs.copy(activityOverlay = !prefs.activityOverlay)) },
         )
 
-        // Auto-snapshot interval — cycle through AUTO_SNAPSHOT_INTERVALS on tap.
+        // Vitals auto-detection — master toggle. Measures HR + SpO₂ together every interval below.
+        ToggleRow(
+            title = stringResource(R.string.vitals_prefs_autodetect_title),
+            description = stringResource(R.string.vitals_prefs_autodetect_desc),
+            on = prefs.vitalsAutoDetectEnabled,
+            onToggle = { onUpdated(prefs.copy(vitalsAutoDetectEnabled = !prefs.vitalsAutoDetectEnabled)) },
+        )
+        // Cadence — cycle through AUTO_SNAPSHOT_INTERVALS on tap. Greyed when auto-detection is off.
         FocusableRow(onClick = {
-            onUpdated(prefs.copy(autoSnapshotIntervalMin = cycleNextInterval(prefs.autoSnapshotIntervalMin)))
+            if (prefs.vitalsAutoDetectEnabled)
+                onUpdated(prefs.copy(autoSnapshotIntervalMin = cycleNextInterval(prefs.autoSnapshotIntervalMin)))
         }) {
             Column(Modifier.padding(end = 8.dp).weight(1f)) {
                 Text(
                     stringResource(R.string.vitals_prefs_auto_snapshot_title),
-                    style = HaloType.Body,
+                    style = HaloType.Body.copy(color = if (prefs.vitalsAutoDetectEnabled) HaloColors.Fg else HaloColors.Mute),
                 )
                 Text(
                     stringResource(R.string.vitals_prefs_auto_snapshot_desc),
@@ -80,7 +88,7 @@ fun VitalsPrefsScreen(
             }
             Text(
                 text = formatInterval(prefs.autoSnapshotIntervalMin),
-                style = HaloType.Body.copy(color = HaloColors.Accent),
+                style = HaloType.Body.copy(color = if (prefs.vitalsAutoDetectEnabled) HaloColors.Accent else HaloColors.Mute),
             )
         }
         Divider()
@@ -92,14 +100,9 @@ fun VitalsPrefsScreen(
             onToggle = { onUpdated(prefs.copy(wearDetectionEnabled = !prefs.wearDetectionEnabled)) },
         )
 
-        // SPEC v3 §4.4 `0x16 HR-auto`: ring's own autonomous PPG every 30 min. Default ON
-        // (matches factory). Disabling saves ring battery (LED stays dark).
-        ToggleRow(
-            title = stringResource(R.string.vitals_prefs_autonomous_ppg_title),
-            description = stringResource(R.string.vitals_prefs_autonomous_ppg_desc),
-            on = prefs.ringAutonomousPpgEnabled,
-            onToggle = { onUpdated(prefs.copy(ringAutonomousPpgEnabled = !prefs.ringAutonomousPpgEnabled)) },
-        )
+        // (Removed 2026-05-30) The ring's autonomous HR-only `0x16` PPG toggle is gone — vitals
+        // auto-detection above (HR + SpO₂, app-driven) replaces it; the service disables `0x16` so
+        // the ring doesn't double-measure.
 
         // SPEC v3 §4.9 `0x21 TargetSetting`: tap to cycle through preset targets. Firmware drops
         // values < 100; cycle starts at 1000 to stay clear of that floor.

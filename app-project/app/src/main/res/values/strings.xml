@@ -287,6 +287,10 @@
     <string name="power_await_combos_title">Await double-tap combos</string>
     <string name="power_await_lp_combos_desc">Wait the follow-up window after LONG_PRESS so LONG_PRESS_SWIPE_* + DOUBLE_LONG_PRESS can fire.</string>
     <string name="power_connection_auto_body">BLE interval is HIGH (15–30 ms) for ~10 s after each gesture and BALANCED (75–100 ms) otherwise. Touch IC disables when the user takes the glasses off. After 5 minutes off-wrist the ring disconnects entirely.</string>
+    <string name="power_section_ring_label">Ring</string>
+    <string name="power_ring_sleep_title">Ring sleep</string>
+    <string name="power_ring_sleep_desc">Touch sensor sleeps this long after your last touch. Shorter = better ring battery; longer = first touch always instant.</string>
+    <string name="power_ring_sleep_unit_min">%1$d min</string>
 
     <!-- ════════════════════════════════════════════════════════════════════════
          Feedback.
@@ -331,8 +335,10 @@
     <string name="vitals_prefs_show_hr_desc">Render the latest HR in the corner of the glasses\' display.</string>
     <string name="vitals_prefs_activity_title">Activity overlay</string>
     <string name="vitals_prefs_activity_desc">Show steps / calories alongside HR. Costs no extra ring power.</string>
-    <string name="vitals_prefs_auto_snapshot_title">Auto-snapshot interval</string>
-    <string name="vitals_prefs_auto_snapshot_desc">Periodic HR/SpO₂/stress sample. PPG LED only on during the read.</string>
+    <string name="vitals_prefs_autodetect_title">Auto-detect vitals</string>
+    <string name="vitals_prefs_autodetect_desc">Automatically measure HR + SpO₂ together on a schedule. PPG LED only on during the read.</string>
+    <string name="vitals_prefs_auto_snapshot_title">Detection interval</string>
+    <string name="vitals_prefs_auto_snapshot_desc">How often to measure one HR + SpO₂ group.</string>
     <string name="vitals_prefs_csv_title">CSV export</string>
     <string name="vitals_prefs_csv_desc">Append every reading to an internal CSV (export from Settings → Advanced).</string>
     <string name="vitals_prefs_pause_offfinger_title">Pause when off-finger</string>

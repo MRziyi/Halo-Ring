@@ -252,6 +252,10 @@
     <string name="power_section_timing_label">时间窗口</string>
     <string name="power_section_latency_label">延迟开关</string>
     <string name="power_section_connection_label">连接（自动）</string>
+    <string name="power_section_ring_label">戒指</string>
+    <string name="power_ring_sleep_title">戒指休眠</string>
+    <string name="power_ring_sleep_desc">最后一次触摸后过这么久，触摸传感器休眠。越短越省戒指电；越长则第一次触摸始终即时。</string>
+    <string name="power_ring_sleep_unit_min">%1$d 分钟</string>
     <string name="power_active_profile_caption">编辑当前配置：%1$s</string>
     <string name="power_multi_tap_desc">两次触摸之间最大间隔，仍算同一连击。</string>
     <string name="power_combo_desc">双击之后等多久接收随后的滑动。</string>
@@ -301,8 +305,10 @@
     <string name="vitals_prefs_show_hr_desc">把最新心率渲染在眼镜显示的角落。</string>
     <string name="vitals_prefs_activity_title">活动浮层</string>
     <string name="vitals_prefs_activity_desc">在心率旁边显示步数 / 卡路里。不额外耗戒指电量。</string>
-    <string name="vitals_prefs_auto_snapshot_title">自动测量间隔</string>
-    <string name="vitals_prefs_auto_snapshot_desc">定期采集心率 / 血氧 / 压力。仅测量瞬间点亮 PPG LED。</string>
+    <string name="vitals_prefs_autodetect_title">自动检测</string>
+    <string name="vitals_prefs_autodetect_desc">按设定周期自动测量心率 + 血氧（一组）。仅测量瞬间点亮 PPG LED。</string>
+    <string name="vitals_prefs_auto_snapshot_title">检测间隔</string>
+    <string name="vitals_prefs_auto_snapshot_desc">每隔多久测量一组心率 + 血氧。</string>
     <string name="vitals_prefs_csv_title">CSV 导出</string>
     <string name="vitals_prefs_csv_desc">把每次读数追加到内部 CSV（在 设置 → 高级 中导出）。</string>
     <string name="vitals_prefs_pause_offfinger_title">未佩戴时暂停</string>

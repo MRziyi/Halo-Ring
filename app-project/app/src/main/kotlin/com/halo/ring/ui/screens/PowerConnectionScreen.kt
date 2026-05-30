@@ -44,6 +44,9 @@ import com.halo.ring.core.gesture.GestureConfig
 fun PowerConnectionScreen(
     activeProfile: KeyMapProfile,
     onActiveProfileUpdated: (KeyMapProfile) -> Unit = {},
+    /** Touch-IC idle-sleep timeout in minutes (SPEC v3 §4.10). Wearer-tunable ring-battery knob. */
+    touchSleepMin: Int = com.halo.ring.core.ble.R08Protocol.DEFAULT_TOUCH_SLEEP_MIN,
+    onTouchSleepMinChanged: (Int) -> Unit = {},
 ) {
     val cfg = activeProfile.gestureConfig
 
@@ -113,6 +116,17 @@ fun PowerConnectionScreen(
         )
 
         Spacer(Modifier.height(12.dp))
+        SectionHeader(stringResource(R.string.power_section_ring_label))
+        // SPEC v3 §4.10 touch-IC sleep timeout. The ring's touch sensor sleeps this long after the
+        // last touch; shorter saves ring battery, longer keeps the first touch instant. Tap to cycle.
+        CycleRow(
+            title = stringResource(R.string.power_ring_sleep_title),
+            value = stringResource(R.string.power_ring_sleep_unit_min, touchSleepMin),
+            description = stringResource(R.string.power_ring_sleep_desc),
+            onTap = { onTouchSleepMinChanged(cycleNextInt(TOUCH_SLEEP_PRESETS, touchSleepMin)) },
+        )
+
+        Spacer(Modifier.height(12.dp))
         SectionHeader(stringResource(R.string.power_section_connection_label))
         Text(
             stringResource(R.string.power_connection_auto_body),
@@ -158,9 +172,16 @@ private fun CycleRow(
     Box(Modifier.fillMaxWidth().height(1.dp).background(HaloColors.Line))
 }
 
-private val MULTI_TAP_PRESETS  = longArrayOf(180L, 220L, 280L, 340L, 400L)
+private val MULTI_TAP_PRESETS  = longArrayOf(180L, 200L, 220L, 280L, 340L, 400L)
 private val COMBO_PRESETS      = longArrayOf(0L, 200L, 300L, 400L, 500L)
 private val LP_FOLLOWUP_PRESETS = longArrayOf(0L, 300L, 400L, 500L, 600L)
+/** Touch-IC sleep-timeout presets in minutes (SPEC v3 §4.10 `sleepMin`). */
+private val TOUCH_SLEEP_PRESETS = intArrayOf(1, 2, 5, 10, 15, 30)
+
+private fun cycleNextInt(presets: IntArray, current: Int): Int {
+    val i = presets.indexOf(current)
+    return if (i < 0) presets.first() else presets[(i + 1) % presets.size]
+}
 
 /** Returns the next preset after [current] (wrap-around). Falls back to the first preset if
  *  [current] isn't in the list. */

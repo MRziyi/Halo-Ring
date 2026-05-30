@@ -23,6 +23,7 @@ package com.halo.ring.core.perf
 class ConnIntervalEstimator(
     private val sampleCount: Int = DEFAULT_SAMPLE_COUNT,
     private val burstFloorMs: Int = DEFAULT_BURST_FLOOR_MS,
+    private val ceilingMs: Int = DEFAULT_CEILING_MS,
 ) {
     private val lock = Any()
     private val timestamps = ArrayDeque<Long>(sampleCount)
@@ -48,7 +49,16 @@ class ConnIntervalEstimator(
         val deltas = IntArray(snapshot.size - 1) { i ->
             (snapshot[i + 1] - snapshot[i]).toInt().coerceAtLeast(0)
         }
-        val kept = deltas.filter { it >= burstFloorMs }
+        // Keep only deltas in a PLAUSIBLE conn-interval band: above the intra-event burst floor
+        // and below [ceilingMs]. The ceiling matters because this firmware doesn't emit periodic
+        // notifies — frames arrive only on gestures (and the ~60 s passive heartbeats). The gaps
+        // *between* user gestures (hundreds of ms to seconds) are NOT the connection interval; left
+        // in, they dominated the median and made the UI read "565 ms / 1290 ms" for what is really
+        // a 15–500 ms link. A real negotiated interval never exceeds the supervision budget (well
+        // under ceilingMs), so anything above it is a between-gesture idle gap — drop it. When too
+        // few plausible deltas survive (sparse gesturing), return null → the UI shows nothing rather
+        // than a fabricated number. (2026-05-29)
+        val kept = deltas.filter { it in burstFloorMs..ceilingMs }
         if (kept.size < MIN_KEPT_FOR_ESTIMATE) return null
         val sorted = kept.sorted()
         return sorted[sorted.size / 2]
@@ -62,6 +72,11 @@ class ConnIntervalEstimator(
         /** Deltas below this ms are intra-conn-event bursts, not the real interval. Well below
          *  the tightest HIGH band (15-30 ms) and well above intra-event packet spacing (~100 μs). */
         const val DEFAULT_BURST_FLOOR_MS = 5
+        /** Deltas above this ms are between-gesture idle gaps, not the connection interval. A real
+         *  negotiated BLE interval is bounded by the supervision timeout and never approaches this;
+         *  SLOW band tops out ~500 ms. 600 leaves headroom while killing the multi-hundred-ms /
+         *  >1 s contamination this firmware's event-driven (non-periodic) notifies produce. */
+        const val DEFAULT_CEILING_MS = 600
         const val MIN_SAMPLES_FOR_ESTIMATE = 4
         const val MIN_KEPT_FOR_ESTIMATE = 3
     }
