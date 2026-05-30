@@ -20,7 +20,10 @@ sealed interface GlassAction {
     data object NavRight  : GlassAction { override val needs = Capability.NAVIGATE }
     data object Confirm   : GlassAction { override val needs = Capability.NAVIGATE }
     data object Back      : GlassAction { override val needs = Capability.BACK }        // accessibility GLOBAL_ACTION_BACK works → cheaper
-    data object Home      : GlassAction { override val needs = Capability.HOME }
+    // Capability.KEY_EVENT (not HOME) so this routes to the agent backend, which injects
+    // KEYCODE_HOME via InputManager. The AccessibilityBackend's GLOBAL_ACTION_HOME silently
+    // no-ops on this Rokid build (2026-05-29); the agent key path works (`input keyevent 3`).
+    data object Home      : GlassAction { override val needs = Capability.KEY_EVENT }
     data object Recents   : GlassAction { override val needs = Capability.RECENTS }
     data object Menu      : GlassAction { override val needs = Capability.KEY_EVENT }
     data object Notifications : GlassAction { override val needs = Capability.NOTIFICATIONS }
@@ -38,8 +41,9 @@ sealed interface GlassAction {
     data object MediaNext      : GlassAction { override val needs = Capability.KEY_EVENT }
 
     // ── glasses-specific features (per-device FeatureIntents) ────────────────────────────────────
+    /** Open the device camera app. Shutter and video record need on-device discovery — synthetic
+     *  input is filtered by the Sprite camera; only the real hardware temple/shutter captures. */
     data object OpenCamera   : GlassAction { override val needs = Capability.LAUNCH_INTENT }
-    data object TakePhoto    : GlassAction { override val needs = Capability.LAUNCH_INTENT }
     /** "Wake the everyday voice / chat assistant" — Gemini / Rokid Chat / Hey-RayNeo etc. Distinct
      *  from [AskVisualAI] (which is camera-grounded VQA). Most-used AI entry point for both flavors;
      *  default system gesture is DOUBLE_LONG_PRESS. Audit-pass 2026-05-14w. */

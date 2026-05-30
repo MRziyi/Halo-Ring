@@ -70,6 +70,11 @@ class MainActivity : AppCompatActivity() {
     private val wifiConnectedState = kotlinx.coroutines.flow.MutableStateFlow(false)
     private val wirelessDebugEnabledState = kotlinx.coroutines.flow.MutableStateFlow(false)
     private var setupPollJob: kotlinx.coroutines.Job? = null
+
+    /** Once-per-process guards so the launch-time self-check doesn't keep deep-linking to Settings on
+     *  every onResume after the user dismisses it. Reset implicitly on app process death. */
+    private var a11yJumpDone = false
+    private var overlayJumpDone = false
     /** v0.4 — true when the injection agent is already alive (fresh heartbeat). Lets the wizard's
      *  System-access step show "✓ already set up" instead of forcing the user to re-pair. */
     private val agentReadyState = kotlinx.coroutines.flow.MutableStateFlow(false)
@@ -251,6 +256,7 @@ class MainActivity : AppCompatActivity() {
                     ),
                     homeTab = com.halo.ring.ui.screens.HomeTab.values()
                         .getOrElse(homeTabIndex) { com.halo.ring.ui.screens.HomeTab.RING },
+                    onSelectTab = { graph.homeTabIndexFlow.value = it.ordinal },
                     profiles = profiles,
                     activeProfileId = activeProfileId,
                     systemGestures = sysGestures,
@@ -491,7 +497,8 @@ class MainActivity : AppCompatActivity() {
                 Log.i("Halo", "pm grant skipped (vendor restriction): ${r.message}")
             else -> Unit
         }
-        adb.grantOverlayPermission()   // best-effort: lets the HUD overlay render (else hud is null)
+        adb.grantOverlayPermission()         // best-effort: lets the HUD overlay render (else hud is null)
+        adb.grantAccessibilityService()      // best-effort: re-enables HaloRingAccessibilityService (foreground detection)
         if (!adb.isOnPersistentTcp()) {
             report("Enabling offline control…")
             when (val r = adb.migrateToPersistentTcp()) {
@@ -586,7 +593,8 @@ class MainActivity : AppCompatActivity() {
                 Log.i("Halo", "pm grant skipped: ${r.message}")
             else -> Unit
         }
-        adb.grantOverlayPermission()   // best-effort: lets the HUD overlay render (else hud is null)
+        adb.grantOverlayPermission()         // best-effort: lets the HUD overlay render (else hud is null)
+        adb.grantAccessibilityService()      // best-effort: re-enables HaloRingAccessibilityService (foreground detection)
         progress("Starting agent…")
         when (val r = adb.startAgent()) {
             is AdbBootstrap.Result.Failure -> return done("✗ ${r.message}")
@@ -630,7 +638,8 @@ class MainActivity : AppCompatActivity() {
                 Log.i("Halo", "pm grant skipped (vendor restriction): ${r.message}")
             else -> Unit
         }
-        adb.grantOverlayPermission()   // best-effort: lets the HUD overlay render (else hud is null)
+        adb.grantOverlayPermission()         // best-effort: lets the HUD overlay render (else hud is null)
+        adb.grantAccessibilityService()      // best-effort: re-enables HaloRingAccessibilityService (foreground detection)
         // Move off the Wi-Fi-bound wireless transport onto the persistent loopback port so the
         // agent survives Wi-Fi off / leaving the AP / reboot. No-op if we already came up on it.
         if (!adb.isOnPersistentTcp()) {
@@ -709,6 +718,52 @@ class MainActivity : AppCompatActivity() {
             contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
         ) ?: ""
         accessibilityEnabledState.value = enabledList.split(':').any { it == expectedSvc }
+
+        // Auto-re-enable our a11y service when it's missing. Done via the **agent** (shell uid) —
+        // a direct Settings.Secure write from the app silently fails to bind even with
+        // WRITE_SECURE_SETTINGS (Android refuses to honour app-side enables for a11y security).
+        // Verified on-device 2026-05-29: shell-route works, app-route writes but never binds.
+        // Covers `install -r` (Android disables a11y services whose app process was killed by the
+        // install) — the next launch silently puts it back without the user re-toggling Settings.
+        val agentLikelyUp = try {
+            val hb = java.io.File("/data/local/tmp/halo.agent.heartbeat")
+            hb.exists() && (System.currentTimeMillis() - hb.lastModified()) < 30_000L
+        } catch (_: Exception) { false }
+        if (!accessibilityEnabledState.value) {
+            if (agentLikelyUp) lifecycleScope.launch {
+                when (val r = adb.grantAccessibilityService()) {
+                    is AdbBootstrap.Result.Success ->
+                        Log.i("Halo", "auto-re-enabled HaloRingAccessibilityService via agent")
+                    is AdbBootstrap.Result.Failure ->
+                        Log.w("Halo", "a11y re-enable via agent failed: ${r.message}")
+                }
+            } else if (!a11yJumpDone) {
+                // Agent down → can't auto-fix; prompt + jump to Settings so the user enables it.
+                a11yJumpDone = true
+                android.widget.Toast.makeText(this, getString(R.string.toast_enable_accessibility), android.widget.Toast.LENGTH_LONG).show()
+                try { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                catch (_: Exception) { Log.w("Halo", "couldn't deep-link to accessibility settings") }
+            }
+        }
+
+        // Self-check the HUD overlay permission too (same pattern as a11y). Granted by the agent on
+        // bootstrap; if it's gone and the agent is down, prompt + jump to MANAGE_OVERLAY_PERMISSION.
+        val overlayGranted = Settings.canDrawOverlays(this)
+        if (!overlayGranted) {
+            if (agentLikelyUp) lifecycleScope.launch {
+                when (val r = adb.grantOverlayPermission()) {
+                    is AdbBootstrap.Result.Success -> Log.i("Halo", "auto-re-granted SYSTEM_ALERT_WINDOW via agent")
+                    is AdbBootstrap.Result.Failure -> Log.w("Halo", "overlay re-grant via agent failed: ${r.message}")
+                }
+            } else if (!overlayJumpDone) {
+                overlayJumpDone = true
+                android.widget.Toast.makeText(this, getString(R.string.toast_enable_overlay), android.widget.Toast.LENGTH_LONG).show()
+                try {
+                    startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                        android.net.Uri.parse("package:$packageName")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                } catch (_: Exception) { Log.w("Halo", "couldn't deep-link to overlay settings") }
+            }
+        }
 
         // v0.4 — Developer Options + Wi-Fi + Wireless Debugging live status.
         devOptionsEnabledState.value = try {

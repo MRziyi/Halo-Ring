@@ -95,7 +95,7 @@ object GlassActionCodec {
         GlassAction.BrightnessUp, GlassAction.BrightnessDown,
         GlassAction.MediaPlayPause, GlassAction.MediaPrev, GlassAction.MediaNext,
         // features
-        GlassAction.OpenCamera, GlassAction.TakePhoto,
+        GlassAction.OpenCamera,
         GlassAction.OpenAIAssistant, GlassAction.WakeSystemAI, GlassAction.AskVisualAI,
         GlassAction.OpenTranslate, GlassAction.OpenSubtitle, GlassAction.OpenChat, GlassAction.OpenMusic,
         GlassAction.OpenSettings, GlassAction.OpenGallery,

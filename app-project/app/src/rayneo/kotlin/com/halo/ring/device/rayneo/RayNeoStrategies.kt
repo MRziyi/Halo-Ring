@@ -77,7 +77,7 @@ class RayNeoActionMapper(private val intents: FeatureIntents) : GlassActionMappe
             InjectionPrimitive.A11yGlobal(A11yGlobalAction.BACK),
             key(KeyEvent.KEYCODE_BACK),
         )
-        GlassAction.Home      -> listOf(InjectionPrimitive.A11yGlobal(A11yGlobalAction.HOME))
+        GlassAction.Home      -> listOf(key(KeyEvent.KEYCODE_HOME))
         GlassAction.Recents   -> listOf(InjectionPrimitive.A11yGlobal(A11yGlobalAction.RECENTS))
         GlassAction.Notifications -> listOf(InjectionPrimitive.A11yGlobal(A11yGlobalAction.NOTIFICATIONS))
         GlassAction.QuickSettings -> listOf(InjectionPrimitive.A11yGlobal(A11yGlobalAction.QUICK_SETTINGS))
@@ -96,7 +96,6 @@ class RayNeoActionMapper(private val intents: FeatureIntents) : GlassActionMappe
 
         // ── feature intents (TBD by on-device discovery) ──
         GlassAction.OpenCamera     -> intents.openCamera()
-        GlassAction.TakePhoto      -> intents.takePhoto()
         GlassAction.OpenAIAssistant -> intents.openAIAssistant()
         GlassAction.WakeSystemAI   -> intents.wakeSystemAI()
         GlassAction.AskVisualAI    -> intents.askVisualAI()
@@ -160,10 +159,6 @@ class RayNeoActionMapper(private val intents: FeatureIntents) : GlassActionMappe
 class RayNeoFeatureIntents : FeatureIntents {
     override fun openCamera() = listOf(
         InjectionPrimitive.Shell("am start -a android.media.action.STILL_IMAGE_CAMERA")
-    )
-    override fun takePhoto() = listOf(
-        InjectionPrimitive.Shell("am start -a android.media.action.IMAGE_CAPTURE"),
-        InjectionPrimitive.Key(KeyEvent.KEYCODE_CAMERA),
     )
     // Until we know the X3 Pro Visual-AI package, surface as no-op so the action isn't silently
     // mis-routed. On-device discovery in Doc/11 §B6.

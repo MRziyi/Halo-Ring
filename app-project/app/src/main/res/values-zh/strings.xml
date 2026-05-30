@@ -158,6 +158,7 @@
     <string name="profile_default_navigation">导航</string>
     <string name="profile_default_media">媒体</string>
     <string name="profile_default_reader">阅读</string>
+    <string name="profile_default_camera">相机</string>
     <string name="profile_default_fast">极速</string>
     <string name="profile_editor_title">手势映射</string>
     <string name="profile_editor_edit_cta">编辑</string>
@@ -165,7 +166,6 @@
     <string name="profile_editor_footer">带标记的手势同时承担系统功能，但仍可在此重新绑定。</string>
     <string name="gesture_role_wake">唤醒</string>
     <string name="gesture_role_sleep">锁屏</string>
-    <string name="gesture_role_screenshot">截屏</string>
     <string name="profiles_list_footer">前台 app 切换时自动切换配置（需启用辅助功能）。无手动切换。</string>
     <string name="profiles_restore_defaults">恢复默认按键</string>
     <string name="profiles_restore_confirm">再点一次以重置全部配置</string>
@@ -459,6 +459,8 @@
     <string name="wizard_battery_cta">申请豁免</string>
     <string name="wizard_battery_exempted">✓ 已豁免</string>
 
+    <string name="toast_enable_accessibility">无障碍服务未开启 — 请在此处开启 Halo Ring。</string>
+    <string name="toast_enable_overlay">"显示在其他应用上层" 未开启 — 请在此处开启，否则 HUD 无法显示。</string>
     <string name="wizard_pair_title">配对戒指</string>
     <string name="wizard_pair_body">把戒指从充电座上拿下来。app 会扫描附近的 Halo / R08 戒指。确认 MAC + LED 双闪。</string>
     <string name="wizard_pair_cta">扫描戒指</string>
@@ -572,7 +574,6 @@
     <string name="action_media_prev">上一首</string>
     <string name="action_media_next">下一首</string>
     <string name="action_open_camera">相机</string>
-    <string name="action_take_photo">拍照</string>
     <string name="action_open_ai_assistant">AI 助手</string>
     <string name="action_wake_system_ai">系统 AI（Sprite）</string>
     <string name="action_visual_ai">视觉 AI</string>

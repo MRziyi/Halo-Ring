@@ -63,7 +63,6 @@ object SettingsCatalog {
 
         // Glasses features
         Entry(GlassAction.OpenCamera,     ActionGroup.FEATURE),
-        Entry(GlassAction.TakePhoto,      ActionGroup.FEATURE),
         Entry(GlassAction.OpenAIAssistant, ActionGroup.FEATURE),
         Entry(GlassAction.WakeSystemAI,   ActionGroup.FEATURE),
         Entry(GlassAction.AskVisualAI,    ActionGroup.FEATURE),

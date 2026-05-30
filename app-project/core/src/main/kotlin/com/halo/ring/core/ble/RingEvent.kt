@@ -9,9 +9,12 @@ sealed interface RingEvent {
      *  taps (inter-tap as short as 0.14 s observed), so multi-tap/combo synthesis is app-layer. */
     data class GestureEvent(val raw: RawGesture) : RingEvent
 
-    /** Touch-IC enabled state echo (`0x73 sub=0x2A`). Fires after the 2-step TouchControl init
-     *  AND on charging-dock insertion. `enabled = false` is also our **off-finger/charging** signal
-     *  (SPEC v3 §4.10 — byte 1 = 1 reported when ring is removed from the user OR docked). */
+    /** Touch-IC state echo (`0x73 sub=0x2A`). Per SPEC v3 §5.2 row 0x2A, fires (a) after a
+     *  TOUCH_MODE-style write (`0x3B [2, 0, appType, sleepMin]`) — i.e. our bootstrap — with
+     *  `enabled = true`, and (b) on **charging-dock insertion** with `enabled = false`. It does
+     *  **not** fire on finger removal. Treat only the `false` direction as actionable
+     *  (= ring is docked, therefore not worn); the `true` echo is a write side-effect, not a
+     *  wear-on signal. */
     data class TouchStatus(val enabled: Boolean) : RingEvent
 
     /** Battery percentage. [charging] true when on cradle; null on legacy (single-byte) frames. */
@@ -31,6 +34,11 @@ sealed interface RingEvent {
 
     /** Wear-detect failure — the ring's PPG sensor can't see a finger. Show "adjust ring" UI. */
     data class WearDetectFail(val kind: HealthKind) : RingEvent
+
+    /** Signals that a [com.halo.ring.core.ble.R08BleClient.requestVitalsSnapshot] snapshot has
+     *  ended — all in-flight kinds converged, the safety timeout fired, or the link dropped. Lets
+     *  the UI flip its `measuring` flag off without polling the BLE client's in-flight state. */
+    data object VitalsSnapshotComplete : RingEvent
 
     /** Cumulative activity counters (`0x73 sub=0x12 ACTIVITY_TOTAL` push during walking).
      *  - [steps] — daily step count.

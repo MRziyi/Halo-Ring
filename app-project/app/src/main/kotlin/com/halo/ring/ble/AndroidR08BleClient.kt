@@ -399,8 +399,7 @@ class AndroidR08BleClient(
                     val unresolved = vitalsPending.toMap()
                     Log.w(TAG, "vitals safety timeout — stopping unresolved kinds: ${unresolved.keys}")
                     unresolved.values.forEach { writeBytes(R08Protocol.stopMeasure(it)) }
-                    vitalsPending.clear()
-                    vitalsSnapshotInFlight = false
+                    completeVitalsSnapshot("safety-timeout")
                 }
             }
         }
@@ -412,11 +411,21 @@ class AndroidR08BleClient(
     private fun advanceVitalsSnapshot(kind: HealthKind) {
         val typeCode = vitalsPending.remove(kind) ?: return
         writeBytes(R08Protocol.stopMeasure(typeCode))
-        if (vitalsPending.isEmpty()) {
-            vitalsStopHandle?.cancel(); vitalsStopHandle = null
-            vitalsSnapshotInFlight = false
-            Log.i(TAG, "vitals snapshot complete (all phases converged)")
-        }
+        if (vitalsPending.isEmpty()) completeVitalsSnapshot("all-converged")
+    }
+
+    /** Terminate the in-flight vitals snapshot (success / timeout / disconnect) and emit
+     *  [RingEvent.VitalsSnapshotComplete] so the UI can flip its `measuring` flag off. Without
+     *  this the snapshot flow's `measuring` stayed true forever — HR set it to true on each
+     *  progress frame but nothing cleared it (Zack 2026-05-29 "心率测试会一直卡住"). */
+    private fun completeVitalsSnapshot(reason: String) {
+        vitalsStopHandle?.cancel(); vitalsStopHandle = null
+        if (!vitalsSnapshotInFlight) return
+        vitalsSnapshotInFlight = false
+        vitalsPending.clear()
+        Log.i(TAG, "vitals snapshot complete ($reason)")
+        val nowMs = scheduler.nowMs()
+        eventSubs.forEach { it(RingEvent.VitalsSnapshotComplete, nowMs) }
     }
 
     override fun findRing() {
@@ -673,9 +682,7 @@ class AndroidR08BleClient(
                         // and the UI can never re-trigger MEASURE NOW until the app restarts.
                         if (vitalsSnapshotInFlight) {
                             Log.w(TAG, "aborting in-flight vitals snapshot due to disconnect")
-                            vitalsStopHandle?.cancel(); vitalsStopHandle = null
-                            vitalsSnapshotInFlight = false
-                            vitalsPending.clear()
+                            completeVitalsSnapshot("disconnect")
                         }
                         accelStreaming = false
                         hwRevString = null
@@ -903,9 +910,7 @@ class AndroidR08BleClient(
                 if (vitalsSnapshotInFlight) {
                     Log.w(TAG, "vitals wear-detect fail (${event.kind}) — stopping all pending")
                     vitalsPending.values.forEach { writeBytes(R08Protocol.stopMeasure(it)) }
-                    vitalsPending.clear()
-                    vitalsSnapshotInFlight = false
-                    vitalsStopHandle?.cancel(); vitalsStopHandle = null
+                    completeVitalsSnapshot("wear-detect-fail")
                 }
             }
             else -> Unit

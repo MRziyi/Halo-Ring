@@ -18,6 +18,9 @@ import androidx.compose.foundation.focusGroup
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.unit.dp
 import com.halo.ring.di.RingInfo
@@ -70,8 +73,11 @@ import com.halo.ring.core.gesture.SystemGestures
 fun HaloRingApp(
     initial: AppState = AppState(),
     /** Active home tab. Single source of truth is `AppGraph.homeTabIndexFlow`, driven by the in-app
-     *  LONG_PRESS gesture (routed via the service). The tab strip is a non-focusable indicator. */
+     *  LONG_PRESS gesture (routed via the service) plus focus-overflow cycling. */
     homeTab: HomeTab = HomeTab.RING,
+    /** Called when focus overflows the active tab (DPAD_DOWN past the last item or DPAD_UP past
+     *  the first). The host writes the chosen tab to `AppGraph.homeTabIndexFlow`. */
+    onSelectTab: (HomeTab) -> Unit = {},
     profiles: List<KeyMapProfile> = emptyList(),
     activeProfileId: String = "",
     systemGestures: SystemGestures = SystemGestures(),
@@ -129,13 +135,25 @@ fun HaloRingApp(
         // re-fired the effect — so we keep requesting until focus is *confirmed* landed (Zack
         // 2026-05-29). Tracked via onFocusChanged on the focus-group column below.
         var contentHasFocus by remember { mutableStateOf(false) }
+        // When focus overflowed UPward into a previous tab, we want focus to land on the *last*
+        // content element of the new tab (not the first), so the user's swipe-up feels continuous.
+        // Set by the onKeyEvent handler below; honoured by the LaunchedEffect after focus lands.
+        var pendingFocusEnd by remember { mutableStateOf(false) }
         val topKey = state.navStack.lastOrNull()?.let { it::class.simpleName } ?: "root"
         // Re-anchor focus on sub-screen change AND on home-tab change (long-press switches tabs
         // without touching the nav stack) so focus lands on the new tab's first content element.
         androidx.compose.runtime.LaunchedEffect(topKey, homeTab) {
             contentHasFocus = false
             repeat(12) {
-                if (contentHasFocus) return@LaunchedEffect          // confirmed — stop (don't re-yank)
+                if (contentHasFocus) {
+                    // If we got here by overflowing UPward into the previous tab, walk the focus
+                    // down until it can't move — lands on the last content element.
+                    if (pendingFocusEnd) {
+                        while (focusManager.moveFocus(androidx.compose.ui.focus.FocusDirection.Down)) { /* keep going */ }
+                        pendingFocusEnd = false
+                    }
+                    return@LaunchedEffect          // confirmed — stop (don't re-yank)
+                }
                 try { contentFocus.requestFocus() } catch (_: Throwable) {}
                 kotlinx.coroutines.delay(120)
             }
@@ -199,7 +217,30 @@ fun HaloRingApp(
                     .fillMaxSize()
                     .onFocusChanged { contentHasFocus = it.hasFocus }
                     .focusRequester(contentFocus)
-                    .focusGroup(),
+                    .focusGroup()
+                    .onKeyEvent { event ->
+                        // Focus-overflow tab switching (Zack 2026-05-29): when a swipe at the home
+                        // boundary can't move focus within the current tab (no focusable above/below),
+                        // the DPAD key bubbles up here unhandled. Cycle to the next/previous tab
+                        // (with wrap) and let the LaunchedEffect above re-anchor focus to the first
+                        // (DOWN) or last (UP) content element. Sub-screens get default behaviour.
+                        if (event.type != androidx.compose.ui.input.key.KeyEventType.KeyDown) return@onKeyEvent false
+                        if (top != null) return@onKeyEvent false
+                        val n = HomeTab.values().size
+                        when (event.key) {
+                            androidx.compose.ui.input.key.Key.DirectionDown -> {
+                                onSelectTab(HomeTab.values()[(homeTab.ordinal + 1) % n])
+                                pendingFocusEnd = false
+                                true
+                            }
+                            androidx.compose.ui.input.key.Key.DirectionUp -> {
+                                onSelectTab(HomeTab.values()[(homeTab.ordinal - 1 + n) % n])
+                                pendingFocusEnd = true
+                                true
+                            }
+                            else -> false
+                        }
+                    },
             ) {
                 if (top == null) {
                     // The 3-tab home (RING · VITALS · MORE). Fixed tab strip, NO vertical scroll —

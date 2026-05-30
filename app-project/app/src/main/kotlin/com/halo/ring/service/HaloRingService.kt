@@ -448,12 +448,16 @@ class HaloRingService : Service() {
                     }
                 }
                 is RingEvent.TouchStatus -> {
-                    // SPEC v3 §4.10: byte 1 = 1 fires when the ring is inserted into the charging
-                    // dock OR removed from the user. We can use this as a real wear-state signal
-                    // (more reliable than the glasses-side ScreenWearProxy on its own). Push to
-                    // the wear-state collector so reconcilePower drops to SLOW band immediately.
+                    // SPEC v3 §5.2 row 0x2A: this echo fires (a) after TOUCH_MODE writes during
+                    // bootstrap, with byte=0 (ACTIVE), and (b) on charging-dock insertion, with
+                    // byte=1 (DISABLED). It does NOT fire on finger removal. So we only treat the
+                    // disabled→worn=false direction as meaningful (dock = definitely off-finger);
+                    // the enabled echo is a TOUCH_MODE-write side-effect and would clobber the
+                    // wearProvider's real state with a false-positive "worn=true" at every reconnect.
                     Log.d(TAG, "ring touch IC enabled=${event.enabled}")
-                    onRingWorn(event.enabled)
+                    // No HUD here — 0x2A only fires on dock-insertion (per SPEC §10.6); the
+                    // charging HUD already covers that case. Just update the wear state.
+                    if (!event.enabled) onRingWorn(false, showHud = false)
                 }
                 is RingEvent.Health -> {
                     val prev = graph.vitalsSnapshotFlow.value
@@ -490,6 +494,13 @@ class HaloRingService : Service() {
                     // Surface to UI via the vitals snapshot's "measuring" flag flipping off + null.
                     val prev = graph.vitalsSnapshotFlow.value
                     graph.vitalsSnapshotFlow.value = prev.copy(measuring = false, wearDetectFail = true)
+                }
+                is RingEvent.VitalsSnapshotComplete -> {
+                    // Clear the UI's "MEASURING…" sticky flag — HR/SpO₂ set it true on every progress
+                    // frame but nothing else cleared it on success, so the readout was stuck (Zack
+                    // 2026-05-29: "心率测试会一直卡住").
+                    val prev = graph.vitalsSnapshotFlow.value
+                    graph.vitalsSnapshotFlow.value = prev.copy(measuring = false)
                 }
                 is RingEvent.Activity -> {
                     // SPEC §5.3 wire-verified: cal=mcal/1000, dist=integer meters.
@@ -617,14 +628,12 @@ class HaloRingService : Service() {
             }
         }
 
-        // ── 5. wear state → power reconcile ────────────────────────────────────────────────────
+        // ── 5. wear state → power reconcile + wear HUD ─────────────────────────────────────────
+        // The wearProvider is our best proxy for ring-on-hand (the firmware doesn't push a
+        // finger-on/off event — 0x2A only fires on dock-in). Drives the wear HUD + auto-snapshot
+        // via onRingWorn(showHud=true), plus the power reconcile inside it.
         val wearUnsub = graph.wearProvider.observe { w ->
-            graph.scheduler.post {
-                worn = w
-                if (w) lastWornMs = graph.scheduler.nowMs()
-                Log.i(TAG, "wear state: worn=$w")
-                reconcilePower()
-            }
+            graph.scheduler.post { onRingWorn(w, showHud = true) }
         }
         cleanup += wearUnsub
 
@@ -1047,14 +1056,26 @@ class HaloRingService : Service() {
         }
     }
 
-    private fun onRingWorn(worn: Boolean) {
+    /**
+     * Update wear state from one of two sources:
+     *  - `0x2A` TOUCH_STATUS_ECHO (ring side; **only** fires on dock-insertion, NOT on finger
+     *    removal — SPEC v3 §10.6). Calls with [showHud] = false so the dock case doesn't double
+     *    up with the charging HUD that also fires on dock-in.
+     *  - The [graph.wearProvider] observer (fused glasses-side signal — Rokid sysprop /
+     *    RayNeo Mercury proximity + screen-on heuristic). Calls with [showHud] = true; this is
+     *    the *best proxy* we have for "ring on the user's hand" since the firmware doesn't push
+     *    a finger-on/off event. It's not perfect (it tracks the glasses, which usually correlate
+     *    with the ring being worn) but it's the only signal we get.
+     */
+    private fun onRingWorn(worn: Boolean, showHud: Boolean = true) {
         if (this.worn == worn) return
         this.worn = worn
         if (worn) lastWornMs = graph.scheduler.nowMs()
         graph.ringInfoFlow.value = graph.ringInfoFlow.value.copy(worn = worn)
-        Log.i(TAG, "wear state from ring touch-IC: worn=$worn")
-        // Wear-change HUD so the wearer gets feedback even off-screen (P-F wakes the screen).
-        showAlert(HudEvent.Notice(getString(if (worn) R.string.hud_ring_on else R.string.hud_ring_off)))
+        Log.i(TAG, "wear state changed: worn=$worn (showHud=$showHud)")
+        if (showHud) {
+            showAlert(HudEvent.Notice(getString(if (worn) R.string.hud_ring_on else R.string.hud_ring_off)))
+        }
         // "戴上即测": the moment the ring is put on (and we're connected) take one snapshot so the
         // Vitals readout is fresh without a manual MEASURE. Only on the false→true transition (this
         // method early-returns on no-change), so reconnect flaps don't trigger repeated PPG.

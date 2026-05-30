@@ -60,7 +60,13 @@ class RokidActionMapper(private val intents: FeatureIntents) : GlassActionMapper
         GlassAction.NavRight   -> listOf(key(KeyEvent.KEYCODE_DPAD_RIGHT))
         GlassAction.Confirm    -> listOf(key(KeyEvent.KEYCODE_DPAD_CENTER))
         GlassAction.Back       -> listOf(InjectionPrimitive.A11yGlobal(A11yGlobalAction.BACK), key(KeyEvent.KEYCODE_BACK))
-        GlassAction.Home       -> listOf(InjectionPrimitive.A11yGlobal(A11yGlobalAction.HOME))
+        // Use the HOME intent via shell — `am start -c HOME -a MAIN` reliably goes to the launcher's
+        // top-level activity from any Sprite page (verified adb on 2026-05-29). KEYCODE_HOME via
+        // `InjectionPrimitive.Key` works from `adb shell input keyevent 3` but the agent's
+        // `InputManager.injectInputEvent` path silently no-ops for HOME on this Rokid build (Android's
+        // input policy filters injected HOME keys even with FLAG_FROM_SYSTEM). A11y GLOBAL_ACTION_HOME
+        // also no-ops here. The shell intent path is the one that actually fires.
+        GlassAction.Home       -> listOf(InjectionPrimitive.Shell("am start -c android.intent.category.HOME -a android.intent.action.MAIN"))
         GlassAction.Recents    -> listOf(InjectionPrimitive.A11yGlobal(A11yGlobalAction.RECENTS))
         GlassAction.Notifications -> listOf(InjectionPrimitive.A11yGlobal(A11yGlobalAction.NOTIFICATIONS))
         GlassAction.QuickSettings -> listOf(InjectionPrimitive.A11yGlobal(A11yGlobalAction.QUICK_SETTINGS))
@@ -87,7 +93,6 @@ class RokidActionMapper(private val intents: FeatureIntents) : GlassActionMapper
 
         // ── feature intents (Sprite Launcher activities — see §12.1) ──
         GlassAction.OpenCamera     -> intents.openCamera()
-        GlassAction.TakePhoto      -> intents.takePhoto()
         GlassAction.OpenAIAssistant -> intents.openAIAssistant()
         GlassAction.WakeSystemAI   -> intents.wakeSystemAI()
         GlassAction.AskVisualAI    -> intents.askVisualAI()
@@ -132,22 +137,18 @@ class RokidFeatureIntents : FeatureIntents {
     private val launcher = "com.rokid.os.sprite.launcher"
 
     /**
-     * Open the **Rokid Sprite** camera (user wants Rokid's, not AOSP Camera2).
-     * ⚠️ On-device caveat (2026-05-28): launching `CameraPageActivity` by component bounces back to
-     * the Sprite home in all external-launch tests (am start ±flags, launcher cmd broadcast) — the
-     * Sprite camera's proper entry is the app-grid or a companion-phone BLE scene command, neither
-     * reachable from our app. If it bounces in real use too, the only camera that *stays* is AOSP
-     * Camera2 (`am start -a android.media.action.STILL_IMAGE_CAMERA`) — swap back to that if needed.
+     * Open the **Rokid Sprite** camera. Uses the assistserver-owned `CameraActivity` (the same one
+     * the temple's CAMERA button + Sprite's app-grid land on). Verified 2026-05-29 via
+     * `adb shell am start -n …assistserver/.assist.media.page.CameraActivity` — stays foreground,
+     * no bounce. The earlier `launcher/.page.camera.CameraPageActivity` route bounced because
+     * it's a launcher-internal proxy that hands off (and dies) when reached externally.
      */
-    override fun openCamera() = listOf(InjectionPrimitive.StartActivity("$launcher/.page.camera.CameraPageActivity"))
+    override fun openCamera() = listOf(
+        InjectionPrimitive.StartActivity(
+            "com.rokid.os.sprite.assistserver/com.rokid.os.sprite.assist.media.page.CameraActivity"
+        )
+    )
 
-    /**
-     * The camera ignores synthetic key/touch injection (only the real hardware shutter captures) and
-     * there's no exported headless-capture intent, so a gesture can't snap a photo directly.
-     * `takePhoto` therefore just **opens the camera** (same as [openCamera]); the Camera profile
-     * auto-activates (HUD shows "Camera") and the wearer shutters with the temple/hardware key.
-     */
-    override fun takePhoto() = openCamera()
     /** Everyday voice/chat AI — Rokid Sprite's ChatPageActivity. Distinct from visual AI which
      *  takes a camera frame as context (`askVisualAI`). Audit-pass 2026-05-14w. */
     override fun openAIAssistant() = listOf(InjectionPrimitive.StartActivity("$launcher/.page.chat.ChatPageActivity"))

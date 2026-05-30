@@ -112,7 +112,6 @@ fun actionFriendlyRes(a: GlassAction): Int = when (a) {
     GlassAction.MediaPrev      -> com.halo.ring.R.string.action_media_prev
     GlassAction.MediaNext      -> com.halo.ring.R.string.action_media_next
     GlassAction.OpenCamera     -> com.halo.ring.R.string.action_open_camera
-    GlassAction.TakePhoto      -> com.halo.ring.R.string.action_take_photo
     GlassAction.OpenAIAssistant -> com.halo.ring.R.string.action_open_ai_assistant
     GlassAction.WakeSystemAI   -> com.halo.ring.R.string.action_wake_system_ai
     GlassAction.AskVisualAI    -> com.halo.ring.R.string.action_visual_ai
@@ -174,6 +173,7 @@ fun profileFriendlyText(profile: com.halo.ring.core.action.KeyMapProfile): Strin
     "navigation" -> androidx.compose.ui.res.stringResource(com.halo.ring.R.string.profile_default_navigation)
     "media"      -> androidx.compose.ui.res.stringResource(com.halo.ring.R.string.profile_default_media)
     "reader"     -> androidx.compose.ui.res.stringResource(com.halo.ring.R.string.profile_default_reader)
+    "camera"     -> androidx.compose.ui.res.stringResource(com.halo.ring.R.string.profile_default_camera)
     "fast"       -> androidx.compose.ui.res.stringResource(com.halo.ring.R.string.profile_default_fast)
     else         -> profile.name
 }
@@ -185,6 +185,7 @@ fun profileFriendlyTextByName(rawName: String): String = when (rawName.lowercase
     "navigation" -> androidx.compose.ui.res.stringResource(com.halo.ring.R.string.profile_default_navigation)
     "media"      -> androidx.compose.ui.res.stringResource(com.halo.ring.R.string.profile_default_media)
     "reader"     -> androidx.compose.ui.res.stringResource(com.halo.ring.R.string.profile_default_reader)
+    "camera"     -> androidx.compose.ui.res.stringResource(com.halo.ring.R.string.profile_default_camera)
     "fast"       -> androidx.compose.ui.res.stringResource(com.halo.ring.R.string.profile_default_fast)
     else         -> rawName
 }

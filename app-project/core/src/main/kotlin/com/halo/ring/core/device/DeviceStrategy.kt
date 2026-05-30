@@ -97,7 +97,6 @@ interface WearStateProvider {
 interface FeatureIntents {
     /** Returns the primitives that open the feature, or empty if not supported on this device. */
     fun openCamera(): List<InjectionPrimitive>
-    fun takePhoto(): List<InjectionPrimitive>
     /** Wake the everyday voice/chat AI (Rokid Chat / RayNeo Gemini). Distinct from [askVisualAI]
      *  which is camera-grounded VQA. */
     fun openAIAssistant(): List<InjectionPrimitive>

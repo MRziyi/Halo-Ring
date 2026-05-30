@@ -74,8 +74,9 @@ object R08Frame {
         return RingEvent.GestureEvent(raw)
     }
 
-    /** `73 2A <touch_disabled_flag>` — inverted polarity; 0 = ACTIVE, non-zero = disabled (also
-     *  fires with byte 1 = 1 when the ring is inserted into the charging dock). */
+    /** `73 2A <touch_disabled_flag>` — inverted polarity; 0 = ACTIVE, non-zero = DISABLED. SPEC
+     *  v3 §5.2 row 0x2A: only fires after `0x3B [2, 0, …]` writes (post-bootstrap echo, byte=0)
+     *  and on charging-dock insertion (byte=1). NOT a wear signal — see [RingEvent.TouchStatus]. */
     private fun parseTouchStatus(data: ByteArray): RingEvent {
         if (data.size < 3) return RingEvent.Unknown(data)
         return RingEvent.TouchStatus(enabled = (data[2].toInt() and 0xFF) == 0)
@@ -199,7 +200,7 @@ object R08Frame {
      * `0x73 sub=0x12` ACTIVITY_TOTAL stream for step / kcal / distance during a sport session.
      */
     private fun parseSportTick(data: ByteArray): RingEvent.SportTick? {
-        if (data.size < 5) return null
+        if (data.size < 6) return null   // reads up to data[5]; was < 5, latent AIOBE on short frames.
         val sportType = data[1].toInt() and 0xFF
         val durationBe = ((data[3].toInt() and 0xFF) shl 8) or (data[4].toInt() and 0xFF)
         val hrEstimate = data[5].toInt() and 0xFF
@@ -283,9 +284,48 @@ object R08Frame {
         if (b3 and 0x10 != 0) flags += "noSingleTemperature"
         if (b3 and 0x20 != 0) flags += "notification"
         if (b3 and 0x80 != 0) flags += "aiAnalyze"
+        val b4 = payload[3].toInt() and 0xFF
+        if (b4 and 0x08 != 0) flags += "ringGestureDND"
+        if (b4 and 0x10 != 0) flags += "tpSleep"
+        if (b4 and 0x20 != 0) flags += "rt11"
+        if (b4 and 0x80 != 0) flags += "resumeServices"
+        val b5 = payload[4].toInt() and 0xFF
+        // SPEC §3.2 byte 5: "when non-zero, overrides the touch bits from byte 2". So if any bit is
+        // set here we treat byte 5 as the source of truth — strip byte 2's ring* flags first, then
+        // re-derive from b5 as the Touch-capable variants. moslin (b5 0x80) also overrides byte 1.
+        // On the tested RT08 unit byte 5 == 0 so byte 2 wins (no-op path).
+        if (b5 != 0) {
+            flags -= setOf("ringMusic", "ringVideo", "ringEbook", "ringCamera", "ringPhoneCall", "ringGame", "heart")
+            if (b5 and 0x01 != 0) flags += "ringMusicTouch"
+            if (b5 and 0x02 != 0) flags += "ringVideoTouch"
+            if (b5 and 0x04 != 0) flags += "ringEbookTouch"
+            if (b5 and 0x08 != 0) flags += "ringCameraTouch"
+            if (b5 and 0x10 != 0) flags += "ringPhoneCallTouch"
+            if (b5 and 0x20 != 0) flags += "ringGameTouch"
+            if (b5 and 0x40 != 0) flags += "heartTouch"
+            if (b5 and 0x80 != 0) flags += "moslin"
+        }
+        val b6 = payload[5].toInt() and 0xFF
+        // takePhoto is INVERTED (bit set = NOT supported), same pattern as wechat in §3.1.
+        if (b6 and 0x04 == 0) flags += "takePhoto"
+        if (b6 and 0x08 != 0) flags += "loverSpace"
+        if (b6 and 0x10 != 0) flags += "worship"
+        if (b6 and 0x20 != 0) flags += "newPraise"
+        if (b6 and 0x40 != 0) flags += "alarm"
+        if (b6 and 0x80 != 0) flags += "doNotDisturb"
         val b7 = payload[6].toInt() and 0xFF
+        if (b7 and 0x01 != 0) flags += "ultraviolet"
+        if (b7 and 0x02 != 0) flags += "callReminder"
         if (b7 and 0x04 != 0) flags += "realTimeOxygen"
         if (b7 and 0x08 != 0) flags += "realTimeHr"
+        if (b7 and 0x10 != 0) flags += "realTimeHrRemind"
+        if (b7 and 0x20 != 0) flags += "friends"
+        if (b7 and 0x40 != 0) flags += "loverInteract"
+        if (b7 and 0x80 != 0) flags += "tempIntervalModify"
+        val b8 = payload[7].toInt() and 0xFF
+        if (b8 and 0x20 != 0) flags += "bodyTag"
+        if (b8 and 0x40 != 0) flags += "tempReminder"
+        if (b8 and 0x80 != 0) flags += "intervalTemp"
         val b9 = payload[8].toInt() and 0xFF
         if (b9 and 0x02 != 0) flags += "ecg"
         if (b9 and 0x04 != 0) flags += "tempBoth"

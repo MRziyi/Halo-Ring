@@ -34,11 +34,12 @@ import com.halo.ring.core.gesture.Gesture
  * Settings → Profiles → <Profile> (mockup §3 E). One row per [Gesture], showing the action it fires.
  * Tapping a row navigates to [ActionPickerScreen] to rebind it.
  *
- * Gestures that ALSO carry a system role (DOUBLE_TAP wakes the screen when off; LONG_PRESS sleeps it
- * in the Navigation profile; TRIPLE_TAP screenshots) get a small badge — but stay **editable** (user
- * 2026-05-29: "有system绑定的要加个标记，但允许功能编辑"). The base-4 (TAP/DOUBLE_TAP/swipes) only honour
- * a custom binding in profiles with `useSystemKeyEvents=false` (e.g. Media); elsewhere they pass
- * through as fixed system KeyEvents.
+ * Gestures that ALSO carry a system role (DOUBLE_TAP wakes the screen when off; LONG_PRESS sleeps
+ * it in the Navigation profile) get a small badge — but stay **editable** (user 2026-05-29:
+ * "有system绑定的要加个标记，但允许功能编辑"). TRIPLE_TAP=Screenshot is just a preset default, not
+ * system-level (user 2026-05-29: "三击截屏不是系统级的操作，而是预设的自定义手势") — no badge. The base-4
+ * (TAP/DOUBLE_TAP/swipes) only honour a custom binding in profiles with `useSystemKeyEvents=false`
+ * (e.g. Media); elsewhere they pass through as fixed system KeyEvents.
  */
 @Composable
 fun ProfileEditorScreen(
@@ -89,7 +90,6 @@ fun ProfileEditorScreen(
  *  LONG_PRESS only sleeps in the Navigation/fallback profile (InteractionRouter gates it there). */
 private fun systemRoleRes(g: Gesture, profileId: String): Int? = when (g) {
     Gesture.DOUBLE_TAP -> R.string.gesture_role_wake
-    Gesture.TRIPLE_TAP -> R.string.gesture_role_screenshot
     Gesture.LONG_PRESS -> if (profileId == DefaultProfiles.DEFAULT_FALLBACK_ID) R.string.gesture_role_sleep else null
     else -> null
 }

@@ -21,7 +21,7 @@ enum class RawGesture {
 enum class Gesture {
     TAP,
     DOUBLE_TAP,              // base = Back; when screen OFF, = system ScreenWake (synthesized)
-    TRIPLE_TAP,              // system = Screenshot (user 2026-05-28)
+    TRIPLE_TAP,              // preset default = Screenshot, per-profile rebindable (user 2026-05-29)
     QUADRUPLE_TAP,           // DISABLED (user 2026-05-28: too complex) — never emitted; GestureConfig.enableQuadrupleTap=false
     SWIPE_UP,
     SWIPE_DOWN,

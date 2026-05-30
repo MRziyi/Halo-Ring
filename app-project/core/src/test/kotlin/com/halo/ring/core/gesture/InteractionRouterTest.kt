@@ -132,14 +132,14 @@ class InteractionRouterTest {
 
     // ── system layer ───────────────────────────────────────────────────────────────────────────
 
-    @Test fun `TRIPLE_TAP takes a screenshot system-wide and never cycles the profile`() = runBlocking<Unit> {
-        // 2026-05-28: TRIPLE_TAP = Screenshot, shared across every profile via systemSlots. It doesn't
-        // cycle the profile (profiles are auto-only) and falls through to the profile binding.
+    @Test fun `TRIPLE_TAP goes Home by default and never cycles the profile`() = runBlocking<Unit> {
+        // 2026-05-29: TRIPLE_TAP is a per-profile **preset** = Home (回主页), rebindable per-profile.
+        // It doesn't cycle profiles (profiles are auto-only) and falls through to the profile binding.
         val (ir, mm, _, b) = fixture()
         val firstActive = mm.active().id
         ir.onGesture(Gesture.TRIPLE_TAP)
         assertEquals(firstActive, mm.active().id, "profile must NOT cycle on triple-tap")
-        assertEquals(listOf<GlassAction>(GlassAction.Screenshot), b.dispatched)
+        assertEquals(listOf<GlassAction>(GlassAction.Home), b.dispatched)
     }
 
     @Test fun `LONG_PRESS routes to ScreenSleep system action when screen on - v04 screen-toggle`() = runBlocking<Unit> {

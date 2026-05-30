@@ -177,6 +177,7 @@
     <string name="profile_default_navigation">Navigation</string>
     <string name="profile_default_media">Media</string>
     <string name="profile_default_reader">Reader</string>
+    <string name="profile_default_camera">Camera</string>
     <string name="profile_default_fast">Fast</string>
     <string name="profile_editor_title">Gesture mapping</string>
     <string name="profile_editor_edit_cta">EDIT</string>
@@ -184,7 +185,6 @@
     <string name="profile_editor_footer">A badge means the gesture also drives a system action. You can still rebind it here.</string>
     <string name="gesture_role_wake">wakes</string>
     <string name="gesture_role_sleep">sleeps</string>
-    <string name="gesture_role_screenshot">screenshot</string>
     <string name="profiles_list_footer">Profiles auto-switch by foreground app (when Accessibility is enabled). There is no manual switch.</string>
     <string name="profiles_restore_defaults">Restore default bindings</string>
     <string name="profiles_restore_confirm">Tap again to reset all profiles</string>
@@ -502,6 +502,8 @@
     <string name="wizard_battery_cta">REQUEST EXEMPTION</string>
     <string name="wizard_battery_exempted">✓ Exempt</string>
 
+    <string name="toast_enable_accessibility">Accessibility service is off — please enable Halo Ring here.</string>
+    <string name="toast_enable_overlay">"Display over other apps" is off — please enable it here so the HUD can show.</string>
     <string name="wizard_pair_title">Pair the ring</string>
     <string name="wizard_pair_body">Take the ring off any charger. The app will scan for nearby Halo / R08 rings. Confirm the MAC + LED double-flash.</string>
     <string name="wizard_pair_cta">SCAN FOR RING</string>
@@ -629,7 +631,6 @@
     <string name="action_media_prev">Previous</string>
     <string name="action_media_next">Next</string>
     <string name="action_open_camera">Camera</string>
-    <string name="action_take_photo">Photo</string>
     <string name="action_open_ai_assistant">AI assistant</string>
     <string name="action_wake_system_ai">System AI (Sprite)</string>
     <string name="action_visual_ai">Visual AI</string>

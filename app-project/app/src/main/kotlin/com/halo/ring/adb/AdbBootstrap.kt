@@ -423,6 +423,25 @@ class AdbBootstrap(private val context: Context) {
     }
 
     /**
+     * Enable our [HaloRingAccessibilityService] via shell. Direct `Settings.Secure.putString` from the
+     * app (even with WRITE_SECURE_SETTINGS) writes the value but Android refuses to bind the service
+     * for security (verified on-device 2026-05-29: setting was written but no events fired). Doing
+     * it through the agent (shell uid) is honoured. Idempotent — appends only if missing.
+     */
+    suspend fun grantAccessibilityService(): Result = withContext(Dispatchers.IO) {
+        val conn = connection ?: return@withContext Result.Failure("not connected")
+        val pkg = context.packageName
+        val svc = "$pkg/com.halo.ring.accessibility.HaloRingAccessibilityService"
+        // Idempotent overwrite — the only a11y service this build cares about. (`settings put` is
+        // silent on success, prints to stderr on permission denial.)
+        val out = conn.exec(
+            "settings put secure enabled_accessibility_services $svc; " +
+                "settings put secure accessibility_enabled 1"
+        )
+        if (out.isBlank()) Result.Success else Result.Failure("a11y enable returned: ${out.trim()}")
+    }
+
+    /**
      * True if the agent's Unix abstract socket is reachable on this device.
      * Use as a cheap liveness probe during and after a bootstrap session.
      */
