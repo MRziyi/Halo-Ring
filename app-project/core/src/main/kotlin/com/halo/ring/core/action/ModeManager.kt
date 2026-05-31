@@ -78,9 +78,16 @@ class ModeManager(
         // "com.rokid.os.sprite.launcher.page.music" can only be hit via the activity class.
         fun matches(trigger: String) =
             pkg.startsWith(trigger) || (activity?.startsWith(trigger) == true)
-        val match = profiles.firstOrNull { p ->
-            p.id != active().id && p.triggerPackages.any { trigger -> matches(trigger) }
-        }
+        fun profileMatches(p: KeyMapProfile) = p.triggerPackages.any { trigger -> matches(trigger) }
+        // STAY if the foreground still belongs to the ACTIVE profile. Apps fire repeated
+        // TYPE_WINDOW_STATE_CHANGED events while you're inside them (dialogs, sub-activities, a
+        // "now playing" screen) — all still matching this profile's trigger prefix. The old code
+        // excluded the active profile from the match search below, so these re-fires found "no
+        // match" and wrongly fell back to Navigation: Media (and Camera) kept getting knocked back
+        // to DPAD mode mid-use, so play/volume "操作不了" and the profile looked un-activated on
+        // re-entry. (root-caused 2026-05-31)
+        if (profileMatches(active())) return
+        val match = profiles.firstOrNull { profileMatches(it) }
         if (match != null) {
             activeIndex = profiles.indexOf(match)
             notifyChanged()

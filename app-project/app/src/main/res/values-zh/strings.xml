@@ -212,8 +212,11 @@
     <string name="ring_battery_pct">%1$d %%</string>
     <string name="ring_find_short">寻找戒指</string>
     <string name="ring_reconnect_short">重新连接</string>
+    <string name="ring_reconnect_confirm">再次点击确认重连</string>
     <string name="ring_shutdown_short">关机</string>
     <string name="ring_forget_short">忘记</string>
+    <string name="ring_forget_confirm">再次点击确认忘记</string>
+    <string name="ring_repair_confirm">再次点击确认重新配对</string>
     <string name="ring_pair_short">配对戒指</string>
     <string name="ring_repair_short">重新配对</string>
     <string name="ring_screen_footer">忘记会取消配对，点配对可换一个戒指。</string>

@@ -88,6 +88,19 @@ class HaloRingAccessibilityService : AccessibilityService() {
         super.onServiceConnected()
         instance = this
         Log.i(TAG, "AccessibilityService connected")
+        // If we connected while an app is ALREADY in the foreground (e.g. the wearer opened Music
+        // before the service was ready), no TYPE_WINDOW_STATE_CHANGED will fire until the next
+        // transition — so seed lastForeground from the current active window now. We only get the
+        // package this way (the activity class isn't exposed on-demand), which is enough for plain
+        // apps (Spotify/YouTube); Rokid Sprite pages still need a real window event. Best-effort.
+        runCatching {
+            val pkg = rootInActiveWindow?.packageName?.toString()
+            if (pkg != null && pkg != packageName) {
+                Log.v(TAG, "onConnected seed foreground pkg=$pkg")
+                lastForeground = pkg to null
+                foregroundPackageListener?.invoke(pkg, null)
+            }
+        }
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
@@ -111,6 +124,9 @@ class HaloRingAccessibilityService : AccessibilityService() {
             // Heuristic: a top-level Activity class ends in "Activity". (root-caused 2026-05-28)
             if (pkg != null && pkg != packageName && activity != null && activity.endsWith("Activity")) {
                 Log.v(TAG, "TYPE_WINDOW_STATE_CHANGED pkg=$pkg activity=$activity")
+                // Remember it unconditionally so the service can replay it on (re)attach — see
+                // [Companion.lastForeground]. MUST be set even when no listener is attached yet.
+                lastForeground = pkg to activity
                 foregroundPackageListener?.invoke(pkg, activity)
             }
         }
@@ -363,5 +379,13 @@ class HaloRingAccessibilityService : AccessibilityService() {
         /** Subscribed by the service so [com.halo.ring.core.action.ModeManager.onForegroundPackage]
          *  can run for auto-profile-switch. Args: (package, activityClass). */
         @Volatile var foregroundPackageListener: ((String?, String?) -> Unit)? = null
+
+        /** The last real (package, activityClass) foreground transition we saw — stored on EVERY
+         *  qualifying window event, even when no listener is attached yet. The service replays this
+         *  the moment it (re)attaches its listener, so the correct profile activates immediately on
+         *  cold start / service restart instead of only after the wearer leaves + re-enters the app
+         *  (the "first entry didn't switch, second did" race — a11y fired before we were listening).
+         *  (Zack 2026-05-31) */
+        @Volatile var lastForeground: Pair<String, String?>? = null
     }
 }

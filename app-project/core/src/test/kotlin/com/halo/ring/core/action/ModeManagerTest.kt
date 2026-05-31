@@ -125,6 +125,24 @@ class ModeManagerTest {
         assertTrue(notifications.isEmpty())
     }
 
+    @Test fun `re-firing a NON-fallback active profile's own trigger does NOT fall back to Navigation`() {
+        // Regression (Zack 2026-05-31): an app fires repeated TYPE_WINDOW_STATE_CHANGED events as
+        // you navigate inside it (sub-activities, dialogs). Each re-fire still matches the SAME
+        // profile's trigger. The old code excluded the active profile from the match search, so a
+        // re-fire found "no other match" and fell back to Navigation — Media kept dropping to DPAD
+        // mode mid-playback. Media is NOT the fallback, so the `fallback == activeIndex` guard never
+        // caught this (the existing nav test did, masking the bug). Must STAY on Media.
+        val clock = FakeClock(start = 100_000)
+        val mm = ModeManager(threeProfiles(), DefaultProfiles.MEDIA.id, clock.supplier)
+        val notifications = mutableListOf<String>()
+        mm.observe { notifications += it.id }
+        notifications.clear()
+        mm.onForegroundPackage("com.r08.media")                       // bare package re-fire
+        mm.onForegroundPackage("com.r08.media", "com.r08.media.NowPlayingActivity")  // sub-activity
+        assertEquals(DefaultProfiles.MEDIA.id, mm.active().id)
+        assertTrue(notifications.isEmpty(), "must not churn/flap off Media on same-app re-fire")
+    }
+
     @Test fun `observe replays the active profile immediately on subscribe`() {
         val mm = ModeManager(threeProfiles(), DefaultProfiles.MEDIA.id, FakeClock().supplier)
         val seen = mutableListOf<String>()

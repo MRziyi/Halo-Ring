@@ -17,10 +17,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -179,6 +181,34 @@ fun Cta(
             ),
         )
     }
+}
+
+/**
+ * A [Cta] for a critical / disruptive action that must not fire on a single stray tap (the glasses'
+ * focus-confirm makes the top button easy to mis-hit). The first tap ARMS it — the label switches to
+ * [confirmText] and the button turns red — and a second tap within [confirmWindowMs] actually fires
+ * [onConfirm]. It auto-disarms after the window so it never stays primed once the wearer moves on.
+ * Used for Reconnect / Re-pair / Forget. (Zack 2026-05-31)
+ */
+@Composable
+fun ConfirmCta(
+    text: String,
+    confirmText: String,
+    modifier: Modifier = Modifier,
+    focused: Boolean = false,
+    danger: Boolean = false,
+    confirmWindowMs: Long = 3_000L,
+    onConfirm: () -> Unit = {},
+) {
+    var armed by remember { mutableStateOf(false) }
+    LaunchedEffect(armed) { if (armed) { delay(confirmWindowMs); armed = false } }
+    Cta(
+        text = if (armed) confirmText else text,
+        modifier = modifier,
+        focused = focused,
+        danger = danger || armed,   // already-red (danger) buttons stay red; the label change is the cue
+        onClick = { if (armed) { armed = false; onConfirm() } else { armed = true } },
+    )
 }
 
 /** A simple horizontal accent bar (e.g. for "BLE conn-interval" or progress). [progress] ∈ [0..1]. */

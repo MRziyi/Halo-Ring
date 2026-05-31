@@ -16,6 +16,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.halo.ring.R
 import com.halo.ring.di.RingInfo
+import com.halo.ring.ui.ConfirmCta
 import com.halo.ring.ui.Cta
 import com.halo.ring.ui.FocusableRow
 import com.halo.ring.ui.HaloColors
@@ -152,19 +153,25 @@ private fun RingHomeContent(
         )
 
         Spacer(Modifier.height(12.dp))
+        // FIND RING goes FIRST now (Zack 2026-05-31): it's harmless — just blinks the LED — so it's
+        // the safe default for the top button, where a stray focus-confirm is most likely. RECONNECT
+        // (which tears the BLE pipeline down + rescans) used to be here and got mis-fired.
         Box(Modifier.padding(horizontal = ScreenPadding)) {
-            Cta(
+            Cta(text = stringResource(R.string.ring_find_short), onClick = { graph.bleClient.findRing() })
+        }
+        Spacer(Modifier.height(6.dp))
+        // RECONNECT is critical/disruptive (tears the BLE pipeline down + rescans), so it's
+        // tap-twice-to-confirm via ConfirmCta. (Zack 2026-05-31)
+        Box(Modifier.padding(horizontal = ScreenPadding)) {
+            ConfirmCta(
                 text = stringResource(R.string.ring_reconnect_short),
-                onClick = {
+                confirmText = stringResource(R.string.ring_reconnect_confirm),
+                onConfirm = {
                     // stop() + start() = full pipeline teardown + rescan (same as Ring details).
                     graph.bleClient.stop()
                     graph.bleClient.start()
                 },
             )
-        }
-        Spacer(Modifier.height(6.dp))
-        Box(Modifier.padding(horizontal = ScreenPadding)) {
-            Cta(text = stringResource(R.string.ring_find_short), onClick = { graph.bleClient.findRing() })
         }
 
         Spacer(Modifier.height(10.dp))

@@ -77,7 +77,7 @@ jobs:
           if-no-files-found: error
 
       # Stage the two release APKs with predictable names so the Release page shows clean
-      # labels (`halo-ring-rokid-release.apk` etc.) instead of the Gradle output paths.
+      # labels (`halo-ring-rokid.apk` / `halo-ring-rayneo.apk`) instead of the Gradle output paths.
       - name: Stage APKs for release upload
         if: |
           (github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')))

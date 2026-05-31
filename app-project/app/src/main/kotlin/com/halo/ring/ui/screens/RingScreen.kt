@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.halo.ring.R
 import com.halo.ring.di.RingInfo
+import com.halo.ring.ui.ConfirmCta
 import com.halo.ring.ui.Cta
 import com.halo.ring.ui.ListRow
 import com.halo.ring.ui.LocalAppGraph
@@ -120,21 +121,34 @@ fun RingScreen(
         Spacer(Modifier.height(16.dp))
         // PAIR / RE-PAIR opens the picker to choose which R0x ring is yours; FORGET clears the
         // persisted MAC so a fresh pairing can start. Both are unique to this screen + stay LAST.
+        // First-time PAIR (no ring yet) is a single tap — nothing to lose. RE-PAIR + FORGET are
+        // disruptive when you already have a working ring, so they're tap-twice-to-confirm. (Zack 2026-05-31)
         Box(Modifier.padding(horizontal = ScreenPadding)) {
-            Cta(text = stringResource(
-                if (info.macAddress == null) R.string.ring_pair_short else R.string.ring_repair_short
-            ), onClick = onOpenPairing)
+            if (info.macAddress == null) {
+                Cta(text = stringResource(R.string.ring_pair_short), onClick = onOpenPairing)
+            } else {
+                ConfirmCta(
+                    text = stringResource(R.string.ring_repair_short),
+                    confirmText = stringResource(R.string.ring_repair_confirm),
+                    onConfirm = onOpenPairing,
+                )
+            }
         }
         Spacer(Modifier.height(8.dp))
         Box(Modifier.padding(horizontal = ScreenPadding)) {
-            Cta(text = stringResource(R.string.ring_forget_short), danger = true, onClick = {
-                pairingScope.launch {
-                    graph.bleClient.stop()
-                    graph.bleClient.setPairedMac(null)
-                    graph.ringPairingPrefs.clear()
-                }
-                onOpenPairing()   // drop user straight into the picker since the ring is now unset
-            })
+            ConfirmCta(
+                text = stringResource(R.string.ring_forget_short),
+                confirmText = stringResource(R.string.ring_forget_confirm),
+                danger = true,
+                onConfirm = {
+                    pairingScope.launch {
+                        graph.bleClient.stop()
+                        graph.bleClient.setPairedMac(null)
+                        graph.ringPairingPrefs.clear()
+                    }
+                    onOpenPairing()   // drop user straight into the picker since the ring is now unset
+                },
+            )
         }
     }
 }

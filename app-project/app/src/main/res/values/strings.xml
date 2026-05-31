@@ -235,8 +235,11 @@
     <string name="ring_battery_pct">%1$d %%</string>
     <string name="ring_find_short">FIND RING</string>
     <string name="ring_reconnect_short">RECONNECT</string>
+    <string name="ring_reconnect_confirm">TAP AGAIN TO RECONNECT</string>
     <string name="ring_shutdown_short">SHUTDOWN</string>
     <string name="ring_forget_short">FORGET</string>
+    <string name="ring_forget_confirm">TAP AGAIN TO FORGET</string>
+    <string name="ring_repair_confirm">TAP AGAIN TO RE-PAIR</string>
     <string name="ring_pair_short">PAIR RING</string>
     <string name="ring_repair_short">RE-PAIR</string>
     <string name="ring_screen_footer">Forget unpairs the ring; tap PAIR to choose a different one.</string>

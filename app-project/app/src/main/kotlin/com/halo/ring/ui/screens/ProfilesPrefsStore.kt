@@ -101,6 +101,13 @@ class ProfilesPrefsStore(private val context: Context) {
         .put("enableDoubleLongPress",     c.enableDoubleLongPress)
         .put("minRawIntervalMs",          c.minRawIntervalMs)
         .put("wakeSwallowCount",          c.wakeSwallowCount)
+        // useSystemKeyEvents was NOT persisted before v1.1.4 — and it defaults to `true`. That meant
+        // a reloaded Media profile (which needs `false` so TAP/swipes route through its play-pause /
+        // volume map instead of passing through as DPAD KeyEvents) silently reverted to DPAD and
+        // "did nothing" inside a music app. Persist it (+ reverseSwipeSemantics) so the routing mode
+        // survives a save/reload. (Zack 2026-05-31)
+        .put("useSystemKeyEvents",        c.useSystemKeyEvents)
+        .put("reverseSwipeSemantics",     c.reverseSwipeSemantics)
 
     private fun encodeSystemGestures(sg: SystemGestures): String = JSONObject()
         .put("wake",            sg.wake?.name)
@@ -131,6 +138,11 @@ class ProfilesPrefsStore(private val context: Context) {
                 List(jt.length()) { jt.getString(it) }
             } ?: emptyList()
             val id = obj.getString("id")
+            // Fallback base for any field the persisted config omits = THIS profile's built-in default
+            // (not the global GestureConfig() default). Critical for legacy configs saved before a
+            // field existed: e.g. Media saved pre-v1.1.4 has no `useSystemKeyEvents`, so it must
+            // inherit Media's `false` (route through the map) rather than the global `true` (DPAD).
+            val defConfig = DefaultProfiles.ALL.firstOrNull { it.id == id }?.gestureConfig ?: GestureConfig()
             // Respect the persisted gestureConfig: the timing windows ARE user-editable per profile
             // via Settings → Power & Connection (CycleRow for multiTapWindowMs / comboWindowMs /
             // longPressFollowupWindowMs + the latency toggles), so an earlier "always override from
@@ -141,7 +153,7 @@ class ProfilesPrefsStore(private val context: Context) {
                 id = id,
                 name = obj.optString("name", id),
                 map = bindings,
-                gestureConfig = decodeConfig(obj.optJSONObject("config")),
+                gestureConfig = decodeConfig(obj.optJSONObject("config"), defConfig),
                 triggerPackages = triggers,
             )
           } catch (e: Exception) {
@@ -163,8 +175,8 @@ class ProfilesPrefsStore(private val context: Context) {
         return out
     }
 
-    private fun decodeConfig(j: JSONObject?): GestureConfig {
-        val d = GestureConfig()    // defaults; overlay any explicit fields
+    private fun decodeConfig(j: JSONObject?, fallback: GestureConfig = GestureConfig()): GestureConfig {
+        val d = fallback           // per-profile defaults; overlay any explicit persisted fields
         if (j == null) return d
         return GestureConfig(
             multiTapWindowMs          = j.optLong("multiTapWindowMs",          d.multiTapWindowMs),
@@ -181,6 +193,10 @@ class ProfilesPrefsStore(private val context: Context) {
             enableDoubleLongPress     = j.optBoolean("enableDoubleLongPress",  d.enableDoubleLongPress),
             minRawIntervalMs          = j.optLong("minRawIntervalMs",          d.minRawIntervalMs),
             wakeSwallowCount          = j.optInt("wakeSwallowCount",           d.wakeSwallowCount),
+            // Absent in pre-v1.1.4 configs → inherits THIS profile's default (Media → false = route
+            // through the map; everything else → true = DPAD passthrough). See encodeConfig note.
+            useSystemKeyEvents        = j.optBoolean("useSystemKeyEvents",     d.useSystemKeyEvents),
+            reverseSwipeSemantics     = j.optBoolean("reverseSwipeSemantics",  d.reverseSwipeSemantics),
         )
     }
 

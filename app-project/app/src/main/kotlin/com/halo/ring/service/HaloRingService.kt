@@ -610,6 +610,17 @@ class HaloRingService : Service() {
                     // reconcile so [setIntervalMode(HIGH)] goes out before the user's first tap.
                     lastActivityMs = graph.scheduler.nowMs()
                     reconcilePower()
+                    // Re-sync the active profile to whatever app is in front RIGHT NOW. By the time
+                    // the ring is connected (and the wearer can actually gesture), the a11y service
+                    // has long since seen the foreground window — so this closes the cold-start race
+                    // where the app was opened before everything was wired and its profile never
+                    // activated until a leave + re-enter. Idempotent (no-op if already correct).
+                    // (Zack 2026-05-31)
+                    graph.scheduler.post {
+                        HaloRingAccessibilityService.lastForeground?.let { (pkg, activity) ->
+                            if (!graph.overlayController.isActive()) graph.modeManager.onForegroundPackage(pkg, activity)
+                        }
+                    }
                     // First-time pairing teaching aid: enable HUD hints for 5 minutes.
                     if (feedbackPrefs.autoHintAfterPairing) {
                         serviceScope.launch { graph.feedbackPrefs.armAutoHintAfterPairing() }
@@ -832,6 +843,16 @@ class HaloRingService : Service() {
             graph.scheduler.post {
                 // Freeze profile inference while a plugin overlay owns the ring — the underlying
                 // app's profile must not churn under the HUD; it re-asserts when the overlay releases.
+                if (!graph.overlayController.isActive()) graph.modeManager.onForegroundPackage(pkg, activity)
+            }
+        }
+        // Cold-start / service-restart sync: the a11y service may have already delivered the
+        // foreground window event BEFORE this listener was attached (the wearer's "first entry into
+        // Music didn't switch, but exit + re-enter did" race). Replay the last-seen foreground now so
+        // the correct profile activates immediately, without needing a fresh window transition.
+        // (Zack 2026-05-31)
+        graph.scheduler.post {
+            HaloRingAccessibilityService.lastForeground?.let { (pkg, activity) ->
                 if (!graph.overlayController.isActive()) graph.modeManager.onForegroundPackage(pkg, activity)
             }
         }
