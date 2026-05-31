@@ -64,23 +64,22 @@ fun PowerConnectionScreen(
         Spacer(Modifier.height(12.dp))
 
         // ── 单击组合 ──────────────────────────────────────────────────────────────────────────────
+        // NO switch (Zack 2026-05-31): the multi-tap window is mandatory — DOUBLE_TAP (= Back) always
+        // needs it — so there's nothing to turn off here. Just the interval. Shorter = a single TAP
+        // confirms sooner (less time spent waiting to rule out a 2nd tap).
         SectionHeader(stringResource(R.string.combo_single_title))
-        SwitchRow(
-            title = stringResource(R.string.combo_enable),
-            description = stringResource(R.string.combo_single_desc),
-            on = cfg.enableTapSwipe,
-            onToggle = { update(activeProfile, onActiveProfileUpdated) { it.copy(enableTapSwipe = !it.enableTapSwipe) } },
-        )
         WindowRow(
-            title = stringResource(R.string.combo_single_window),
+            title = stringResource(R.string.combo_single_interval),
             ms = cfg.multiTapWindowMs.toInt(),
-            enabled = true,   // always applies (DOUBLE/TRIPLE-tap disambiguation), even when off
+            enabled = true,
             onTap = { update(activeProfile, onActiveProfileUpdated) {
                 it.copy(multiTapWindowMs = cycleNext(MULTI_TAP_PRESETS, cfg.multiTapWindowMs))
             } },
         )
 
         // ── 双击组合 ──────────────────────────────────────────────────────────────────────────────
+        // The switch IS a latency control: off → a double-tap commits the instant the 2nd tap lands
+        // (no wait for a follow-up swipe), so DOUBLE_TAP = Back is snappier. On → can form DOUBLE_TAP_SWIPE.
         Spacer(Modifier.height(10.dp))
         SectionHeader(stringResource(R.string.combo_double_title))
         SwitchRow(
@@ -170,7 +169,8 @@ private fun Divider() {
     Box(Modifier.fillMaxWidth().height(1.dp).background(HaloColors.Line))
 }
 
-private val MULTI_TAP_PRESETS   = longArrayOf(180L, 200L, 220L, 280L, 340L, 400L)
+// Fine 20 ms steps through the useful range (Zack 2026-05-31: 220→280 was too coarse a jump).
+private val MULTI_TAP_PRESETS   = longArrayOf(140L, 160L, 180L, 200L, 220L, 240L, 260L, 280L, 300L, 340L, 400L)
 private val COMBO_PRESETS       = longArrayOf(200L, 250L, 300L, 400L, 500L)
 private val LP_FOLLOWUP_PRESETS  = longArrayOf(40L, 60L, 120L, 200L, 300L, 400L)
 

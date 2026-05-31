@@ -671,12 +671,16 @@ class HaloRingService : Service() {
         }
         cleanup += modeUnsub
 
-        // ── 6b. user edits in the settings UI: profilesFlow → ModeManager.upsert ──────────────
-        // Drop the initial value (already in ModeManager); only react to user-initiated changes.
+        // ── 6b. profilesFlow → ModeManager (persisted load + later user edits) ────────────────
+        // Sync EVERY emission into ModeManager — never drop the first. The persisted profiles load
+        // ASYNC (HaloRingApplication, Dispatchers.IO); if that load wins the race against this
+        // collector subscribing, the FIRST emission IS the wearer's persisted config — the old
+        // `if (first) drop` then silently discarded it, so ModeManager (which drives gesture routing)
+        // kept the DEFAULT bindings while the config file + UI showed the wearer's edits. That's the
+        // "config file says my plugin, but the gesture fires the default" bug (Zack 2026-05-31).
+        // upsert is now change-aware, so re-applying the unchanged seed here is a silent no-op.
         val profilesEditJob = serviceScope.launch {
-            var first = true
             graph.profilesFlow.collect { list ->
-                if (first) { first = false; return@collect }
                 list.forEach { graph.modeManager.upsert(it) }
             }
         }

@@ -183,7 +183,7 @@
     <string name="profile_editor_edit_cta">EDIT</string>
     <string name="profile_editor_system_value">(system) ›</string>
     <string name="profile_editor_footer">A badge means the gesture also drives a system action. You can still rebind it here.</string>
-    <string name="profile_combo_disabled">Enable in Gesture combos</string>
+    <string name="profile_combo_disabled">Combo off</string>
     <string name="gesture_role_wake">wakes</string>
     <string name="gesture_role_sleep">sleeps</string>
     <string name="profiles_list_footer">Profiles auto-switch by foreground app (when Accessibility is enabled). There is no manual switch.</string>
@@ -259,9 +259,11 @@
     <string name="combo_enable">Enable</string>
     <string name="combo_single_title">Single-tap combos</string>
     <string name="combo_single_desc">Single tap, then swipe → TAP_SWIPE up / down. (Double-tap always works.)</string>
+    <string name="combo_single_interval">Single-tap interval</string>
     <string name="combo_single_window">Single-tap window</string>
     <string name="combo_double_title">Double-tap combos</string>
     <string name="combo_double_desc">Double tap, then swipe → DOUBLE_TAP_SWIPE up / down.</string>
+    <string name="combo_double_interval">Double-tap interval</string>
     <string name="combo_double_window">Double-tap window</string>
     <string name="combo_long_title">Long-press combos</string>
     <string name="combo_long_desc">Long-press, then swipe → LONG_PRESS_SWIPE up / down; double long-press.</string>

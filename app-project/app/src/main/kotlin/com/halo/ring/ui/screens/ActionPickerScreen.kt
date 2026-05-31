@@ -74,6 +74,64 @@ fun ActionPickerScreen(
             modifier = Modifier.padding(horizontal = ScreenPadding, vertical = 12.dp),
         )
 
+        // ── Doc/18 §8.1 — EXTERNAL APPS group, pinned to the TOP (Zack 2026-05-31) ────────────
+        // Plugin actions (e.g. Constellation) are the wearer's most-bound custom targets, so they
+        // lead the picker rather than trailing the built-in catalog.
+        Text(
+            text = stringResource(R.string.action_group_external).uppercase(),
+            style = HaloType.Caption.copy(color = HaloColors.Mute),
+            modifier = Modifier.padding(horizontal = ScreenPadding, vertical = 4.dp),
+        )
+        if (plugins.isEmpty()) {
+            Text(
+                text = stringResource(R.string.action_picker_external_empty),
+                style = HaloType.Caption.copy(color = HaloColors.Mute, fontSize = 14.sp),
+                modifier = Modifier.padding(horizontal = ScreenPadding, vertical = 8.dp),
+            )
+        } else {
+            for (plugin in plugins) {
+                Text(
+                    text = plugin.appName,
+                    style = HaloType.Caption.copy(color = HaloColors.Mute, fontSize = 14.sp, letterSpacing = 1.sp),
+                    modifier = Modifier.padding(horizontal = ScreenPadding, vertical = 4.dp),
+                )
+                if (plugin.actions.isEmpty()) {
+                    Text(
+                        text = stringResource(R.string.action_picker_external_no_actions),
+                        style = HaloType.Caption.copy(color = HaloColors.Mute),
+                        modifier = Modifier.padding(horizontal = ScreenPadding, vertical = 6.dp),
+                    )
+                    Box(Modifier.fillMaxWidth().height(1.dp).background(HaloColors.Line))
+                    continue
+                }
+                for (pluginAction in plugin.actions) {
+                    val bound = pluginAction.toBoundAction()
+                    val selected = currentBinding is GlassAction.PluginAction &&
+                        (currentBinding as GlassAction.PluginAction).pluginPackage == bound.pluginPackage &&
+                        (currentBinding as GlassAction.PluginAction).actionId == bound.actionId
+                    FocusableRow(onClick = { onActionSelected(bound) }) {
+                        Text(
+                            text = (if (selected) "● " else "") + pluginAction.label,
+                            style = HaloType.Body.copy(
+                                color = if (selected) HaloColors.Accent else HaloColors.Fg,
+                            ),
+                        )
+                        if (selected) {
+                            Text(stringResource(R.string.action_picker_current), style = HaloType.Caption.copy(color = HaloColors.Mute))
+                        } else if (pluginAction.description != null) {
+                            Text(
+                                pluginAction.description,
+                                style = HaloType.Caption.copy(color = HaloColors.Mute, fontSize = 12.sp),
+                                maxLines = 1,
+                            )
+                        }
+                    }
+                    Box(Modifier.fillMaxWidth().height(1.dp).background(HaloColors.Line))
+                }
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+
         // Walk the catalog in order, emitting a small group header each time the group changes.
         var lastGroup: SettingsCatalog.ActionGroup? = null
         for (entry in SettingsCatalog.ENTRIES) {
@@ -112,66 +170,6 @@ fun ActionPickerScreen(
                 }
             }
             Box(Modifier.fillMaxWidth().height(1.dp).background(HaloColors.Line))
-        }
-
-        // ── Doc/18 §8.1 — EXTERNAL APPS group ──────────────────────────────────────────────
-        // Always render the group header so the wearer learns the section exists even with no
-        // plugins installed (the empty-state message hints how plugins are surfaced).
-        Spacer(Modifier.height(12.dp))
-        Text(
-            text = stringResource(R.string.action_group_external).uppercase(),
-            style = HaloType.Caption.copy(color = HaloColors.Mute),
-            modifier = Modifier.padding(horizontal = ScreenPadding, vertical = 4.dp),
-        )
-        if (plugins.isEmpty()) {
-            Text(
-                text = stringResource(R.string.action_picker_external_empty),
-                style = HaloType.Caption.copy(color = HaloColors.Mute, fontSize = 14.sp),
-                modifier = Modifier.padding(horizontal = ScreenPadding, vertical = 8.dp),
-            )
-        } else {
-            for (plugin in plugins) {
-                // Plugin sub-heading (app name in small all-caps, like a group header).
-                Text(
-                    text = plugin.appName,
-                    style = HaloType.Caption.copy(color = HaloColors.Mute, fontSize = 14.sp, letterSpacing = 1.sp),
-                    modifier = Modifier.padding(horizontal = ScreenPadding, vertical = 4.dp),
-                )
-                if (plugin.actions.isEmpty()) {
-                    Text(
-                        text = stringResource(R.string.action_picker_external_no_actions),
-                        style = HaloType.Caption.copy(color = HaloColors.Mute),
-                        modifier = Modifier.padding(horizontal = ScreenPadding, vertical = 6.dp),
-                    )
-                    Box(Modifier.fillMaxWidth().height(1.dp).background(HaloColors.Line))
-                    continue
-                }
-                for (pluginAction in plugin.actions) {
-                    val bound = pluginAction.toBoundAction()
-                    val selected = currentBinding is GlassAction.PluginAction &&
-                        (currentBinding as GlassAction.PluginAction).pluginPackage == bound.pluginPackage &&
-                        (currentBinding as GlassAction.PluginAction).actionId == bound.actionId
-                    FocusableRow(onClick = { onActionSelected(bound) }) {
-                        Text(
-                            text = (if (selected) "● " else "") + pluginAction.label,
-                            style = HaloType.Body.copy(
-                                color = if (selected) HaloColors.Accent else HaloColors.Fg,
-                            ),
-                        )
-                        if (selected) {
-                            Text(stringResource(R.string.action_picker_current), style = HaloType.Caption.copy(color = HaloColors.Mute))
-                        } else if (pluginAction.description != null) {
-                            // Truncate softly — Body row already constrains; Caption right-aligned.
-                            Text(
-                                pluginAction.description,
-                                style = HaloType.Caption.copy(color = HaloColors.Mute, fontSize = 12.sp),
-                                maxLines = 1,
-                            )
-                        }
-                    }
-                    Box(Modifier.fillMaxWidth().height(1.dp).background(HaloColors.Line))
-                }
-            }
         }
 
         Spacer(Modifier.height(16.dp))

@@ -62,7 +62,9 @@ fun ProfileEditorScreen(
             // explain instead of letting the wearer bind something that can never fire (Zack 2026-05-30).
             val comboOff = comboDisabled(gesture, cfg)
             FocusableRow(onClick = { if (!comboOff) onGestureTapped(gesture) }) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                // weight(1f) so the gesture name + badge take the left space and the right-hand value
+                // can never overlap them (the "Combo off" tag in EN was overrunning — Zack 2026-05-31).
+                Row(modifier = Modifier.weight(1f).padding(end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         gestureFriendlyText(gesture),
                         style = HaloType.Body.copy(color = if (comboOff) HaloColors.Mute else HaloColors.Fg),
@@ -83,6 +85,7 @@ fun ProfileEditorScreen(
                         color = if (comboOff || action is GlassAction.None) HaloColors.Mute else HaloColors.Fg,
                         fontSize = if (comboOff) 11.sp else HaloType.RowVal.fontSize,
                     ),
+                    maxLines = 1,
                 )
             }
             Box(Modifier.fillMaxWidth().height(1.dp).background(HaloColors.Line))
@@ -108,7 +111,9 @@ private fun systemRoleRes(g: Gesture, profileId: String): Int? = when (g) {
  *  so it can never fire and shouldn't be bindable. */
 private fun comboDisabled(g: Gesture, cfg: GestureConfig): Boolean = when (g) {
     Gesture.TAP_SWIPE_UP, Gesture.TAP_SWIPE_DOWN -> !cfg.enableTapSwipe
-    Gesture.DOUBLE_TAP_SWIPE_UP, Gesture.DOUBLE_TAP_SWIPE_DOWN -> !cfg.enableDoubleTapSwipe
+    // 双击组合 gates DOUBLE_TAP_SWIPE *and* TRIPLE_TAP — both are double-tap extensions that only
+    // fire while the 双击组合 hold-window is open (Zack 2026-05-31). Off → neither can fire.
+    Gesture.DOUBLE_TAP_SWIPE_UP, Gesture.DOUBLE_TAP_SWIPE_DOWN, Gesture.TRIPLE_TAP -> !cfg.enableDoubleTapSwipe
     Gesture.LONG_PRESS_SWIPE_UP, Gesture.LONG_PRESS_SWIPE_DOWN, Gesture.DOUBLE_LONG_PRESS -> !cfg.awaitLongPressCombos
     else -> false
 }

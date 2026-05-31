@@ -164,7 +164,7 @@
     <string name="profile_editor_edit_cta">编辑</string>
     <string name="profile_editor_system_value">（系统）›</string>
     <string name="profile_editor_footer">带标记的手势同时承担系统功能，但仍可在此重新绑定。</string>
-    <string name="profile_combo_disabled">在手势组合中开启</string>
+    <string name="profile_combo_disabled">组合已关</string>
     <string name="gesture_role_wake">唤醒</string>
     <string name="gesture_role_sleep">锁屏</string>
     <string name="profiles_list_footer">前台 app 切换时自动切换配置（需启用辅助功能）。无手动切换。</string>
@@ -233,9 +233,11 @@
     <string name="combo_enable">启用</string>
     <string name="combo_single_title">单击组合</string>
     <string name="combo_single_desc">单击后接滑动 → 单击上 / 单击下。（双击始终可用）</string>
+    <string name="combo_single_interval">单击组合时间间隔</string>
     <string name="combo_single_window">单击组合窗口</string>
     <string name="combo_double_title">双击组合</string>
     <string name="combo_double_desc">双击后接滑动 → 双击上 / 双击下。</string>
+    <string name="combo_double_interval">双击间隔</string>
     <string name="combo_double_window">双击组合窗口</string>
     <string name="combo_long_title">长按组合</string>
     <string name="combo_long_desc">长按后接滑动 → 长按上 / 长按下；以及双长按。</string>

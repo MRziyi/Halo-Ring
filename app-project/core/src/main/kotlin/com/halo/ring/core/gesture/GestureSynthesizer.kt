@@ -115,18 +115,15 @@ class GestureSynthesizer(
                 tapTimer = scheduler.postDelayed(config.multiTapWindowMs) { onTapWindowExpired(1) }
             }
             tapCount == 2 -> {
-                // Hold the DOUBLE_TAP if EITHER a 双击组合 swipe (enableDoubleTapSwipe) OR a 3rd tap
-                // (enableTripleTap/Quad) could still follow — these are now independent. The window is
-                // the 双击组合窗口 (comboWindowMs) when waiting for a swipe, else the multi-tap window
-                // (just disambiguating DOUBLE vs TRIPLE). `inComboWindow` arms the DOUBLE_TAP_SWIPE
-                // path and is set ONLY when double-tap-swipe is enabled.
-                val waitForSwipe = config.enableDoubleTapSwipe
-                val waitForMoreTaps = config.enableTripleTap || config.enableQuadrupleTap
-                if (waitForSwipe || waitForMoreTaps) {
-                    inComboWindow = waitForSwipe
-                    val window = if (waitForSwipe) config.comboWindowMs else config.multiTapWindowMs
-                    comboTimer = scheduler.postDelayed(window) {
-                        if (tapCount == 2) {
+                // 双击组合 (enableDoubleTapSwipe) is the master switch for ALL double-tap extensions —
+                // both DOUBLE_TAP_SWIPE_* AND TRIPLE_TAP (Zack 2026-05-31). When it's OFF, a DOUBLE_TAP
+                // commits the INSTANT the 2nd tap lands: no wait for a follow-up swipe, no wait for a
+                // 3rd tap → DOUBLE_TAP = Back is snappy and turning off 双击组合 actually saves time.
+                // When ON, hold the window so a swipe → DOUBLE_TAP_SWIPE or a 3rd tap → TRIPLE_TAP.
+                if (config.enableDoubleTapSwipe) {
+                    inComboWindow = true
+                    comboTimer = scheduler.postDelayed(config.comboWindowMs) {
+                        if (inComboWindow && tapCount == 2) {
                             inComboWindow = false
                             comboTimer = NoopCancellable
                             tapCount = 0
@@ -135,7 +132,7 @@ class GestureSynthesizer(
                     }
                 } else {
                     tapCount = 0
-                    emit(Gesture.DOUBLE_TAP)
+                    emit(Gesture.DOUBLE_TAP)   // immediate — no triple, no swipe
                 }
             }
             tapCount == 3 -> {

@@ -101,12 +101,27 @@ class GestureSynthesizerTest {
     // ── triple tap ───────────────────────────────────────────────────────────────────────────────
 
     @Test fun `triple tap emits TRIPLE_TAP and suppresses the bare DOUBLE_TAP`() {
-        val (syn, sched, out) = fixture(GestureConfig(optimisticSingleTap = false))
+        // TRIPLE_TAP is a double-tap extension → requires 双击组合 (enableDoubleTapSwipe) on.
+        val (syn, sched, out) = fixture(GestureConfig(optimisticSingleTap = false, enableDoubleTapSwipe = true))
         syn.onRaw(RawGesture.TOUCH, nowMs = 0)
         syn.onRaw(RawGesture.TOUCH, nowMs = 120)
         syn.onRaw(RawGesture.TOUCH, nowMs = 240)
         sched.advanceBy(500)
         assertEquals(listOf(Gesture.TRIPLE_TAP), out)
+    }
+
+    @Test fun `with double-combo OFF, three fast taps never make TRIPLE_TAP (double-tap is immediate)`() {
+        // The latency promise: 双击组合 off → DOUBLE_TAP commits on the 2nd tap with no wait, so a 3rd
+        // tap can't extend it to TRIPLE_TAP. (Confirms turning off 双击组合 actually speeds up double-tap.)
+        val (syn, sched, out) = fixture(GestureConfig(
+            optimisticSingleTap = false, enableDoubleTapSwipe = false, enableTripleTap = true,
+        ))
+        syn.onRaw(RawGesture.TOUCH, nowMs = 0)
+        syn.onRaw(RawGesture.TOUCH, nowMs = 100)   // 2nd tap → DOUBLE_TAP fires immediately here
+        syn.onRaw(RawGesture.TOUCH, nowMs = 200)   // 3rd tap → starts a fresh single tap
+        sched.advanceBy(500)
+        assertEquals(listOf(Gesture.DOUBLE_TAP, Gesture.TAP), out)
+        assertTrue(Gesture.TRIPLE_TAP !in out, "triple-tap must NOT form while 双击组合 is off")
     }
 
     @Test fun `with enableTripleTap=false a 3rd tap collapses to DOUBLE_TAP`() {
@@ -223,7 +238,7 @@ class GestureSynthesizerTest {
     // QUADRUPLE_TAP is disabled by default now (2026-05-28); these exercise the still-present
     // synth path by explicitly re-enabling the flag.
     @Test fun `quadruple tap emits QUADRUPLE_TAP and nothing else`() {
-        val (syn, sched, out) = fixture(GestureConfig(optimisticSingleTap = false, enableQuadrupleTap = true))
+        val (syn, sched, out) = fixture(GestureConfig(optimisticSingleTap = false, enableDoubleTapSwipe = true, enableQuadrupleTap = true))
         syn.onRaw(RawGesture.TOUCH, nowMs = 0)
         syn.onRaw(RawGesture.TOUCH, nowMs = 100)
         syn.onRaw(RawGesture.TOUCH, nowMs = 200)
@@ -234,14 +249,14 @@ class GestureSynthesizerTest {
 
     @Test fun `five taps cap to QUADRUPLE_TAP`() {
         // Counts above 4 are clamped — extra taps don't roll over into a fresh TAP.
-        val (syn, sched, out) = fixture(GestureConfig(optimisticSingleTap = false, enableQuadrupleTap = true))
+        val (syn, sched, out) = fixture(GestureConfig(optimisticSingleTap = false, enableDoubleTapSwipe = true, enableQuadrupleTap = true))
         repeat(5) { syn.onRaw(RawGesture.TOUCH, nowMs = it * 100L) }
         sched.advanceBy(500)
         assertEquals(listOf(Gesture.QUADRUPLE_TAP), out)
     }
 
-    @Test fun `default config (quad disabled) collapses 4 taps to TRIPLE_TAP`() {
-        val (syn, sched, out) = fixture(GestureConfig(optimisticSingleTap = false))
+    @Test fun `with double-combo on + quad disabled, 4 taps collapse to TRIPLE_TAP`() {
+        val (syn, sched, out) = fixture(GestureConfig(optimisticSingleTap = false, enableDoubleTapSwipe = true))
         repeat(4) { syn.onRaw(RawGesture.TOUCH, nowMs = it * 100L) }
         sched.advanceBy(500)
         assertEquals(listOf(Gesture.TRIPLE_TAP), out)
@@ -249,7 +264,7 @@ class GestureSynthesizerTest {
 
     @Test fun `with enableQuadrupleTap=false a 4th tap collapses to TRIPLE_TAP`() {
         val (syn, sched, out) = fixture(GestureConfig(
-            optimisticSingleTap = false, enableTripleTap = true, enableQuadrupleTap = false,
+            optimisticSingleTap = false, enableDoubleTapSwipe = true, enableTripleTap = true, enableQuadrupleTap = false,
         ))
         syn.onRaw(RawGesture.TOUCH, nowMs = 0)
         syn.onRaw(RawGesture.TOUCH, nowMs = 100)

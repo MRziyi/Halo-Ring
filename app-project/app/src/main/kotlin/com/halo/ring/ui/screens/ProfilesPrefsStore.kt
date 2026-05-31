@@ -119,6 +119,7 @@ class ProfilesPrefsStore(private val context: Context) {
         val arr = JSONArray(json)
         val out = ArrayList<KeyMapProfile>(arr.length())
         for (i in 0 until arr.length()) {
+          try {
             val obj = arr.getJSONObject(i)
             val mapObj = obj.optJSONObject("map") ?: JSONObject()
             val bindings = mutableMapOf<Gesture, com.halo.ring.core.action.GlassAction>()
@@ -143,6 +144,21 @@ class ProfilesPrefsStore(private val context: Context) {
                 gestureConfig = decodeConfig(obj.optJSONObject("config")),
                 triggerPackages = triggers,
             )
+          } catch (e: Exception) {
+              // One malformed profile entry must NOT nuke the whole set (which would silently reset
+              // the wearer to defaults + re-save over their good config). Skip it; the merge below
+              // re-adds any built-in that ended up missing.
+              android.util.Log.w("ProfilesPrefsStore", "skipping unparseable profile #$i: ${e.message}")
+          }
+        }
+        // MERGE in any built-in profile the persisted set is missing (by id). Older installs were
+        // seeded before reader/camera/fast existed, so their persisted JSON had only navigation +
+        // media — and because the persisted set REPLACES the seed wholesale, the newer built-ins
+        // never appeared (their auto-switch silently dead). Adding the missing built-ins fresh keeps
+        // the wearer's edits to the profiles they DID customise while restoring the rest. (2026-05-31)
+        val knownIds = out.mapTo(HashSet()) { it.id }
+        com.halo.ring.core.action.DefaultProfiles.ALL.forEach { def ->
+            if (def.id !in knownIds) out += def
         }
         return out
     }
@@ -154,7 +170,9 @@ class ProfilesPrefsStore(private val context: Context) {
             multiTapWindowMs          = j.optLong("multiTapWindowMs",          d.multiTapWindowMs),
             comboWindowMs             = j.optLong("comboWindowMs",             d.comboWindowMs),
             optimisticSingleTap       = j.optBoolean("optimisticSingleTap",    d.optimisticSingleTap),
-            enableTapSwipe            = j.optBoolean("enableTapSwipe",         d.enableTapSwipe),
+            // 单击组合 has no UI switch anymore (the multi-tap window is mandatory for DOUBLE_TAP), so
+            // TAP_SWIPE is always available — force it on, ignoring any stale persisted `false`.
+            enableTapSwipe            = true,
             enableDoubleTapSwipe      = j.optBoolean("enableDoubleTapSwipe",   d.enableDoubleTapSwipe),
             enableTripleTap           = j.optBoolean("enableTripleTap",        d.enableTripleTap),
             enableQuadrupleTap        = j.optBoolean("enableQuadrupleTap",     d.enableQuadrupleTap),

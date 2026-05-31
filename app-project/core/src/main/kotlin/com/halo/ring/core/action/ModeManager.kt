@@ -99,8 +99,13 @@ class ModeManager(
     /** CRUD for the settings UI. */
     fun upsert(p: KeyMapProfile) {
         val i = profiles.indexOfFirst { it.id == p.id }
+        // Only notify when the ACTIVE profile's content actually changed — KeyMapProfile is a data
+        // class, so `!=` is structural. This keeps upsert idempotent: re-applying an unchanged
+        // profile (e.g. the seed during the profilesFlow → ModeManager sync on startup) is a silent
+        // no-op, so it won't fire a spurious "profile switched" HUD.
+        val changed = i < 0 || profiles[i] != p
         if (i < 0) profiles += p else profiles[i] = p
-        if (i == activeIndex) notifyChanged()
+        if (i == activeIndex && changed) notifyChanged()
     }
     fun remove(id: String) {
         val i = profiles.indexOfFirst { it.id == id }

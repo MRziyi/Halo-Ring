@@ -237,7 +237,30 @@ fun HaloRingApp(
                         // tabs. The earlier `onKeyEvent` approach fired before the focus search and
                         // switched tabs on every swipe — the bug Zack hit.
                         if (event.type != androidx.compose.ui.input.key.KeyEventType.KeyDown) return@onPreviewKeyEvent false
-                        if (top != null) return@onPreviewKeyEvent false
+                        if (top != null) {
+                            // Sub-screen lists wrap at the boundary — "infinite list" feel (Zack
+                            // 2026-05-31): swipe-up on the first row jumps to the last, swipe-down on
+                            // the last jumps to the first. Otherwise behave exactly like the default
+                            // DPAD focus nav. The `guard` bounds the wrap-walk so a focus cycle can't
+                            // spin. Only DPAD up/down are taken over; everything else falls through.
+                            when (event.key) {
+                                androidx.compose.ui.input.key.Key.DirectionDown -> {
+                                    if (!focusManager.moveFocus(androidx.compose.ui.focus.FocusDirection.Down)) {
+                                        var guard = 0
+                                        while (focusManager.moveFocus(androidx.compose.ui.focus.FocusDirection.Up) && guard++ < 300) { /* walk to first */ }
+                                    }
+                                    return@onPreviewKeyEvent true
+                                }
+                                androidx.compose.ui.input.key.Key.DirectionUp -> {
+                                    if (!focusManager.moveFocus(androidx.compose.ui.focus.FocusDirection.Up)) {
+                                        var guard = 0
+                                        while (focusManager.moveFocus(androidx.compose.ui.focus.FocusDirection.Down) && guard++ < 300) { /* walk to last */ }
+                                    }
+                                    return@onPreviewKeyEvent true
+                                }
+                                else -> return@onPreviewKeyEvent false
+                            }
+                        }
                         val n = HomeTab.values().size
                         when (event.key) {
                             androidx.compose.ui.input.key.Key.DirectionDown -> {
