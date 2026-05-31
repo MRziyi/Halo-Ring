@@ -844,7 +844,7 @@ class AndroidR08BleClient(
     }
 
     @SuppressLint("MissingPermission")
-    private fun writeBytes(bytes: ByteArray) {
+    private fun writeBytes(bytes: ByteArray, retriesLeft: Int = WRITE_MAX_RETRIES) {
         val ch = writeChar ?: run {
             Log.w(TAG, "writeBytes: writeChar not yet available, dropping ${bytes.size}-byte cmd")
             return
@@ -852,7 +852,19 @@ class AndroidR08BleClient(
         try {
             ch.value = bytes
             ch.writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
-            gatt?.writeCharacteristic(ch)
+            // Android BLE allows only ONE outstanding GATT op — if another op (a read, the CCCD
+            // write, or a prior command whose onCharacteristicWrite hasn't returned) is still in
+            // flight, writeCharacteristic returns false and the write is **silently dropped**. The
+            // old code ignored that return, so an unlucky drop lost a command outright — observed
+            // 2026-05-31 as the bootstrap SetTime (0x01) getting dropped, so the ring never sent its
+            // 14-byte capability extension and bloodOxygen/HR/HRV/temperature caps went missing
+            // (SpO₂ readout disappeared). Retry shortly, bounded, so the next free slot picks it up.
+            val ok = gatt?.writeCharacteristic(ch)
+            if (ok != true && retriesLeft > 0) {
+                scheduler.postDelayed(WRITE_RETRY_MS) {
+                    if (state == ConnectionState.READY) writeBytes(bytes, retriesLeft - 1)
+                }
+            }
         } catch (e: SecurityException) {
             Log.e(TAG, "writeCharacteristic denied: ${e.message}")
         }
@@ -971,8 +983,13 @@ class AndroidR08BleClient(
      */
     private fun startCommandChannelBootstrap() {
         Log.i(TAG, "starting command-channel bootstrap")
-        val nowUtcSec = System.currentTimeMillis() / 1000
-        writeBytes(R08Protocol.setTimeBeijingLocked(nowUtcSec))
+        val nowMs = System.currentTimeMillis()
+        // Set the ring's clock to the GLASSES' local time (its current tz offset, DST-aware) — not a
+        // hard-coded Beijing UTC+8 — so the ring rolls its day (and zeroes the daily step counter) at
+        // the wearer's local midnight. SetTime had to retry-survive too: it's the first bootstrap
+        // write and was the one that got dropped (→ missing caps); writeBytes now retries.
+        val tzOffsetSec = java.util.TimeZone.getDefault().getOffset(nowMs) / 1000
+        writeBytes(R08Protocol.setTimeForOffset(nowMs / 1000, tzOffsetSec))
         scheduler.postDelayed(200L) { if (state == ConnectionState.READY) writeBytes(R08Protocol.bindAncs()) }
         scheduler.postDelayed(400L) { if (state == ConnectionState.READY) writeBytes(R08Protocol.DEVICE_SUPPORT_QUERY) }
         scheduler.postDelayed(600L) { if (state == ConnectionState.READY) writeBytes(R08Protocol.GET_MESSAGE_PUSH) }
@@ -1043,6 +1060,11 @@ class AndroidR08BleClient(
         // Give up the LOW_LATENCY scan after this long. The user can retry via "Reconnect" or by
         // taking the glasses off + putting them back on (wear-state change re-invokes start()).
         private const val SCAN_TIMEOUT_MS = 30_000L
+        /** A GATT write returns false when another op is in flight (Android allows only one at a
+         *  time). Retry the dropped write this many times, [WRITE_RETRY_MS] apart, so a transient
+         *  busy-slot doesn't lose a command (e.g. the bootstrap SetTime capability query). */
+        private const val WRITE_MAX_RETRIES = 5
+        private const val WRITE_RETRY_MS = 70L
         /** Energy: auto-reconnect re-scan backoff bounds. Base is short so the SPEC §6.5 quirk-drop
          *  reconnect stays snappy (resets on every READY); max caps the worst-case to one short
          *  scan per 30 s when the ring is genuinely gone, instead of a back-to-back scan loop. */

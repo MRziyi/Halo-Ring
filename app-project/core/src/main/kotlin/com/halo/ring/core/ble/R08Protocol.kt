@@ -410,17 +410,24 @@ object R08Protocol {
         language.toByte(),
     ))
 
-    /** Build a SetTime command from a Unix-epoch second, shifting into the firmware's Beijing
-     *  frame so device-emitted timestamps come out as real Unix-UTC. */
-    fun setTimeBeijingLocked(unixEpochSecond: Long): ByteArray {
-        // Add 8h to get the BCD that the firmware will treat as Beijing-local.
-        val beijing = unixEpochSecond + 8 * 3600
-        val sec  = beijing % 60
-        val min  = (beijing / 60) % 60
-        val hour = (beijing / 3600) % 24
+    /**
+     * Build a SetTime command so the ring's clock reads wall-time at [utcOffsetSeconds]. **Pass the
+     * wearer's device-timezone offset** (e.g. Chicago CDT = -5h): the ring has no timezone field, it
+     * just stores the BCD we send and rolls its DAY (zeroing the daily step counter) at that clock's
+     * midnight. Sending Beijing time (the old hard-coded UTC+8) made the daily step count reset at
+     * Beijing midnight — ~11:00 in Chicago — so "today's steps" were wrong for any non-Beijing wearer
+     * (Zack 2026-05-31). Using the device offset puts the roll-over at the wearer's local midnight.
+     * (SPEC §4.8: the firmware *emits* timestamps assuming UTC+8, but we don't consume those — vitals
+     * are stamped with the glasses' own clock.)
+     */
+    fun setTimeForOffset(unixEpochSecond: Long, utcOffsetSeconds: Int): ByteArray {
+        val local = unixEpochSecond + utcOffsetSeconds
+        val sec  = local % 60
+        val min  = (local / 60) % 60
+        val hour = (local / 3600) % 24
         // Use a stripped-down GMT-Julian-to-YMD to avoid pulling java.util.Date/Calendar into :core.
         // Algorithm from Howard Hinnant's chrono paper (public domain).
-        val days = beijing / 86400
+        val days = local / 86400
         val z = days + 719468
         val era = if (z >= 0) z / 146097 else (z - 146096) / 146097
         val doe = (z - era * 146097)
@@ -440,6 +447,10 @@ object R08Protocol {
             second = sec.toInt(),
         )
     }
+
+    /** Legacy UTC+8 variant — kept for tests/reference. Production passes the device tz offset via
+     *  [setTimeForOffset] so the daily step roll-over matches the wearer's local midnight. */
+    fun setTimeBeijingLocked(unixEpochSecond: Long): ByteArray = setTimeForOffset(unixEpochSecond, 8 * 3600)
 
     // ─── 0x04 BindAncs ────────────────────────────────────────────────────────────────────────
     fun bindAncs(sdkLevel: Int = 2, model: String = "halo-ring"): ByteArray {
