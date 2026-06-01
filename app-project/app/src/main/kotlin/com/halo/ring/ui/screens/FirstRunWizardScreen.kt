@@ -23,6 +23,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.InputMode
+import androidx.compose.ui.platform.LocalInputModeManager
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.halo.ring.R
@@ -38,8 +40,6 @@ import com.halo.ring.ui.ScreenPadding
  * Interaction paradigm (2026-05-28):
  *   - ONE button visible at a time.
  *   - If the app can auto-detect completion → auto-advance (no CONTINUE, no user tap).
- *   - If completion can't be detected (autostart) → show action button first; after it's
- *     been tapped, switch to ONLY a CONTINUE button. Never action + CONTINUE together.
  *
  * Step order:
  *   1. SYSTEM_ACCESS — gates in sequence:
@@ -48,9 +48,11 @@ import com.halo.ring.ui.ScreenPadding
  *        c) Wi-Fi radio on
  *        d) Wireless Debugging
  *        e) ADB pairing → post-pairing Wi-Fi off
- *   2. KEEP_ALIVE — battery exemption (auto-detected) then autostart (tap → CONTINUE).
+ *   2. KEEP_ALIVE — battery-optimisation exemption (direct system popup; auto-advances once on).
+ *      The background-unrestricted appop is granted silently by the agent — no App-info tail.
  *   3. PAIR ring — BLE scan.
  */
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)   // InputModeManager.requestInputMode
 @Composable
 fun FirstRunWizardScreen(
     onOpenDeveloperSettings: () -> Unit = {},
@@ -66,7 +68,6 @@ fun FirstRunWizardScreen(
     accessibilityEnabled: Boolean = false,
     onRequestBatteryExemption: () -> Unit = {},
     batteryExempted: Boolean = false,
-    onOpenAutostartSettings: () -> Unit = {},
     onStartRingPairing: () -> Unit = {},
     onCompleted: () -> Unit = {},
     isReRecovery: Boolean = false,
@@ -80,6 +81,9 @@ fun FirstRunWizardScreen(
     HaloRingTheme {
         var step by remember { mutableStateOf(WizardStep.SYSTEM_ACCESS) }
         val focus = remember { FocusRequester() }
+        // Force keyboard/focus input mode so the focus ring shows even when a mouse is attached
+        // (a pointer device drops the window into touch mode → no highlight; Zack 2026-06-01).
+        val inputModeManager = LocalInputModeManager.current
 
         // Re-focus whenever observable state changes so the AR focus ring lands on the
         // new button after each gate auto-advances.
@@ -87,6 +91,7 @@ fun FirstRunWizardScreen(
             step, adbStatus, batteryExempted, devOptionsEnabled,
             wirelessDebugEnabled, agentReady, accessibilityEnabled, wifiConnected,
         ) {
+            inputModeManager.requestInputMode(InputMode.Keyboard)
             repeat(5) {
                 kotlinx.coroutines.delay(100)
                 val ok = try { focus.requestFocus(); true } catch (_: Throwable) { false }
@@ -130,9 +135,7 @@ fun FirstRunWizardScreen(
                 )
                 WizardStep.KEEP_ALIVE -> KeepAliveStep(
                     batteryExempted = batteryExempted,
-                    isReRecovery = isReRecovery,
                     onRequestBattery = onRequestBatteryExemption,
-                    onOpenAutostart = onOpenAutostartSettings,
                     onNext = { step = WizardStep.PAIR },
                 )
                 WizardStep.PAIR -> when {
@@ -309,22 +312,19 @@ private fun SystemAccessStep(
 }
 
 /**
- * Keep-alive step — two sequential gates.
+ * Keep-alive step — battery-optimisation exemption only (Zack 2026-06-01).
  *
- * Gate 1: battery exemption (auto-detected via PowerManager).
- *   Not exempted → only "ALLOW BATTERY".
- *   Exempted     → show ✓, fall through to gate 2 (no CONTINUE for battery).
- *
- * Gate 2: autostart (not auto-detectable).
- *   Not opened → only "OPEN APP INFO".
- *   Opened     → only "CONTINUE".   ← never both buttons together.
+ * The old "background unrestricted / auto-start" gate that dumped the user into App info to hunt for
+ * a toggle is gone — that appop is now granted silently by the agent (`grantKeepAlive`) during the
+ * SYSTEM_ACCESS bootstrap. The one remaining piece needs a user confirm because Android requires it
+ * for `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`, so we show ONE direct-system-popup CTA:
+ *   Not exempted → only "ALLOW BATTERY" (fires the system allow-dialog, like Constellation-Glass).
+ *   Exempted     → show ✓ + auto-advance (no CONTINUE; often already exempt from the onCreate ask).
  */
 @Composable
 private fun KeepAliveStep(
     batteryExempted: Boolean,
-    isReRecovery: Boolean,
     onRequestBattery: () -> Unit,
-    onOpenAutostart: () -> Unit,
     onNext: () -> Unit,
 ) {
     Text(stringResource(R.string.wizard_keepalive_title), style = HaloType.Title)
@@ -332,7 +332,6 @@ private fun KeepAliveStep(
     Text(stringResource(R.string.wizard_keepalive_body), style = HaloType.Caption)
     Spacer(Modifier.height(14.dp))
 
-    // Gate 1: battery exemption — auto-detected, no CONTINUE.
     if (!batteryExempted) {
         Text(stringResource(R.string.wizard_keepalive_battery_desc), style = HaloType.Caption)
         Spacer(Modifier.height(12.dp))
@@ -340,24 +339,9 @@ private fun KeepAliveStep(
         return
     }
 
-    // Battery exempted — show ✓ and advance to autostart gate automatically.
+    // Exempt (granted by the popup or already-on) → confirm + advance. No "find it in Settings" tail.
     StatusLine(stringResource(R.string.wizard_keepalive_battery_row), ok = true)
-    Spacer(Modifier.height(10.dp))
-    Text(stringResource(R.string.wizard_keepalive_autostart_desc), style = HaloType.Caption)
-    Spacer(Modifier.height(12.dp))
-
-    // Gate 2: autostart — can't detect. Track whether the user has opened the settings screen.
-    // Before tap: only action button. After tap: only CONTINUE. Never both.
-    // Re-recovery: already done, seed as opened so CONTINUE shows immediately.
-    var autostartOpened by remember { mutableStateOf(isReRecovery) }
-    if (!autostartOpened) {
-        Cta(stringResource(R.string.wizard_keepalive_autostart_cta), onClick = {
-            autostartOpened = true
-            onOpenAutostart()
-        })
-    } else {
-        Cta(stringResource(R.string.wizard_keepalive_done_cta), onClick = onNext)
-    }
+    androidx.compose.runtime.LaunchedEffect(Unit) { onNext() }
 }
 
 /** Short window before we stop showing the indefinite "connecting" text and offer a retry —

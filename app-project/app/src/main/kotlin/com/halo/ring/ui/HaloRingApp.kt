@@ -21,7 +21,9 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.InputMode
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalInputModeManager
 import androidx.compose.ui.unit.dp
 import com.halo.ring.di.RingInfo
 import com.halo.ring.ui.screens.AboutScreen
@@ -44,6 +46,7 @@ import com.halo.ring.ui.screens.ProfileEditorScreen
 import com.halo.ring.ui.screens.ProfilesListScreen
 import com.halo.ring.ui.screens.RingScreen
 import com.halo.ring.ui.screens.SettingsSection
+import com.halo.ring.ui.screens.SetupStatus
 import com.halo.ring.ui.screens.StatusScreen
 import com.halo.ring.ui.screens.StatusState
 import com.halo.ring.ui.screens.SystemGesturesScreen
@@ -69,6 +72,7 @@ import com.halo.ring.core.gesture.SystemGestures
  * - No InAppFocusController. The base ring gestures dispatch via [ActivitySystemKeyDispatcher] as
  *   system KeyEvents; Compose's standard FocusManager handles DPAD navigation natively.
  */
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)   // InputModeManager.requestInputMode
 @Composable
 fun HaloRingApp(
     initial: AppState = AppState(),
@@ -85,6 +89,8 @@ fun HaloRingApp(
     /** v0.4 C4 — SPEC v3 capability bitmap; threads into Vitals + Ring sub-screens. */
     ringCapabilities: Set<String> = emptySet(),
     advancedPrefs: AdvancedPrefs = AdvancedPrefs(),
+    /** Live system-access state for the Advanced screen's critical rows (battery / a11y / agent). */
+    setupStatus: SetupStatus = SetupStatus(),
     vitalsPrefs: VitalsPrefs = VitalsPrefs(),
     deviceProfile: DeviceProfile = DeviceProfile.GENERIC_ANDROID,
     versionName: String = "0.1.0",
@@ -121,6 +127,11 @@ fun HaloRingApp(
         }
 
         val focusManager = LocalFocusManager.current
+        // A pointer device (mouse / trackpad) puts the window into Android "touch mode", which
+        // suppresses the Compose focus ring — that's why "接了鼠标 focus 就消失了，怎么滑都不回来"
+        // (Zack 2026-06-01). Forcing Keyboard input mode (on first anchor + on every DPAD event)
+        // keeps the focus highlight alive regardless of an attached pointer.
+        val inputModeManager = LocalInputModeManager.current
 
         // On AR glasses there's no touchscreen — the wearer can't tap to grab focus on the first
         // focusable element. Without an initial focus owner, the temple touchpad's KeyEvents
@@ -135,6 +146,12 @@ fun HaloRingApp(
         // re-fired the effect — so we keep requesting until focus is *confirmed* landed (Zack
         // 2026-05-29). Tracked via onFocusChanged on the focus-group column below.
         var contentHasFocus by remember { mutableStateOf(false) }
+        // Proof that focus is already established: a DPAD key event only reaches the content's
+        // onPreviewKeyEvent when its subtree holds focus. Once we've seen one, the anchor loop must
+        // STOP re-requesting — a re-request on the focusGroup snaps to the FIRST child, which was
+        // yanking the cursor back to row 1 on every swipe-down (the lock-to-first bug, Zack
+        // 2026-06-01). Reset per (topKey, homeTab) so a fresh tab still gets anchored.
+        var contentReceivedKey by remember { mutableStateOf(false) }
         // When focus overflowed UPward into a previous tab, we want focus to land on the *last*
         // content element of the new tab (not the first), so the user's swipe-up feels continuous.
         // Set by the onKeyEvent handler below; honoured by the LaunchedEffect after focus lands.
@@ -144,18 +161,22 @@ fun HaloRingApp(
         // without touching the nav stack) so focus lands on the new tab's first content element.
         androidx.compose.runtime.LaunchedEffect(topKey, homeTab) {
             contentHasFocus = false
-            // Keep requesting until focus is *confirmed* landed. The budget must cover the worst case:
-            // the FIRST cold-launch home frame, where the focusable content (RECONNECT/FIND buttons)
-            // hasn't been placed yet, so requestFocus silently no-ops. The old 12×120 ms (1.44 s)
-            // budget sometimes expired before that first frame composed on the glasses — and once the
-            // loop gave up there was NO recovery (the onPreviewKeyEvent handler below only receives
-            // DPAD events while something in the group holds focus, so with no cursor the wearer's
-            // swipes went nowhere and they had to exit + re-enter — Zack 2026-05-30). Re-entry worked
-            // only because the second attempt ran warm. So we extend the budget to ~9.6 s; warm
-            // entries still land in the first try and return immediately, so this costs nothing when
-            // composition is fast.
+            contentReceivedKey = false
+            // Force keyboard/focus input mode so the focus ring is visible even with a mouse attached
+            // (a pointer device otherwise drops the window into touch mode → no highlight). Re-armed
+            // on every DPAD event in onPreviewKeyEvent below.
+            inputModeManager.requestInputMode(InputMode.Keyboard)
+            // Anchor focus into the content. Keep requesting ONLY until focus first lands: the FIRST
+            // cold-launch home frame hasn't placed the focusable content yet, so requestFocus silently
+            // no-ops — the old fixed-budget loop sometimes gave up before the frame composed, leaving
+            // the wearer with no cursor and no recovery but exit + re-enter (Zack 2026-05-30). So we
+            // retry up to ~9.6 s. BUT the moment focus is established — confirmed either by
+            // onFocusChanged (contentHasFocus) OR by a DPAD event reaching the content
+            // (contentReceivedKey; Compose only delivers key events to a focused subtree) — we STOP
+            // and never re-request. Re-requesting on the focusGroup snaps to the FIRST child, which
+            // was racing the wearer's swipe-down and re-locking the cursor on row 1 (Zack 2026-06-01).
             repeat(80) {
-                if (contentHasFocus) {
+                if (contentHasFocus || contentReceivedKey) {
                     // If we got here by overflowing UPward into the previous tab, walk the focus
                     // down until it can't move — lands on the last content element.
                     if (pendingFocusEnd) {
@@ -237,6 +258,11 @@ fun HaloRingApp(
                         // tabs. The earlier `onKeyEvent` approach fired before the focus search and
                         // switched tabs on every swipe — the bug Zack hit.
                         if (event.type != androidx.compose.ui.input.key.KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                        // This event proves the content holds focus → tell the anchor loop to stop
+                        // re-requesting (it would snap back to row 1). Re-arm keyboard input mode so a
+                        // swipe restores the focus ring even after a mouse knocked us into touch mode.
+                        contentReceivedKey = true
+                        inputModeManager.requestInputMode(InputMode.Keyboard)
                         if (top != null) {
                             // Sub-screen lists wrap at the boundary — "infinite list" feel (Zack
                             // 2026-05-31): swipe-up on the first row jumps to the last, swipe-down on
@@ -426,6 +452,7 @@ fun HaloRingApp(
                     )
 
                     SubScreen.Advanced -> AdvancedScreen(
+                        status = setupStatus,
                         onActionTriggered = onAdvancedAction,
                         onOpenPlugins = { push(SubScreen.ExternalPlugins) },
                     )

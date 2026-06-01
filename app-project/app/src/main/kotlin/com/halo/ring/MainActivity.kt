@@ -75,6 +75,10 @@ class MainActivity : AppCompatActivity() {
      *  every onResume after the user dismisses it. Reset implicitly on app process death. */
     private var a11yJumpDone = false
     private var overlayJumpDone = false
+    /** Once-per-process guard: (re)apply the background-unrestricted keep-alive appop via the agent
+     *  the first time we see it alive, so the agent's reboot-respawn re-grants it without re-running
+     *  the wizard. The persistent battery exemption stays the user's own system dialog. */
+    private var keepAliveGrantDone = false
     /** v0.4 — true when the injection agent is already alive (fresh heartbeat). Lets the wizard's
      *  System-access step show "✓ already set up" instead of forcing the user to re-pair. */
     private val agentReadyState = kotlinx.coroutines.flow.MutableStateFlow(false)
@@ -168,6 +172,11 @@ class MainActivity : AppCompatActivity() {
                 val vitalsPrefs by graph.vitalsPrefsFlow.collectAsState()
                 val vitalsSnapshot by graph.vitalsSnapshotFlow.collectAsState()
                 val ringCapabilities by graph.ringCapabilitiesFlow.collectAsState()
+                // Live system-access state (refreshed by the onResume 500 ms poll) for the Advanced
+                // screen's critical rows — so each shows ✓/needs-setup + guards an accidental re-run.
+                val a11yEnabledNow by accessibilityEnabledState.collectAsState()
+                val batteryExemptedNow by batteryExemptedState.collectAsState()
+                val agentReadyNow by agentReadyState.collectAsState()
                 // Active home tab — driven by both UI taps and the in-app LONG_PRESS gesture (which
                 // the service routes into this same flow). See AppGraph.homeTabIndexFlow.
                 val homeTabIndex by graph.homeTabIndexFlow.collectAsState()
@@ -203,7 +212,6 @@ class MainActivity : AppCompatActivity() {
                         accessibilityEnabled = a11yEnabled,
                         onRequestBatteryExemption = ::requestBatteryExemption,
                         batteryExempted = batteryExempted,
-                        onOpenAutostartSettings = { openAppDetailsSettings() },
                         onStartRingPairing = { graph.bleClient.start() },
                         onCompleted = {
                             lifecycleScope.launch { firstRunStore.markCompleted() }
@@ -263,6 +271,11 @@ class MainActivity : AppCompatActivity() {
                     ringInfo = ringInfo,
                     ringCapabilities = ringCapabilities,
                     advancedPrefs = advancedPrefs,
+                    setupStatus = com.halo.ring.ui.screens.SetupStatus(
+                        batteryExempted = batteryExemptedNow,
+                        accessibilityEnabled = a11yEnabledNow,
+                        agentReady = agentReadyNow,
+                    ),
                     vitalsPrefs = vitalsPrefs,
                     deviceProfile = graph.deviceProfile,
                     versionName = BuildConfig.VERSION_NAME,
@@ -439,21 +452,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /** v0.4 — open this app's details page, where the user enables auto-start / unrestricted
-     *  background (the per-OEM toggle that lets the service restart after reboot). Most reliable
-     *  cross-OEM entry point since there's no standard "autostart" Intent. */
-    private fun openAppDetailsSettings() {
-        try {
-            startActivity(
-                Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
-                    .setData(Uri.parse("package:$packageName"))
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            )
-        } catch (e: Exception) {
-            Log.w("Halo", "openAppDetailsSettings failed: ${e.message}")
-        }
-    }
-
     /**
      * Kick off the pairing flow. Two paths:
      *
@@ -499,6 +497,7 @@ class MainActivity : AppCompatActivity() {
         }
         adb.grantOverlayPermission()         // best-effort: lets the HUD overlay render (else hud is null)
         adb.grantAccessibilityService()      // best-effort: re-enables HaloRingAccessibilityService (foreground detection)
+        adb.grantKeepAlive()                 // best-effort: background-unrestricted appop (replaces the "open App info" tail)
         if (!adb.isOnPersistentTcp()) {
             report("Enabling offline control…")
             when (val r = adb.migrateToPersistentTcp()) {
@@ -595,6 +594,7 @@ class MainActivity : AppCompatActivity() {
         }
         adb.grantOverlayPermission()         // best-effort: lets the HUD overlay render (else hud is null)
         adb.grantAccessibilityService()      // best-effort: re-enables HaloRingAccessibilityService (foreground detection)
+        adb.grantKeepAlive()                 // best-effort: background-unrestricted appop (replaces the "open App info" tail)
         progress("Starting agent…")
         when (val r = adb.startAgent()) {
             is AdbBootstrap.Result.Failure -> return done("✗ ${r.message}")
@@ -640,6 +640,7 @@ class MainActivity : AppCompatActivity() {
         }
         adb.grantOverlayPermission()         // best-effort: lets the HUD overlay render (else hud is null)
         adb.grantAccessibilityService()      // best-effort: re-enables HaloRingAccessibilityService (foreground detection)
+        adb.grantKeepAlive()                 // best-effort: background-unrestricted appop (replaces the "open App info" tail)
         // Move off the Wi-Fi-bound wireless transport onto the persistent loopback port so the
         // agent survives Wi-Fi off / leaving the AP / reboot. No-op if we already came up on it.
         if (!adb.isOnPersistentTcp()) {
@@ -762,6 +763,21 @@ class MainActivity : AppCompatActivity() {
                     startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
                         android.net.Uri.parse("package:$packageName")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
                 } catch (_: Exception) { Log.w("Halo", "couldn't deep-link to overlay settings") }
+            }
+        }
+
+        // Keep-alive self-heal: once per process, when the agent is up, (re)apply the background-
+        // unrestricted appop silently. Covers boot-recovery (the agent re-spawns on boot but the
+        // wizard doesn't re-run) and any user who reached the home without it set. This is the
+        // silent replacement for the old "open App info → set Unrestricted" tail; the persistent
+        // battery-optimisation exemption stays the user's own REQUEST_IGNORE_BATTERY dialog.
+        if (agentLikelyUp && !keepAliveGrantDone) {
+            keepAliveGrantDone = true
+            lifecycleScope.launch {
+                when (val r = adb.grantKeepAlive()) {
+                    is AdbBootstrap.Result.Success -> Log.i("Halo", "keep-alive appop ensured via agent")
+                    is AdbBootstrap.Result.Failure -> Log.w("Halo", "keep-alive appop via agent failed: ${r.message}")
+                }
             }
         }
 

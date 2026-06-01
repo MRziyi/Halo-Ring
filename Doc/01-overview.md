@@ -45,11 +45,12 @@ implementation:
 
 ## Project status
 
-**Hardware not yet acquired.** Both pairs of glasses + the ring are on order.
+**Shipped + validated on real hardware** (Rokid Glasses + R08_E600 ring) — current release
+**v1.1.5**. The "already done / outstanding" lists below are **pre-v0.4 and kept for historical
+orientation only**; trust the handoff snapshots for the live state.
 
-> **For a comprehensive status snapshot + priority-ordered TODO + handoff notes**, read
-> [08-handoff.md](08-handoff.md). The summary below is a quick orientation; §13 is the canonical
-> "where are we, what's next" document.
+> **For the current state snapshot + priority TODO + handoff notes**, read the newest dated
+> snapshot in [`_handoffs/`](_handoffs/) — that's the canonical "where are we, what's next".
 
 Already done (no hardware required):
 - BLE protocol fully reverse-engineered ([02-hardware-and-protocol.md](02-hardware-and-protocol.md))
@@ -76,7 +77,7 @@ Already done (no hardware required):
   ([11-verification-checklists.md](11-verification-checklists.md)) + research provenance
   ([12-research-and-references.md](12-research-and-references.md))
 
-Outstanding work — see [08-handoff.md §2](08-handoff.md):
+Outstanding work — see the newest snapshot in [`_handoffs/`](_handoffs/):
 - **Critical path (priority A) — DONE**: `AndroidR08BleClient`, `:agent` body,
   `AppProcessAgentBackend`, `HaloRingService` body, HUD wiring to the InteractionRouter
   callback, foreground bypass, DataStore prefs persistence

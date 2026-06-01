@@ -359,6 +359,10 @@
     <string name="advanced_battery_desc">允许环意在 Doze 状态下运行。</string>
     <string name="advanced_adb_title">重新运行 ADB 引导</string>
     <string name="advanced_adb_desc">重新推送 agent dex + 授予 WRITE_SECURE_SETTINGS。</string>
+    <string name="advanced_a11y_ok">✓ 无障碍已开启</string>
+    <string name="advanced_battery_ok">✓ 已豁免，可在 Doze 下运行</string>
+    <string name="advanced_adb_ok">✓ Agent 运行中</string>
+    <string name="advanced_confirm_rerun">已就绪 — 再次单击以重新执行</string>
     <string name="advanced_export_title">导出延迟日志（CSV）</string>
     <string name="advanced_export_desc">在使用过 "延迟测量" 后才能导出。</string>
     <string name="advanced_export_vitals_title">导出生理数据日志（CSV）</string>
@@ -505,14 +509,10 @@
     <string name="wizard_keepalive_step">保活</string>
     <string name="wizard_pair_step">配对戒指</string>
     <string name="wizard_keepalive_title">开启保活</string>
-    <string name="wizard_keepalive_body">为了让戒指在后台和重启后都持续工作，请同时开启这两项：</string>
+    <string name="wizard_keepalive_body">为了让戒指在后台和重启后都持续工作：</string>
     <string name="wizard_keepalive_battery_row">电池：忽略优化</string>
-    <string name="wizard_keepalive_battery_desc">阻止 Android Doze 几小时后杀掉服务。</string>
-    <string name="wizard_keepalive_autostart_row">后台：不受限制</string>
-    <string name="wizard_keepalive_autostart_desc">在 应用信息 → 电池 里设为「不受限制」。开机自启由系统的开机广播自动处理，无需单独开关。部分 ROM 另有「自启动」开关，有的话也在这里打开。</string>
-    <string name="wizard_keepalive_autostart_cta">打开应用信息</string>
+    <string name="wizard_keepalive_battery_desc">阻止 Android Doze 几小时后杀掉服务。后台不受限会自动授予。</string>
     <string name="wizard_keepalive_battery_cta">允许电池后台</string>
-    <string name="wizard_keepalive_done_cta">继续</string>
     <string name="wizard_done_cta">完成</string>
     <string name="wizard_adb_start_pairing_cta">开始配对</string>
     <string name="wizard_adb_running_title">配对中…</string>

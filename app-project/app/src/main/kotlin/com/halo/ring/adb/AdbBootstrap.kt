@@ -442,6 +442,27 @@ class AdbBootstrap(private val context: Context) {
     }
 
     /**
+     * Grant the background "Unrestricted" appop the user otherwise has to hunt for in
+     * App info → Battery (the old "OPEN APP INFO" wizard tail). Done silently via the agent
+     * (shell uid) — `RUN_ANY_IN_BACKGROUND` / `RUN_IN_BACKGROUND` are the persistent appops behind
+     * the "Unrestricted" / "Auto-start" toggle, so they survive reboot with no settings page.
+     *
+     * NOTE: this deliberately does NOT touch the Doze whitelist — the persistent battery-optimisation
+     * exemption stays the user's `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` dialog (MainActivity), which
+     * is the reboot-durable grant. Best-effort: vendors vary; log + continue on failure.
+     */
+    suspend fun grantKeepAlive(): Result = withContext(Dispatchers.IO) {
+        val conn = connection ?: return@withContext Result.Failure("not connected")
+        val pkg = context.packageName
+        val out = conn.exec(
+            "appops set $pkg RUN_ANY_IN_BACKGROUND allow; " +
+                "appops set $pkg RUN_IN_BACKGROUND allow"
+        )
+        Log.i(TAG, "grantKeepAlive: ${out.trim().ifBlank { "ok" }}")
+        Result.Success
+    }
+
+    /**
      * True if the agent's Unix abstract socket is reachable on this device.
      * Use as a cheap liveness probe during and after a bootstrap session.
      */

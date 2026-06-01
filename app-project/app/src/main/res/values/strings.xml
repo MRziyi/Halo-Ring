@@ -391,6 +391,10 @@
     <string name="advanced_battery_desc">Allow Halo Ring to run in Doze.</string>
     <string name="advanced_adb_title">Re-run ADB bootstrap</string>
     <string name="advanced_adb_desc">Push the agent dex + grant WRITE_SECURE_SETTINGS again.</string>
+    <string name="advanced_a11y_ok">✓ Accessibility on</string>
+    <string name="advanced_battery_ok">✓ Exempt — runs in Doze</string>
+    <string name="advanced_adb_ok">✓ Agent running</string>
+    <string name="advanced_confirm_rerun">Already set — tap again to re-run</string>
     <string name="advanced_export_title">Export latency log (CSV)</string>
     <string name="advanced_export_desc">Available after you\'ve used Latency measurement.</string>
     <string name="advanced_export_vitals_title">Export vitals log (CSV)</string>
@@ -561,14 +565,10 @@
     <string name="wizard_keepalive_step">Keep-alive</string>
     <string name="wizard_pair_step">Pair ring</string>
     <string name="wizard_keepalive_title">Keep it alive</string>
-    <string name="wizard_keepalive_body">So the ring keeps working in the background and after a reboot, enable both:</string>
+    <string name="wizard_keepalive_body">So the ring keeps working in the background and after a reboot:</string>
     <string name="wizard_keepalive_battery_row">Battery: ignore optimisation</string>
-    <string name="wizard_keepalive_battery_desc">Stops Android Doze from killing the service.</string>
-    <string name="wizard_keepalive_autostart_row">Background: unrestricted</string>
-    <string name="wizard_keepalive_autostart_desc">In App info → Battery, set to \"Unrestricted\". Restart-after-reboot is already automatic (boot receiver). Some ROMs also have a separate \"Auto-start\" toggle — enable it here if present.</string>
-    <string name="wizard_keepalive_autostart_cta">OPEN APP INFO</string>
+    <string name="wizard_keepalive_battery_desc">Stops Android Doze from killing the service. Background access is granted automatically.</string>
     <string name="wizard_keepalive_battery_cta">ALLOW BATTERY</string>
-    <string name="wizard_keepalive_done_cta">CONTINUE</string>
     <string name="wizard_done_cta">FINISH</string>
     <string name="wizard_adb_running_title">Pairing…</string>
     <string name="wizard_adb_paired_title">Paired</string>

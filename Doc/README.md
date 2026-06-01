@@ -10,8 +10,10 @@ The Android package is `com.halo.ring` (suffixed `.rokid` / `.rayneo` per flavor
 socket is `halo.agent`; the device codename used in source for the ring hardware itself remains
 `R08` because that's the QRing model name. Brand assets in [`./brand/`](brand/).
 
-Docs are numbered **01–11, gaplessly**. Pre-v0.4 / superseded versions are kept under
+Docs are numbered **01–11**. Pre-v0.4 / superseded versions are kept under
 [`_archive/`](_archive/). The forward-looking design record is [Doc/11 v0.4 design](11-v0.4-design.md).
+The **08 "Handoff" slot is now a folder of dated, per-version snapshots** — [`_handoffs/`](_handoffs/)
+(read the newest); the old single `08-handoff.md` was retired 2026-06-01.
 
 ---
 
@@ -21,7 +23,7 @@ Docs are numbered **01–11, gaplessly**. Pre-v0.4 / superseded versions are kep
 |---|---|
 | **An end user** | [06 — User Manual](06-user-manual.md) |
 | **A new contributor onboarding** | [01 — Overview](01-overview.md) → **[11 — v0.4 Design](11-v0.4-design.md)** → [03 — Architecture](03-architecture.md) → [04 — Interaction Design](04-interaction-design.md) |
-| **Taking the project handoff** | **[08 — Handoff state snapshot](08-handoff.md)** → **[11 — v0.4 Design](11-v0.4-design.md)** → any doc as needed |
+| **Taking the project handoff** | **the newest dated snapshot in [`_handoffs/`](_handoffs/)** → **[11 — v0.4 Design](11-v0.4-design.md)** → any doc as needed |
 | **Building / extending the Android app** | [03 — Architecture](03-architecture.md) → [04 — Interaction Design](04-interaction-design.md) → [07 — Developer Guide](07-developer-guide.md) |
 | **Adding gestures or actions** | [04 — Interaction Design](04-interaction-design.md) + [07 — Developer Guide](07-developer-guide.md) §4-§6 |
 | **Reverse-engineering or debugging the ring protocol** | [02 — Hardware & Protocol](02-hardware-and-protocol.md) → full spec [09 — R08 BLE Protocol Spec](09-r08-ble-protocol-spec.md) |
@@ -40,7 +42,7 @@ Docs are numbered **01–11, gaplessly**. Pre-v0.4 / superseded versions are kep
 | **[05](05-ui-design.md)** | UI Design | HUD-first daily UX + Config-Activity for deep editing. HUD events catalogue, Config screen catalogue, design tokens. | ~10 min |
 | **[06](06-user-manual.md)** | User Manual | End-user setup + gesture catalogue + profiles + hand-over + troubleshooting | ~5 min |
 | **[07](07-developer-guide.md)** | Developer Guide | Build, test, extend (new profile / gesture / platform / backend) | ~10 min |
-| **[08](08-handoff.md)** | Handoff State Snapshot | Where the project is right now + forward plan pointer + threading discipline | ~5 min |
+| **[08](_handoffs/)** | Handoff Snapshots | Point-in-time state snapshots, one per shipped version, in [`_handoffs/`](_handoffs/) — read the newest. (The old single `08-handoff.md` was retired 2026-06-01.) | — |
 | **[09](09-r08-ble-protocol-spec.md)** | **R08 BLE Protocol Spec** | The full reverse-engineered QRing R08 BLE protocol — every opcode, frame format, capability bitmap, verification status. Verified on `RT08_3.10.46`. | ~30 min |
 | **[10](10-plugin-protocol.md)** | External-App Plugin Protocol | Wire format for any installed app to expose actions to Halo Ring's profile bindings (Constellation is the first client). | ~10 min |
 | **[11](11-v0.4-design.md)** | **v0.4 Design** | The canonical decision record — Service spine + HUD-first daily UX + deep-config-allowed; base-gestures hard-locked. | ~10 min |
@@ -81,7 +83,7 @@ When code changes invalidate something here, update the relevant doc(s):
 | New executor backend | [03](03-architecture.md) §5 |
 | UI screen / HUD event | [05](05-ui-design.md) + [`ui-mockup.html`](ui-mockup.html) |
 | Build process | [07](07-developer-guide.md) §3 |
-| Finished or started a TODO | [08](08-handoff.md) + [11](11-v0.4-design.md) §11 |
-| Project status changed | [01](01-overview.md) + [08](08-handoff.md) §1 |
+| Finished or started a TODO | a new dated snapshot in [`_handoffs/`](_handoffs/) + [11](11-v0.4-design.md) §11 |
+| Project status changed | [01](01-overview.md) + a new [`_handoffs/`](_handoffs/) snapshot |
 
 `Doc/README.md` (this file) gets updated when a top-level doc is added or removed.
