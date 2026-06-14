@@ -218,6 +218,25 @@ private fun SystemAccessStep(
     onStartReconnect: () -> Unit,
     onNext: () -> Unit,
 ) {
+    // ── RayNeo: accessibility-only system access (no ADB agent) ─────────────────────────────────
+    // On RayNeo X3 Pro the app_process agent can't bootstrap (AIOS SELinux blocks the adb setprops),
+    // so injection runs entirely through the accessibility service. None of the ADB prerequisites
+    // (Developer Options, Wi-Fi radio, Wireless Debugging, ADB pairing) apply — gating on them was
+    // the "老是要开发者权限" nag. Require ONLY accessibility, then advance. Rokid is untouched.
+    if (com.halo.ring.BuildConfig.DEVICE_FLAVOR == "rayneo") {
+        Text(stringResource(R.string.wizard_adb_intro_title), style = HaloType.Title)
+        Spacer(Modifier.height(8.dp))
+        if (!accessibilityEnabled) {
+            Text(stringResource(R.string.wizard_a11y_gate_body), style = HaloType.Caption)
+            Spacer(Modifier.height(12.dp))
+            Cta(stringResource(R.string.wizard_a11y_cta_enable), onClick = onOpenAccessibilitySettings)
+        } else {
+            StatusLine(stringResource(R.string.advanced_a11y_ok), ok = true)
+            androidx.compose.runtime.LaunchedEffect(Unit) { onNext() }
+        }
+        return
+    }
+
     Text(stringResource(R.string.wizard_adb_intro_title), style = HaloType.Title)
     Spacer(Modifier.height(8.dp))
 

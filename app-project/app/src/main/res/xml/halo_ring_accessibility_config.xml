@@ -6,6 +6,10 @@
   - canRetrieveWindowContent: needed so that flow can find + click the "Internet access" toggle in
     the system Settings UI (Android resets that toggle on every reboot; we re-apply it).
   - global actions (Back/Home/Recents/Notifications) for AccessibilityBackend without ADB.
+  - canPerformGestures: FALSE here (Rokid + base) — Rokid injects via the agent, a11y does global
+    actions only. The **rayneo** flavor overrides this file (src/rayneo/res/xml/) with
+    canPerformGestures="true" because dispatchGesture is its primary tap/swipe nav path. Keeping the
+    base false means Rokid behaviour is unchanged.
 -->
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
     android:accessibilityEventTypes="typeWindowStateChanged|typeWindowsChanged"

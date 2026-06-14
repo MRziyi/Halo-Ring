@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -227,7 +229,12 @@ class HudOverlay(
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
             setContent {
                 HaloRingTheme {
-                    currentEvent?.let { HudPill(it) }
+                    currentEvent?.let { ev ->
+                        // Binocular (RayNeo): render the pill in BOTH eye halves so it isn't
+                        // single-eye. Mono (Rokid): single pill, anchored via layout-params gravity.
+                        if (isBinocular) BinocularHudPill(ev, hudPosition, hudOffsetSteps)
+                        else HudPill(ev)
+                    }
                 }
             }
         }
@@ -258,6 +265,17 @@ class HudOverlay(
         val flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                     WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
                     WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
+        // Binocular (RayNeo X3 Pro): a single anchored pill only reaches one eye. Instead make the
+        // overlay a full-screen transparent canvas and let [BinocularHudPill] place one pill in each
+        // 640-wide eye half. FLAG_NOT_TOUCHABLE keeps it pass-through; the two small pills render
+        // only while a HUD event is showing, so the memory/latency cost is negligible.
+        if (isBinocular) {
+            return WindowManager.LayoutParams(
+                WindowManager.LayoutParams.MATCH_PARENT,
+                WindowManager.LayoutParams.MATCH_PARENT,
+                type, flags, PixelFormat.TRANSLUCENT,
+            ).apply { gravity = Gravity.TOP or Gravity.START }
+        }
         // On a side-by-side binocular canvas (RayNeo X3 Pro: 1280×480 logical, left half → left
         // eye, right half → right eye), CENTER_HORIZONTAL lands at x≈640 which is the *inner*
         // edge of both eyes — visible at the user's nose, not centred in their gaze. Re-anchor
@@ -312,6 +330,44 @@ class HudOverlay(
         const val SAFE_MARGIN_PX = 32
         /** One "body" unit (px) for the user's HUD vertical offset ≈ one pill-height. */
         const val BODY_UNIT_PX = 60
+    }
+}
+
+/**
+ * Binocular HUD layout (RayNeo X3 Pro). The panel is one 1280×480 surface split down the middle —
+ * left 640 → left eye, right 640 → right eye. A single pill placed once would only reach one eye
+ * (the "HUD 只在右眼" bug), so we render the SAME pill in BOTH halves, each centred horizontally in
+ * its eye and anchored vertically to match [HudPosition]. Fused by the wearer's binocular vision
+ * into one element. Rokid (mono) never calls this — it keeps the single anchored [HudPill].
+ *
+ * Vertical anchor + offset mirror the mono [HudOverlay.buildLayoutParams] math (SAFE_MARGIN +
+ * hudOffsetSteps body-units), in dp (RayNeo panel is 160 dpi so dp≈px).
+ */
+@Composable
+fun BinocularHudPill(event: HudEvent, position: HudOverlay.HudPosition, offsetSteps: Int) {
+    val topAnchored = position == HudOverlay.HudPosition.TopRight ||
+        position == HudOverlay.HudPosition.TopLeft || position == HudOverlay.HudPosition.TopCenter
+    val bottomAnchored = position == HudOverlay.HudPosition.BottomRight ||
+        position == HudOverlay.HudPosition.BottomLeft
+    val align = when {
+        topAnchored    -> Alignment.TopCenter
+        bottomAnchored -> Alignment.BottomCenter
+        else           -> Alignment.Center   // Center
+    }
+    // Same units as buildLayoutParams: SAFE_MARGIN_PX(32) + offsetSteps*BODY_UNIT_PX(60).
+    val edgePad = (32 + offsetSteps * 60).dp
+    val pad = when {
+        topAnchored    -> Modifier.padding(top = edgePad)
+        bottomAnchored -> Modifier.padding(bottom = edgePad)
+        else           -> Modifier
+    }
+    Row(Modifier.fillMaxSize()) {
+        // One eye-half per child; weight(1f) splits the 1280 canvas into two 640 columns.
+        repeat(2) {
+            Box(Modifier.weight(1f).fillMaxHeight().then(pad), contentAlignment = align) {
+                HudPill(event)
+            }
+        }
     }
 }
 

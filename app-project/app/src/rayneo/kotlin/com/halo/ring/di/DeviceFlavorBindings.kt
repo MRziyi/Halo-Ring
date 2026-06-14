@@ -28,7 +28,9 @@ object DeviceFlavorBindings {
             featureIntents = intents,
             backends       = listOf(
                 AppProcessAgentBackend(mapper),
-                AccessibilityBackend(mapper),
+                // RayNeo: AIOS SELinux blocks the agent's self-bootstrap, so the accessibility
+                // dispatchGesture path is the primary nav injector → enable tap/swipe here.
+                AccessibilityBackend(mapper, gesturesEnabled = true),
                 InotifydScriptBackend(mapper),
             ),
         )

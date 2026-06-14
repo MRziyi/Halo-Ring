@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  RayNeo-flavor override of the accessibility-service config (merges over src/main/res/xml/).
+
+  The ONLY difference from the base file is `canPerformGestures="true"`: on RayNeo X3 Pro the
+  app_process agent can't bootstrap (AIOS SELinux blocks the adb setprops), so AccessibilityBackend
+  injects tap/swipe via dispatchGesture — which silently no-ops (no callback, no effect) unless this
+  flag is true. Verified on real ARGF20 2026-06-14. Rokid keeps the base file (false) untouched.
+-->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:accessibilityEventTypes="typeWindowStateChanged|typeWindowsChanged"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:accessibilityFlags="flagDefault|flagRetrieveInteractiveWindows|flagReportViewIds"
+    android:canPerformGestures="true"
+    android:canRetrieveWindowContent="true"
+    android:notificationTimeout="100"
+    android:summary="Lets Halo Ring do Back/Home/Recents without ADB, auto-switch profiles by foreground app, and re-enable Bluetooth internet sharing after a reboot." />

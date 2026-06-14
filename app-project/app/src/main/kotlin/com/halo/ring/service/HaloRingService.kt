@@ -727,6 +727,44 @@ class HaloRingService : Service() {
         })
         cleanup += { try { unregisterReceiver(screenReceiver) } catch (_: IllegalArgumentException) {} }
 
+        // ── DEBUG + RayNeo-only: dispatch a GlassAction by name through the router, no ring needed.
+        // Lets the host validate the RayNeo accessibility dispatchGesture path without driving real
+        // BLE gestures:
+        //   adb shell am broadcast -a com.halo.ring.TEST_ACTION -p com.mudra.mudraband --es action NavNext
+        // Watch: adb logcat -s HaloService:* A11yBackend:* ActionRouter:*
+        // Gated to the rayneo flavor so Rokid debug builds are byte-for-byte unaffected.
+        if (com.halo.ring.BuildConfig.DEBUG && com.halo.ring.BuildConfig.DEVICE_FLAVOR == "rayneo") {
+            val testActionReceiver = object : BroadcastReceiver() {
+                override fun onReceive(c: Context?, i: Intent?) {
+                    val name = i?.getStringExtra("action") ?: return
+                    val action = when (name) {
+                        "NavNext"  -> GlassAction.NavNext
+                        "NavPrev"  -> GlassAction.NavPrev
+                        "NavLeft"  -> GlassAction.NavLeft
+                        "NavRight" -> GlassAction.NavRight
+                        "Confirm"  -> GlassAction.Confirm
+                        "Back"     -> GlassAction.Back
+                        "Home"     -> GlassAction.Home
+                        "Recents"  -> GlassAction.Recents
+                        else       -> { Log.w(TAG, "TEST_ACTION: unknown action '$name'"); return }
+                    }
+                    Log.i(TAG, "TEST_ACTION → dispatch $name")
+                    serviceScope.launch {
+                        val backend = graph.router.dispatch(action)
+                        Log.i(TAG, "TEST_ACTION $name → backend=${backend?.id ?: "NONE"}")
+                    }
+                }
+            }
+            val testFilter = IntentFilter("com.halo.ring.TEST_ACTION")
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                registerReceiver(testActionReceiver, testFilter, Context.RECEIVER_EXPORTED)
+            } else {
+                @Suppress("UnspecifiedRegisterReceiverFlag")
+                registerReceiver(testActionReceiver, testFilter)
+            }
+            cleanup += { try { unregisterReceiver(testActionReceiver) } catch (_: IllegalArgumentException) {} }
+        }
+
         // v0.4 C2: Rokid temple touchpad → InteractionRouter (system ordered broadcasts).
         // Rokid-only — RayNeo doesn't publish the `com.android.action.ACTION_SPRITE_*` constants
         // (its temple input flows through Mercury SDK's TouchDispatcher, which we may re-wire in a

@@ -13,8 +13,10 @@ import com.halo.ring.core.action.GlassAction
  *  - `ShizukuBackend`         — same capability set, via Shizuku's binder. Only if user installed it.
  *  - `InotifydScriptBackend`  — fall-back: write a command file → inotifyd-triggered shell runs `input`/`am`.
  *  - `PollScriptBackend`      — last-resort 0.05s polling script.
- *  - `AccessibilityBackend`   — only BACK / HOME / RECENTS / NOTIFICATIONS. Doesn't need ADB.
- *    Also feeds foreground-package events back to [com.halo.ring.core.action.ModeManager.onForegroundPackage].
+ *  - `AccessibilityBackend`   — BACK / HOME / RECENTS / NOTIFICATIONS via performGlobalAction, plus
+ *    TAP_SWIPE via dispatchGesture (tap/swipe, no ADB). Primary nav backend on RayNeo X3 Pro where
+ *    the agent can't bootstrap. Also feeds foreground-package events back to
+ *    [com.halo.ring.core.action.ModeManager.onForegroundPackage].
  */
 interface ExecutorBackend {
     val id: String
