@@ -62,12 +62,11 @@ class RayNeoActionMapper(private val intents: FeatureIntents) : GlassActionMappe
      *    "no third-party screenshot" policy (typical of OEM-customised launchers). BEST_EFFORT.
      */
     override fun supportLevel(action: GlassAction): GlassActionMapper.SupportLevel = when (action) {
+        // Modal is a skeleton (no mic pipeline) on both flavors.
         GlassAction.EnterAIDictateModal -> GlassActionMapper.SupportLevel.UNSUPPORTED
-        GlassAction.OpenAIAssistant,
-        GlassAction.OpenCamera,
-        GlassAction.OpenMusic,
-        GlassAction.OpenGallery,
-        GlassAction.Screenshot          -> GlassActionMapper.SupportLevel.BEST_EFFORT
+        // First-party launches (camera/gallery/music/translate/subtitle/live-AI) all verified to
+        // launch on ARGF20 2026-06-14 via RayNeoSystemBackend → fully supported (no longer best-
+        // effort). Screenshot works via the a11y global. Volume/brightness/media via the backend.
         else                            -> super.supportLevel(action)
     }
 
@@ -169,48 +168,22 @@ class RayNeoActionMapper(private val intents: FeatureIntents) : GlassActionMappe
  * before falling back to the standard LAUNCHER one.
  */
 class RayNeoFeatureIntents : FeatureIntents {
-    override fun openCamera() = listOf(
-        InjectionPrimitive.Shell("am start -a android.media.action.STILL_IMAGE_CAMERA")
-    )
-    // Until we know the X3 Pro Visual-AI package, surface as no-op so the action isn't silently
-    // mis-routed. On-device discovery in Doc/11 §B6.
-    override fun askVisualAI()   = emptyList<InjectionPrimitive>()
-    override fun openTranslate() = emptyList<InjectionPrimitive>()
-    override fun openSubtitle()  = emptyList<InjectionPrimitive>()   // no RayNeo equivalent yet
-    override fun openChat()      = emptyList<InjectionPrimitive>()
-    /**
-     * Best-effort "wake the assistant" on X3 Pro. RayNeo bundles Google Gemini (West) / a domestic
-     * LLM (CN) as the system assistant; wake word is "Hey RayNeo" or a long-press on the left
-     * temple. **No public Intent / package name is documented** for third-party triggering.
-     *
-     * The standard `android.speech.action.VOICE_SEARCH_HANDS_FREE` is the canonical Android voice-
-     * assistant entry point and **may** fall through to Gemini on AIOS 2.0 (Pixel-style behaviour),
-     * but this is unverified pending hardware. If it fails, the user just sees nothing happen and
-     * can rebind to something supported via Settings → Profiles. The `ActionRouter.supports()`
-     * default impl returns true here (non-empty primitives list), so the ActionPicker shows it as
-     * bindable rather than "coming soon" — accepting the tradeoff that we want users to be able to
-     * try it before we know for certain. Audit-pass 2026-05-14w. Doc/11 §B6 has the on-device
-     * verification recipe.
-     */
-    override fun openAIAssistant() = listOf(
-        InjectionPrimitive.Shell("am start -a android.speech.action.VOICE_SEARCH_HANDS_FREE"),
-    )
-    /** RayNeo has no documented native-assistant broadcast equivalent to Rokid's ACTION_AI_START;
-     *  reuse the hands-free voice-search entry as the best-effort "system AI" until on-device
-     *  discovery finds the RayNeo-specific trigger. */
-    override fun wakeSystemAI() = listOf(
-        InjectionPrimitive.Shell("am start -a android.speech.action.VOICE_SEARCH_HANDS_FREE"),
-    )
-    override fun openMusic() = listOf(
-        // MEDIA_PLAY_FROM_SEARCH with empty query opens whichever music app is registered as default.
-        InjectionPrimitive.Shell("am start -a android.media.action.MEDIA_PLAY_FROM_SEARCH --es query ''"),
-    )
+    // Feature actions resolve to first-party RayNeo packages (verified to launch on ARGF20
+    // 2026-06-14). On RayNeo these are actually executed by RayNeoSystemBackend via
+    // context.startActivity (no shell on RayNeo); the Shell primitives below keep the action
+    // bindable for any future shell-capable backend + make the default supportLevel report SUPPORTED.
+    override fun openCamera()    = launchApp("com.leiniao.camera")
+    override fun askVisualAI()   = launchApp("com.rayneo.live.ai")    // camera-grounded visual AI
+    override fun openTranslate() = launchApp("com.ffalcon.translate")
+    override fun openSubtitle()  = launchApp("com.ffalcon.wordprompt") // teleprompter (closest)
+    override fun openChat()      = launchApp("com.rayneo.live.ai")
+    override fun openAIAssistant() = launchApp("com.rayneo.live.ai")
+    override fun wakeSystemAI()  = launchApp("com.rayneo.live.ai")
+    override fun openMusic()     = launchApp("com.rayneo.media")
     override fun openSettings() = listOf(
         InjectionPrimitive.Shell("am start -a android.settings.SETTINGS"),
     )
-    override fun openGallery() = listOf(
-        InjectionPrimitive.Shell("am start -a android.intent.action.VIEW -t image/*"),
-    )
+    override fun openGallery()   = launchApp("com.rayneo.gallery")
     override fun launchApp(pkg: String) = listOf(
         // Try RayNeo's AppLab-specific category first (their Mercury-SDK apps register here),
         // then standard Android LAUNCHER. `monkey` picks the first match in either case.

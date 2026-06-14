@@ -766,6 +766,11 @@ class HaloRingService : Service() {
                         "Screenshot"     -> GlassAction.Screenshot
                         "Notifications"  -> GlassAction.Notifications
                         "ScreenSleep"    -> GlassAction.ScreenSleep
+                        "OpenCamera"     -> GlassAction.OpenCamera
+                        "OpenGallery"    -> GlassAction.OpenGallery
+                        "OpenMusic"      -> GlassAction.OpenMusic
+                        "OpenTranslate"  -> GlassAction.OpenTranslate
+                        "AskVisualAI"    -> GlassAction.AskVisualAI
                         else       -> { Log.w(TAG, "TEST_ACTION: unknown action '$name'"); return }
                     }
                     Log.i(TAG, "TEST_ACTION → dispatch $name")
