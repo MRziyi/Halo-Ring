@@ -5,12 +5,35 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.unit.dp
+
+/**
+ * Runtime-tunable binocular disparity (px) for [BinocularMirror], shared by the config UI and the
+ * HUD so the whole RayNeo presentation sits at one focal plane. **Positive = uncrossed disparity →
+ * content recedes (appears farther / behind the screen plane); negative = crossed → pops toward the
+ * wearer.** Kept small (clamped) to avoid vergence-accommodation discomfort on the fixed-focus
+ * waveguide. A Compose state so changing it live (debug `TEST_DISPARITY` broadcast) re-draws both
+ * eyes without recomposition. Default 0 = flat at the screen plane until a comfortable value is
+ * dialled in on-device.
+ */
+object BinocularTuning {
+    /** Clamp bound — a few % of the 640-px eye width; beyond this the eyes can't fuse comfortably. */
+    const val MAX_DISPARITY_PX = 48
+    /** Comfortable default dialled in on real RayNeo X3 Pro hardware (2026-06-14, Zack): a small
+     *  uncrossed disparity that floats the UI just behind the screen plane. */
+    const val DEFAULT_DISPARITY_PX = 12
+    var disparityPx by mutableIntStateOf(DEFAULT_DISPARITY_PX)
+        private set
+    fun setDisparity(px: Int) { disparityPx = px.coerceIn(-MAX_DISPARITY_PX, MAX_DISPARITY_PX) }
+}
 
 /**
  * Binocular mirror for the RayNeo X3 Pro panel (one 1280×480 surface split down the middle: left
@@ -48,9 +71,12 @@ fun BinocularMirror(
             .drawWithContent {
                 // Record the (left-eye-width) child once …
                 layer.record { this@drawWithContent.drawContent() }
-                // … then paint it into the left eye (in place) and the right eye (+eyeWidth).
-                drawLayer(layer)
-                translate(left = eyeWidthDp.dp.toPx()) { drawLayer(layer) }
+                // … then paint it into both eyes. A half-disparity is applied in opposite directions
+                // so the fused image sits off the screen plane (see [BinocularTuning]). Reading the
+                // state here (draw phase) re-draws on change — no recomposition.
+                val half = BinocularTuning.disparityPx / 2f
+                translate(left = -half) { drawLayer(layer) }                       // left eye
+                translate(left = eyeWidthDp.dp.toPx() + half) { drawLayer(layer) } // right eye
             },
     ) {
         Box(Modifier.width(eyeWidthDp.dp).fillMaxHeight()) { content() }

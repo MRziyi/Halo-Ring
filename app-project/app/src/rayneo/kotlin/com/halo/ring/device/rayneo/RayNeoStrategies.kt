@@ -35,6 +35,13 @@ class RayNeoActionMapper(private val intents: FeatureIntents) : GlassActionMappe
         // X3 Pro navigation = swipe MotionEvent → TAP_SWIPE-capable backend.
         GlassAction.NavPrev, GlassAction.NavNext, GlassAction.NavLeft, GlassAction.NavRight,
         GlassAction.Confirm -> Capability.TAP_SWIPE
+        // RayNeo can't inject KeyEvents (no agent), so re-route the KEY_EVENT defaults that have an
+        // accessibility-global equivalent onto the a11y backend:
+        //  - Home → GLOBAL_ACTION_HOME   - ScreenSleep → GLOBAL_ACTION_LOCK_SCREEN
+        // (NOTIFICATIONS is the project's "a11y can do this global" capability, reused here like
+        // Screenshot/QuickSettings do.) Volume/brightness/media stay KEY_EVENT → RayNeoSystemBackend.
+        GlassAction.Home        -> Capability.HOME
+        GlassAction.ScreenSleep -> Capability.NOTIFICATIONS
         else -> null
     }
 
@@ -77,7 +84,12 @@ class RayNeoActionMapper(private val intents: FeatureIntents) : GlassActionMappe
             InjectionPrimitive.A11yGlobal(A11yGlobalAction.BACK),
             key(KeyEvent.KEYCODE_BACK),
         )
-        GlassAction.Home      -> listOf(key(KeyEvent.KEYCODE_HOME))
+        // RayNeo: no KeyEvent injection → use the accessibility HOME global (Key kept as a no-op
+        // fallback for any future shell-capable backend).
+        GlassAction.Home      -> listOf(
+            InjectionPrimitive.A11yGlobal(A11yGlobalAction.HOME),
+            key(KeyEvent.KEYCODE_HOME),
+        )
         GlassAction.Recents   -> listOf(InjectionPrimitive.A11yGlobal(A11yGlobalAction.RECENTS))
         GlassAction.Notifications -> listOf(InjectionPrimitive.A11yGlobal(A11yGlobalAction.NOTIFICATIONS))
         GlassAction.QuickSettings -> listOf(InjectionPrimitive.A11yGlobal(A11yGlobalAction.QUICK_SETTINGS))

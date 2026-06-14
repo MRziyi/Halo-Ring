@@ -737,6 +737,15 @@ class HaloRingService : Service() {
             val testActionReceiver = object : BroadcastReceiver() {
                 override fun onReceive(c: Context?, i: Intent?) {
                     val name = i?.getStringExtra("action") ?: return
+                    // Live binocular-disparity tuning (RayNeo stereo-depth dial-in):
+                    //   adb shell am broadcast -a com.halo.ring.TEST_ACTION -p com.mudra.mudraband \
+                    //       --es action SetDisparity --ei px 12
+                    if (name == "SetDisparity") {
+                        val px = i.getIntExtra("px", 0)
+                        com.halo.ring.ui.BinocularTuning.setDisparity(px)
+                        Log.i(TAG, "TEST_ACTION SetDisparity → ${com.halo.ring.ui.BinocularTuning.disparityPx}px")
+                        return
+                    }
                     val action = when (name) {
                         "NavNext"  -> GlassAction.NavNext
                         "NavPrev"  -> GlassAction.NavPrev
@@ -746,6 +755,17 @@ class HaloRingService : Service() {
                         "Back"     -> GlassAction.Back
                         "Home"     -> GlassAction.Home
                         "Recents"  -> GlassAction.Recents
+                        "VolumeUp"   -> GlassAction.VolumeUp
+                        "VolumeDown" -> GlassAction.VolumeDown
+                        "ToggleMute" -> GlassAction.ToggleMute
+                        "BrightnessUp"   -> GlassAction.BrightnessUp
+                        "BrightnessDown" -> GlassAction.BrightnessDown
+                        "MediaPlayPause" -> GlassAction.MediaPlayPause
+                        "MediaNext"      -> GlassAction.MediaNext
+                        "MediaPrev"      -> GlassAction.MediaPrev
+                        "Screenshot"     -> GlassAction.Screenshot
+                        "Notifications"  -> GlassAction.Notifications
+                        "ScreenSleep"    -> GlassAction.ScreenSleep
                         else       -> { Log.w(TAG, "TEST_ACTION: unknown action '$name'"); return }
                     }
                     Log.i(TAG, "TEST_ACTION → dispatch $name")

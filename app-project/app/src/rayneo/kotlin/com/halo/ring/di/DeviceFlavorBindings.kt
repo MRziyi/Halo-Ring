@@ -28,6 +28,8 @@ object DeviceFlavorBindings {
             featureIntents = intents,
             backends       = listOf(
                 AppProcessAgentBackend(mapper),
+                // RayNeo app-level KEY_EVENT actions (volume/media/brightness) — no shell needed.
+                com.halo.ring.device.rayneo.RayNeoSystemBackend(context),
                 // RayNeo: AIOS SELinux blocks the agent's self-bootstrap, so the accessibility
                 // dispatchGesture path is the primary nav injector → enable tap/swipe here.
                 AccessibilityBackend(mapper, gesturesEnabled = true),

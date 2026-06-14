@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -41,6 +42,7 @@ import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import com.halo.ring.ui.BinocularTuning
 import com.halo.ring.ui.HaloColors
 import com.halo.ring.ui.HaloType
 import com.halo.ring.ui.HaloRingTheme
@@ -361,12 +363,16 @@ fun BinocularHudPill(event: HudEvent, position: HudOverlay.HudPosition, offsetSt
         bottomAnchored -> Modifier.padding(bottom = edgePad)
         else           -> Modifier
     }
+    // Same binocular disparity as the config UI (BinocularMirror) so the HUD floats at the same
+    // focal plane: left eye shifted out by -half, right eye by +half.
+    val half = (BinocularTuning.disparityPx / 2).dp
     Row(Modifier.fillMaxSize()) {
         // One eye-half per child; weight(1f) splits the 1280 canvas into two 640 columns.
-        repeat(2) {
-            Box(Modifier.weight(1f).fillMaxHeight().then(pad), contentAlignment = align) {
-                HudPill(event)
-            }
+        Box(Modifier.weight(1f).fillMaxHeight().offset(x = -half).then(pad), contentAlignment = align) {
+            HudPill(event)
+        }
+        Box(Modifier.weight(1f).fillMaxHeight().offset(x = half).then(pad), contentAlignment = align) {
+            HudPill(event)
         }
     }
 }
