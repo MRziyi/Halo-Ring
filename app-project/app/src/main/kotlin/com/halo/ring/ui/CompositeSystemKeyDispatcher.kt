@@ -1,6 +1,10 @@
 package com.halo.ring.ui
 
 import android.accessibilityservice.AccessibilityService
+import android.accessibilityservice.GestureDescription
+import android.graphics.Path
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import android.view.KeyEvent
 import android.view.accessibility.AccessibilityNodeInfo
@@ -57,6 +61,22 @@ class CompositeSystemKeyDispatcher(
             Log.d(TAG, "no agent, no a11y service; keycode $keyCode dropped")
             return false
         }
+        // RayNeo: out-of-app base gestures hit Mercury apps, which navigate by TOUCH (TouchDispatcher),
+        // NOT by a11y focus nodes — so the node-based ACTION_CLICK/ACTION_SCROLL path below does
+        // nothing there. Use dispatchGesture (the same tap/swipe injection that drives Mercury). The
+        // base swipe sends a dual-axis pair (e.g. UP+LEFT); we act on the HORIZONTAL key and no-op the
+        // vertical one so a single swipe fires. Direction is the user's reverseSwipeSemantics choice.
+        if (com.halo.ring.BuildConfig.DEVICE_FLAVOR == "rayneo") {
+            return when (keyCode) {
+                KeyEvent.KEYCODE_BACK -> a11y.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)
+                KeyEvent.KEYCODE_HOME -> a11y.performGlobalAction(AccessibilityService.GLOBAL_ACTION_HOME)
+                KeyEvent.KEYCODE_DPAD_CENTER -> a11yTap(a11y, 320f, 240f)
+                KeyEvent.KEYCODE_DPAD_RIGHT  -> a11ySwipe(a11y, 240f, 240f, 400f, 240f)   // forward
+                KeyEvent.KEYCODE_DPAD_LEFT   -> a11ySwipe(a11y, 400f, 240f, 240f, 240f)   // backward
+                KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN -> true               // dual-axis partner; no-op
+                else -> false
+            }
+        }
         return when (keyCode) {
             KeyEvent.KEYCODE_BACK ->
                 a11y.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)
@@ -76,6 +96,29 @@ class CompositeSystemKeyDispatcher(
                 false
             }
         }
+    }
+
+    private val mainHandler = Handler(Looper.getMainLooper())
+
+    private fun a11yTap(a11y: AccessibilityService, x: Float, y: Float): Boolean =
+        a11yStroke(a11y, Path().apply { moveTo(x, y) }, 40L)
+
+    private fun a11ySwipe(a11y: AccessibilityService, x1: Float, y1: Float, x2: Float, y2: Float): Boolean =
+        a11yStroke(a11y, Path().apply { moveTo(x1, y1); lineTo(x2, y2) }, 60L)
+
+    /** Fire-and-forget dispatchGesture on the main thread (its callback must be delivered there). */
+    private fun a11yStroke(a11y: AccessibilityService, path: Path, durationMs: Long): Boolean {
+        val gesture = try {
+            GestureDescription.Builder()
+                .addStroke(GestureDescription.StrokeDescription(path, 0, durationMs)).build()
+        } catch (t: Throwable) {
+            Log.w(TAG, "gesture build failed: ${t.message}"); return false
+        }
+        mainHandler.post {
+            try { a11y.dispatchGesture(gesture, null, mainHandler) }
+            catch (t: Throwable) { Log.w(TAG, "dispatchGesture failed: ${t.message}") }
+        }
+        return true
     }
 
     private companion object { const val TAG = "HaloSysKey" }

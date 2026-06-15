@@ -347,22 +347,31 @@ class HudOverlay(
  */
 @Composable
 fun BinocularHudPill(event: HudEvent, position: HudOverlay.HudPosition, offsetSteps: Int) {
-    val topAnchored = position == HudOverlay.HudPosition.TopRight ||
-        position == HudOverlay.HudPosition.TopLeft || position == HudOverlay.HudPosition.TopCenter
-    val bottomAnchored = position == HudOverlay.HudPosition.BottomRight ||
-        position == HudOverlay.HudPosition.BottomLeft
-    val align = when {
-        topAnchored    -> Alignment.TopCenter
-        bottomAnchored -> Alignment.BottomCenter
-        else           -> Alignment.Center   // Center
+    // Anchor the pill in the SAME corner of each eye so the wearer fuses it as one element. Honour
+    // left/right (not just top/bottom) so e.g. TopRight lands in the top-RIGHT of each eye — the
+    // default — instead of the centre (the earlier "HUD 在正中心" bug came from mapping every top
+    // position to TopCenter).
+    val align = when (position) {
+        HudOverlay.HudPosition.TopRight    -> Alignment.TopEnd
+        HudOverlay.HudPosition.TopLeft     -> Alignment.TopStart
+        HudOverlay.HudPosition.TopCenter   -> Alignment.TopCenter
+        HudOverlay.HudPosition.BottomRight -> Alignment.BottomEnd
+        HudOverlay.HudPosition.BottomLeft  -> Alignment.BottomStart
+        HudOverlay.HudPosition.Center      -> Alignment.Center
     }
-    // Same units as buildLayoutParams: SAFE_MARGIN_PX(32) + offsetSteps*BODY_UNIT_PX(60).
-    val edgePad = (32 + offsetSteps * 60).dp
-    val pad = when {
-        topAnchored    -> Modifier.padding(top = edgePad)
-        bottomAnchored -> Modifier.padding(bottom = edgePad)
-        else           -> Modifier
-    }
+    val topAnchored = align == Alignment.TopEnd || align == Alignment.TopStart || align == Alignment.TopCenter
+    val bottomAnchored = align == Alignment.BottomEnd || align == Alignment.BottomStart
+    val rightAnchored = position == HudOverlay.HudPosition.TopRight || position == HudOverlay.HudPosition.BottomRight
+    val leftAnchored = position == HudOverlay.HudPosition.TopLeft || position == HudOverlay.HudPosition.BottomLeft
+    // Vertical edge inset = SAFE_MARGIN(32) + user offset; horizontal edge inset = SAFE_MARGIN.
+    val vEdge = (32 + offsetSteps * 60).dp
+    val hEdge = 32.dp
+    val pad = Modifier.padding(
+        top = if (topAnchored) vEdge else 0.dp,
+        bottom = if (bottomAnchored) vEdge else 0.dp,
+        end = if (rightAnchored) hEdge else 0.dp,
+        start = if (leftAnchored) hEdge else 0.dp,
+    )
     // Same binocular disparity as the config UI (BinocularMirror) so the HUD floats at the same
     // focal plane: left eye shifted out by -half, right eye by +half.
     val half = (BinocularTuning.disparityPx / 2).dp

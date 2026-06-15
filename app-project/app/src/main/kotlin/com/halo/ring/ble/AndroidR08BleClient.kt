@@ -218,10 +218,11 @@ class AndroidR08BleClient(
 
     @SuppressLint("MissingPermission")
     override fun startDiscovery() {
+        Log.i(TAG, "startDiscovery()")
         scheduler.post {
-            val mgr = context.getSystemService(BluetoothManager::class.java) ?: return@post
-            val a = mgr.adapter ?: return@post
-            if (!a.isEnabled) return@post
+            val mgr = context.getSystemService(BluetoothManager::class.java) ?: run { Log.e(TAG, "startDiscovery: no BluetoothManager"); return@post }
+            val a = mgr.adapter ?: run { Log.e(TAG, "startDiscovery: no adapter"); return@post }
+            if (!a.isEnabled) { Log.e(TAG, "startDiscovery: adapter not enabled"); return@post }
             adapter = a
             // Tear down any existing connection / scan first.
             if (state != ConnectionState.DISCONNECTED) {
@@ -269,6 +270,17 @@ class AndroidR08BleClient(
             }
             adapter = a
             wantConnection = true
+            // Don't let an auto-connect start() (e.g. the service's wear-state reconcile) tear down
+            // and restart the scanner while the user is actively in the pairing picker — that churn
+            // re-registers the LE scanner faster than some stacks allow and yields scan errors
+            // (RayNeo X3 Pro returns SCAN_FAILED_FEATURE_UNSUPPORTED/ALREADY_STARTED; the unfiltered
+            // discovery scan then never delivers results). Discovery owns the scanner until the user
+            // picks a ring (which calls stopDiscovery → setPairedMac → start). No-op on Rokid (its
+            // wear-reconcile doesn't collide with discovery in practice).
+            if (discoveryMode) {
+                Log.w(TAG, "start() ignored — discovery picker owns the scanner")
+                return@post
+            }
             when (state) {
                 // Already connected — a stray start() must not drop a healthy link.
                 ConnectionState.READY -> {
@@ -280,6 +292,16 @@ class AndroidR08BleClient(
                 // "connect"/"re-pair" during a hung attempt got NOTHING. Tear the attempt down and
                 // restart cleanly so the action is always responsive.
                 ConnectionState.SCANNING, ConnectionState.CONNECTING -> {
+                    // RayNeo only: a scan is already running — DON'T stop+restart it. RayNeo's BLE
+                    // stack returns SCAN_FAILED_FEATURE_UNSUPPORTED when a scan is stopped and
+                    // re-issued within a few ms (the churn from overlapping start()/reconcile calls),
+                    // and then never delivers results. Keeping the in-flight scan lets it actually
+                    // find the ring. Rokid keeps the original tear-down+restart (stack tolerates it).
+                    if (state == ConnectionState.SCANNING &&
+                        com.halo.ring.BuildConfig.DEVICE_FLAVOR == "rayneo") {
+                        Log.w(TAG, "start() while SCANNING (rayneo) — keeping the active scan, not restarting")
+                        return@post
+                    }
                     Log.w(TAG, "start() while $state — tearing down + restarting scan")
                     try { adapter?.bluetoothLeScanner?.stopScan(scanCallback) } catch (_: SecurityException) {}
                     connectTimeoutHandle?.cancel(); connectTimeoutHandle = null
@@ -515,12 +537,26 @@ class AndroidR08BleClient(
         // Power note: an unfiltered LOW_LATENCY scan is more expensive than a filtered one, but
         // SCAN_TIMEOUT_MS caps it at 30 s and we connectGatt(autoConnect=true) the moment we
         // see a match, so steady-state cost is unchanged.
-        val filters = emptyList<ScanFilter>()
+        // RayNeo X3 Pro: its BLE stack rejects a fully UNFILTERED scan with
+        // SCAN_FAILED_FEATURE_UNSUPPORTED (verified on ARGF20 — the stack scans but never delivers
+        // to our client). Provide a ScanFilter (the standard workaround). Rokid keeps the unfiltered
+        // scan it's always used (the ring advertises no service UUID there, so a filter would miss).
+        // RayNeo needs a NON-EMPTY filter list, but the ring advertises no service UUID (only its
+        // local name), so we can't filter by UUID. An EMPTY ScanFilter (no criteria) is a "match
+        // all" filter — it satisfies RayNeo's "must have a filter" requirement while still delivering
+        // every advertisement, so the name-keyword match in onScanResult still finds "R08_XXXX".
+        val isRayneo = com.halo.ring.BuildConfig.DEVICE_FLAVOR == "rayneo"
+        val filters: List<ScanFilter> = if (isRayneo) {
+            listOf(ScanFilter.Builder().build())
+        } else {
+            emptyList()
+        }
         val settings = ScanSettings.Builder()
             .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)   // brief, then we connectGatt(autoConnect=true)
             .build()
         try {
             scanner.startScan(filters, settings, scanCallback)
+            Log.i(TAG, "beginScan: startScan issued")
         } catch (e: SecurityException) {
             Log.e(TAG, "startScan denied: ${e.message}")
             return
@@ -554,7 +590,13 @@ class AndroidR08BleClient(
         @SuppressLint("MissingPermission")
         override fun onScanResult(callbackType: Int, result: ScanResult?) {
             val device = result?.device ?: return
-            val name = try { device.name } catch (_: SecurityException) { null }
+            // Prefer the ADVERTISED local name from the scan record. `device.name` is the GATT/bond
+            // name and on some BLE stacks (RayNeo X3 Pro / AIOS) returns null during a scan — the ring
+            // then never matched the name-keyword filter and "什么都没扫描到". The advertised name in
+            // the scan record is present pre-connect, so use it first; fall back to device.name.
+            val advName = try { result.scanRecord?.deviceName } catch (_: Exception) { null }
+            val gattName = try { device.name } catch (_: SecurityException) { null }
+            val name = advName ?: gattName
             val rssi = result.rssi
             // Burn-in fix 2026-05-27: name-keyword filter — only surface devices whose advertised
             // local name matches an R0x-family prefix. (SPEC v3 §1.2 — no service UUID is in the
