@@ -272,25 +272,7 @@ Authoritative source: `~/Code/Projects/Constellation/reference/rokid-glass/bare-
 | Speech co-proc | NXP RT600 (iFlytek + Rokid KWS) |
 | Default locale | zh-CN |
 
-**Input** — Rokid publishes temple touchpad actions as **system ordered broadcasts** AND
-standard Android KeyEvents. Halo Ring's `SystemBroadcastReceiver` (on `HaloRingService`)
-registers these:
-
-| KeyType | Action constant | Notes |
-|---|---|---|
-| `CLICK` | `com.android.action.ACTION_SPRITE_BUTTON_CLICK` | Side-key single click |
-| `DOUBLE_CLICK` | `com.android.action.ACTION_SPRITE_BUTTON_DOUBLE_CLICK` | **System-occupied = back; can't abortBroadcast()** |
-| `LONG_PRESS` | `com.android.action.ACTION_SPRITE_BUTTON_LONG_PRESS` | Side-key long press |
-| `ACTION_TWO_FINGER_SINGLE_TAP` | (same as constant) | |
-| `ACTION_TWO_FINGER_DOUBLE_TAP` | (same) | |
-| `ACTION_TWO_FINGER_SWIPE_FORWARD` | (same) | |
-| `ACTION_TWO_FINGER_SWIPE_BACK` | (same) | |
-| `ACTION_SETTINGS_KEY` | (same — 二指长按) | Used to launch Halo Ring config |
-| `AI_START` | `com.android.action.ACTION_AI_START` | **System-occupied; can't intercept** |
-
-`priority=100` + `abortBroadcast()` available for non-system-occupied entries. KeyEvents on the
-foreground Activity are still consumed by Compose's `FocusManager` for navigation when the
-config Activity is visible.
+**Input** — Halo handles gestures produced by the ring’s Bluetooth touch sensor. The gesture synthesizer and active profile map them to commands, and the device backend delivers those commands to Rokid. Glasses temple controls go directly to the system or focused app. In Halo’s own settings, the platform’s usual focus navigation handles those controls.
 
 **System launcher**: Sprite Launcher (`com.rokid.os.sprite.launcher`) is focus-based with DPAD
 key transport. 21 launchable page Activities including:

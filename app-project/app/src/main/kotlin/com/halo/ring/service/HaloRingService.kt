@@ -12,7 +12,6 @@ import android.content.IntentFilter
 import android.os.IBinder
 import android.os.PowerManager
 import android.util.Log
-import com.halo.ring.MainActivity
 import com.halo.ring.HaloRingApplication
 import com.halo.ring.accessibility.HaloRingAccessibilityService
 import com.halo.ring.di.AppGraph
@@ -155,7 +154,6 @@ class HaloRingService : Service() {
 
     /** v0.4 C2 — Rokid temple system-broadcast receiver. Null on rayneo + generic-Android flavors
      *  (the Rokid system broadcasts don't exist there). Lifetime-managed by [onCreate]/[onDestroy]. */
-    private var templeReceiver: RokidTempleBroadcastReceiver? = null
 
     /** v0.4 C5 — throttle SportTick HUD pips to ~8 s. The ring pushes ticks once per second during
      *  an active workout; rendering every tick would dominate the HUD. */
@@ -331,8 +329,8 @@ class HaloRingService : Service() {
             // v0.4: InAppFocusController deleted. Base gestures (TAP / DOUBLE_TAP / SWIPE_UP /
             // SWIPE_DOWN) flow through `r.systemKeyDispatcher` above as raw KeyEvents — Compose's
             // standard FocusManager handles DPAD navigation when MainActivity is foreground;
-            // out-of-app it lands on whichever Activity is foreground via the temple-broadcast
-            // path (C2 / SystemBroadcastReceiver) or the agent. Custom gestures (TRIPLE_TAP etc.)
+            // the system-action backend delivers ring input to other foreground activities.
+            // Custom ring gestures (TRIPLE_TAP etc.)
             // continue to flow through profile → ActionRouter → executor backend below.
             // Doc/18 §7 — exclusive plugin overlay. When a plugin's HUD is up it owns the ring:
             // the router forwards every gesture to the plugin and lets nothing leak to the
@@ -790,39 +788,6 @@ class HaloRingService : Service() {
             cleanup += { try { unregisterReceiver(testActionReceiver) } catch (_: IllegalArgumentException) {} }
         }
 
-        // v0.4 C2: Rokid temple touchpad → InteractionRouter (system ordered broadcasts).
-        // Rokid-only — RayNeo doesn't publish the `com.android.action.ACTION_SPRITE_*` constants
-        // (its temple input flows through Mercury SDK's TouchDispatcher, which we may re-wire in a
-        // future C-step). On generic Android, no glasses, also skipped.
-        if (graph.deviceProfile == com.halo.ring.core.DeviceProfile.ROKID_GLASSES) {
-            val rcv = RokidTempleBroadcastReceiver(
-                router = interactionRouter,
-                scope = serviceScope,
-                onOpenSettings = {
-                    // Two-finger long-press = "open Halo Ring config". Launch MainActivity into the
-                    // Settings root.
-                    try {
-                        startActivity(
-                            Intent(this, MainActivity::class.java)
-                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        )
-                    } catch (e: Exception) {
-                        Log.w(TAG, "open MainActivity from temple SETTINGS_KEY failed: ${e.message}")
-                    }
-                },
-            )
-            try {
-                registerReceiver(rcv, rcv.filter())
-                templeReceiver = rcv
-                cleanup += {
-                    try { unregisterReceiver(rcv) } catch (_: IllegalArgumentException) {}
-                    templeReceiver = null
-                }
-                Log.i(TAG, "Rokid temple broadcast receiver registered")
-            } catch (e: Exception) {
-                Log.w(TAG, "Rokid temple broadcast receiver registration failed: ${e.message}")
-            }
-        }
         // Seed initial state. Audit-2026-05-13j (P3): also pre-fetch wear state via the synchronous
         // [WearStateProvider.isWorn] (the observer fires on *changes* — may never fire if the user
         // is already wearing the glasses when our service starts), then trigger one reconcile so

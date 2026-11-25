@@ -5,8 +5,7 @@ The Halo Ring UI has **two surfaces** in v0.4:
 1. **HUD overlay** (`WindowManager.TYPE_APPLICATION_OVERLAY`) — the daily UX. Transient pips
    fired by gesture-recognition, profile-switch, vitals, sport-tick, spatial alerts, ring status.
    Owned by `HaloRingService`; visible regardless of which app is foreground.
-2. **Config Activity** (`MainActivity`) — opened occasionally (icon tap or `ACTION_SETTINGS_KEY`
-   two-finger long-press). Hosts pairing, the custom-gesture editor, Vitals dashboard, ring info,
+2. **Config Activity** (`MainActivity`) — opened from the launcher icon. Hosts pairing, the custom-gesture editor, Vitals dashboard, ring info,
    plugin management. Allowed to be deep — but **never the daily entry point**.
 
 Pre-v0.4 design had a 3-tab top-level (Vitals / Settings / Status). v0.4 retires the tab strip
@@ -105,8 +104,7 @@ subtle on a small display in bright ambient).
 
 ## 4. Config Activity — the editing surface
 
-Opened by: app icon tap, `ACTION_SETTINGS_KEY` two-finger long-press (Rokid), launcher icon
-from Sprite. **Never the daily entry point.**
+Opened from the Sprite Launcher icon. **Never the daily entry point.**
 
 ### 4.1 Top-level (after v0.4 reorg: 10 flat items → 5 groups)
 
