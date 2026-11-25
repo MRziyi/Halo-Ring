@@ -44,12 +44,9 @@ jobs:
           java-version: '17'
 
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
         with:
-          # NDK 27 contains the toolchain our cpp/spake2_jni.cpp links against; CMake 3.22.1
-          # matches the version pinned in app/src/main/cpp/CMakeLists.txt.
-          ndk-version: '27.2.12479018'
-          cmake-version: '3.22.1'
+          packages: 'platform-tools platforms;android-34 build-tools;34.0.0 ndk;27.0.12077973 cmake;3.22.1'
           accept-android-sdk-licenses: true
 
       - name: Set up Gradle
