@@ -14,10 +14,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -42,7 +39,6 @@ import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
-import com.halo.ring.ui.BinocularTuning
 import com.halo.ring.ui.HaloColors
 import com.halo.ring.ui.HaloType
 import com.halo.ring.ui.HaloRingTheme
@@ -231,12 +227,7 @@ class HudOverlay(
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
             setContent {
                 HaloRingTheme {
-                    currentEvent?.let { ev ->
-                        // Binocular (RayNeo): render the pill in BOTH eye halves so it isn't
-                        // single-eye. Mono (Rokid): single pill, anchored via layout-params gravity.
-                        if (isBinocular) BinocularHudPill(ev, hudPosition, hudOffsetSteps)
-                        else HudPill(ev)
-                    }
+                    currentEvent?.let { HudPill(it) }
                 }
             }
         }
@@ -267,17 +258,6 @@ class HudOverlay(
         val flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                     WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
                     WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
-        // Binocular (RayNeo X3 Pro): a single anchored pill only reaches one eye. Instead make the
-        // overlay a full-screen transparent canvas and let [BinocularHudPill] place one pill in each
-        // 640-wide eye half. FLAG_NOT_TOUCHABLE keeps it pass-through; the two small pills render
-        // only while a HUD event is showing, so the memory/latency cost is negligible.
-        if (isBinocular) {
-            return WindowManager.LayoutParams(
-                WindowManager.LayoutParams.MATCH_PARENT,
-                WindowManager.LayoutParams.MATCH_PARENT,
-                type, flags, PixelFormat.TRANSLUCENT,
-            ).apply { gravity = Gravity.TOP or Gravity.START }
-        }
         // On a side-by-side binocular canvas (RayNeo X3 Pro: 1280×480 logical, left half → left
         // eye, right half → right eye), CENTER_HORIZONTAL lands at x≈640 which is the *inner*
         // edge of both eyes — visible at the user's nose, not centred in their gaze. Re-anchor
@@ -332,57 +312,6 @@ class HudOverlay(
         const val SAFE_MARGIN_PX = 32
         /** One "body" unit (px) for the user's HUD vertical offset ≈ one pill-height. */
         const val BODY_UNIT_PX = 60
-    }
-}
-
-/**
- * Binocular HUD layout (RayNeo X3 Pro). The panel is one 1280×480 surface split down the middle —
- * left 640 → left eye, right 640 → right eye. A single pill placed once would only reach one eye
- * (the "HUD 只在右眼" bug), so we render the SAME pill in BOTH halves, each centred horizontally in
- * its eye and anchored vertically to match [HudPosition]. Fused by the wearer's binocular vision
- * into one element. Rokid (mono) never calls this — it keeps the single anchored [HudPill].
- *
- * Vertical anchor + offset mirror the mono [HudOverlay.buildLayoutParams] math (SAFE_MARGIN +
- * hudOffsetSteps body-units), in dp (RayNeo panel is 160 dpi so dp≈px).
- */
-@Composable
-fun BinocularHudPill(event: HudEvent, position: HudOverlay.HudPosition, offsetSteps: Int) {
-    // Anchor the pill in the SAME corner of each eye so the wearer fuses it as one element. Honour
-    // left/right (not just top/bottom) so e.g. TopRight lands in the top-RIGHT of each eye — the
-    // default — instead of the centre (the earlier "HUD 在正中心" bug came from mapping every top
-    // position to TopCenter).
-    val align = when (position) {
-        HudOverlay.HudPosition.TopRight    -> Alignment.TopEnd
-        HudOverlay.HudPosition.TopLeft     -> Alignment.TopStart
-        HudOverlay.HudPosition.TopCenter   -> Alignment.TopCenter
-        HudOverlay.HudPosition.BottomRight -> Alignment.BottomEnd
-        HudOverlay.HudPosition.BottomLeft  -> Alignment.BottomStart
-        HudOverlay.HudPosition.Center      -> Alignment.Center
-    }
-    val topAnchored = align == Alignment.TopEnd || align == Alignment.TopStart || align == Alignment.TopCenter
-    val bottomAnchored = align == Alignment.BottomEnd || align == Alignment.BottomStart
-    val rightAnchored = position == HudOverlay.HudPosition.TopRight || position == HudOverlay.HudPosition.BottomRight
-    val leftAnchored = position == HudOverlay.HudPosition.TopLeft || position == HudOverlay.HudPosition.BottomLeft
-    // Vertical edge inset = SAFE_MARGIN(32) + user offset; horizontal edge inset = SAFE_MARGIN.
-    val vEdge = (32 + offsetSteps * 60).dp
-    val hEdge = 32.dp
-    val pad = Modifier.padding(
-        top = if (topAnchored) vEdge else 0.dp,
-        bottom = if (bottomAnchored) vEdge else 0.dp,
-        end = if (rightAnchored) hEdge else 0.dp,
-        start = if (leftAnchored) hEdge else 0.dp,
-    )
-    // Same binocular disparity as the config UI (BinocularMirror) so the HUD floats at the same
-    // focal plane: left eye shifted out by -half, right eye by +half.
-    val half = (BinocularTuning.disparityPx / 2).dp
-    Row(Modifier.fillMaxSize()) {
-        // One eye-half per child; weight(1f) splits the 1280 canvas into two 640 columns.
-        Box(Modifier.weight(1f).fillMaxHeight().offset(x = -half).then(pad), contentAlignment = align) {
-            HudPill(event)
-        }
-        Box(Modifier.weight(1f).fillMaxHeight().offset(x = half).then(pad), contentAlignment = align) {
-            HudPill(event)
-        }
     }
 }
 

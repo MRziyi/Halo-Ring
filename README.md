@@ -16,9 +16,8 @@
 
 ## English
 
-Wear a **QRing R08 smart ring** as a single, wireless remote for **AR glasses** — **Rokid Glasses**
-(primary, on-device validated) and **RayNeo X3 Pro**. Same operations, same UI, automatic
-hand-over when you switch glasses. One codebase, two product flavors.
+Wear a **QRing R08 smart ring** as a wireless remote for **Rokid Glasses**. RayNeo X3 Pro development is on
+[`feature/rayneo-x3-pro`](../../tree/feature/rayneo-x3-pro).
 
 Tap to confirm, swipe to navigate, long-press to wake/sleep the screen — all from a ring on your
 finger. A shell-uid input agent injects events directly via `InputManager.injectInputEvent`
@@ -27,14 +26,13 @@ gesture), so the ring drives the glasses **system-wide**, not just inside this a
 
 ### Get an APK
 
-Pre-built release APKs for both glasses live on the [**Releases**](../../releases) page:
+Download the Rokid APK from [**Releases**](../../releases).
 
 | Glasses | Use the file named |
 |---|---|
 | Rokid Glasses | `halo-ring-rokid.apk` |
-| RayNeo X3 Pro | `halo-ring-rayneo.apk` |
 
-`adb install -r halo-ring-<glasses>.apk` after enabling sideloading, then open the app once and
+`adb install -r halo-ring-rokid.apk` after enabling sideloading, then open the app once and
 follow the first-run wizard (it pairs the ring + bootstraps the input agent — no computer needed
 after that, and it survives a reboot).
 
@@ -71,8 +69,7 @@ after that, and it survives a reboot).
 
 A pure-Kotlin/JVM `:core` module owns the gesture state machine, the routing pipeline, and the
 power policy — fully unit-testable on the JVM (**277 tests** at HEAD). `:app` is the Android
-shell: a foreground service runs the BLE central, a Compose UI exposes settings, and two product
-flavors (`rokid` / `rayneo`) supply per-glasses transports. `:agent` is a tiny dex that runs as a
+shell: a foreground service runs the BLE central, a Compose UI exposes settings, and the Rokid flavor supplies the device transport. `:agent` is a tiny dex that runs as a
 shell-uid `app_process`, talks to `:app` over a `LocalSocket`, and calls
 `InputManager.injectInputEvent` directly via reflection — the same trick scrcpy and Shizuku use.
 Full rationale is in **[Doc/](Doc/)** — start at [Doc/01-overview.md](Doc/01-overview.md), or
@@ -88,12 +85,7 @@ Design mockups: open [`Doc/ui-mockup.html`](Doc/ui-mockup.html) in a browser.
 cd app-project
 ./gradlew :core:test                # 277 tests, no Android SDK needed
 ./gradlew :app:assembleRokidDebug   # ~15 MB debug  (release after R8 ≈ 4 MB)
-./gradlew :app:assembleRayneoDebug
 ```
-
-Both flavors build clean from a fresh checkout. The RayNeo flavor pulls in the
-openly-distributable Mercury Android SDK AAR (committed at
-[`app-project/app/libs/mercury-release.aar`](app-project/app/libs/mercury-release.aar)).
 
 ### Contributing
 
@@ -137,8 +129,8 @@ for the full policy.
 
 ## 中文
 
-戴一枚 **QRing R08 智能戒指**，把它当作 **AR 眼镜** 的统一无线遥控——**Rokid Glasses**（主力、已真机
-验证）与 **RayNeo X3 Pro**。一套交互、一套 UI，换眼镜自动切换。一份代码，两个产品 flavor。
+用 **QRing R08 智能戒指**遥控 **Rokid Glasses**。RayNeo X3 Pro 的开发在
+[`feature/rayneo-x3-pro`](../../tree/feature/rayneo-x3-pro) 分支进行。
 
 单击确认、滑动翻页、长按唤屏/息屏，全部从手指上的戒指完成。注入 agent 以 shell uid 直接调用
 `InputManager.injectInputEvent`（额外延迟约 1–3 ms，而每次手势 spawn 一次 `adb shell input
@@ -146,14 +138,13 @@ keyevent` 要 ~100 ms+）。戒指**系统级**驱动眼镜，不止在本 app �
 
 ### 拿 APK
 
-两副眼镜的预编译 release APK 都挂在 [**Releases**](../../releases) 页：
+到 [**Releases**](../../releases) 下载 Rokid APK。
 
 | 眼镜 | 用这个文件 |
 |---|---|
 | Rokid Glasses | `halo-ring-rokid.apk` |
-| RayNeo X3 Pro | `halo-ring-rayneo.apk` |
 
-开启侧载后 `adb install -r halo-ring-<眼镜>.apk`，打开 app 跟随首次向导（配对戒指 +
+开启侧载后 `adb install -r halo-ring-rokid.apk`，打开 app 跟随首次向导（配对戒指 +
 引导注入 agent）——之后**无需电脑，且能扛重启**。
 
 > **暂时没有眼镜？** 逆向出来的完整 BLE 协议已开源在
@@ -180,8 +171,7 @@ keyevent` 要 ~100 ms+）。戒指**系统级**驱动眼镜，不止在本 app �
 ### 架构
 
 `:core` 是纯 Kotlin/JVM 模块，承载手势状态机、路由管线和功耗策略，全部 JVM 可单测（HEAD 处
-**277 个测试**）。`:app` 是 Android 壳：常驻前台服务跑 BLE central，Compose UI 提供设置，两个
-flavor（`rokid` / `rayneo`）提供各自传输层。`:agent` 是微型 dex，以 shell uid 通过 `app_process`
+**277 个测试**）。`:app` 是 Android 壳：常驻前台服务跑 BLE central，Compose UI 提供设置，Rokid flavor 提供设备传输层。`:agent` 是微型 dex，以 shell uid 通过 `app_process`
 运行，走 `LocalSocket` 直接反射调 `InputManager.injectInputEvent`——和 scrcpy / Shizuku 同源。
 完整设计在 **[Doc/](Doc/)**——从 [Doc/01-overview.md](Doc/01-overview.md) 开始，手势/profile
 模型看 [Doc/04-interaction-design.md](Doc/04-interaction-design.md)，延迟/功耗看
@@ -195,11 +185,7 @@ flavor（`rokid` / `rayneo`）提供各自传输层。`:agent` 是微型 dex，�
 cd app-project
 ./gradlew :core:test                # 277 测试，无需 Android SDK
 ./gradlew :app:assembleRokidDebug   # ~15 MB debug（R8 后 release ≈ 4 MB）
-./gradlew :app:assembleRayneoDebug
 ```
-
-两个 flavor 从干净 checkout 都能直接编通。RayNeo flavor 依赖公开可分发的 Mercury ARDK AAR，
-已提交在 [`app-project/app/libs/mercury-release.aar`](app-project/app/libs/mercury-release.aar)。
 
 ### 贡献
 

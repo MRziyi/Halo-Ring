@@ -26,7 +26,6 @@ import com.halo.ring.adb.AdbBootstrap
 import com.halo.ring.adb.RootBypass
 import com.halo.ring.service.HaloRingService
 import com.halo.ring.ui.AppState
-import com.halo.ring.ui.BinocularMirror
 import com.halo.ring.ui.LocalAppGraph
 import com.halo.ring.ui.HaloRingApp
 import com.halo.ring.ui.StatusBarState
@@ -186,9 +185,6 @@ class MainActivity : AppCompatActivity() {
                 val currentLanguage by appPrefs.languageFlow
                     .collectAsState(initial = com.halo.ring.ui.screens.AppLanguage.SYSTEM)
 
-                // RayNeo: mirror the whole UI into both eye-halves (fixes the x=640 seam split).
-                // Rokid / mono → enabled=false → pass-through, zero overhead. See BinocularMirror.
-                BinocularMirror(enabled = com.halo.ring.BuildConfig.DEVICE_FLAVOR == "rayneo") {
                 if ((!firstRunCompleted && pairedMac == null) || forceWizard) {
                     var adbStatus by remember { mutableStateOf("") }
                     // Refreshed on every onResume — when the user comes back from a settings
@@ -234,7 +230,7 @@ class MainActivity : AppCompatActivity() {
                             }
                         },
                     )
-                    return@BinocularMirror
+                    return@CompositionLocalProvider
                 }
 
                 HaloRingApp(
@@ -313,7 +309,6 @@ class MainActivity : AppCompatActivity() {
                     // VitalsScreen + RingScreen consume LocalAppGraph directly. No callback
                     // threading, same semantics.
                 )
-                }  // BinocularMirror
             }
         }
     }
